@@ -1,0 +1,18 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+  <application>
+    <!-- Subclasse própria pra não brigar com o FileProvider do expo-file-system -->
+    <provider
+      android:name="expo.modules.apkbuilder.ApkBuilderFileProvider"
+      android:authorities="${applicationId}.apkbuilder.fileprovider"
+      android:exported="false"
+      android:grantUriPermissions="true">
+      <meta-data
+        android:name="android.support.FILE_PROVIDER_PATHS"
+        android:resource="@xml/apk_builder_paths" />
+    </provider>
+  </application>
+
+</manifest>

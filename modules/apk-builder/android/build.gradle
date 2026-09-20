@@ -1,0 +1,37 @@
+// Se o build.gradle do seu módulo overlay-bubble for diferente deste
+// (versão do plugin etc), copie o dele e só troque namespace/group e o
+// bloco `dependencies` abaixo.
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.apkbuilder'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.apkbuilder"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+  lint {
+    abortOnError false
+  }
+}
+
+dependencies {
+  implementation "androidx.core:core-ktx:1.13.1"
+
+  // Compilador Java (ECJ). A 4.6.1 é da era Java 8 e roda no ART; versões
+  // novas do ECJ exigem APIs do Java 11 que o Android não tem.
+  implementation 'org.eclipse.jdt.core.compiler:ecj:4.6.1'
+
+  // D8 (.class -> classes.dex). Precisa de Android 8+ (java.nio.file).
+  // Se o D8 quebrar com NoSuchMethodError/NoClassDefFoundError de API do
+  // Java (List.of, etc), troque por um R8 mais antigo, ex: 3.3.28.
+  implementation 'com.android.tools:r8:8.5.35'
+
+  // Assinatura v1/v2/v3 do APK.
+  implementation 'com.android.tools.build:apksig:8.5.2'
+}

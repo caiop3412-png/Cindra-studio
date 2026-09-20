@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+  <!-- = FileSystem.documentDirectory do expo-file-system -->
+  <files-path name="cindrastudio" path="cindrastudio/" />
+</paths>
