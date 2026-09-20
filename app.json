@@ -28,8 +28,8 @@
         "expo-build-properties",
         {
           "android": {
-            "enableMinifyInReleaseBuilds": true,
-            "enableShrinkResourcesInReleaseBuilds": true,
+            "enableMinifyInReleaseBuilds": false,
+            "enableShrinkResourcesInReleaseBuilds": false,
             "extraProguardRules": "-keep class expo.modules.** { *; }\n-keepclassmembers class expo.modules.** { *; }\n-keep class org.unimodules.** { *; }\n-keep class com.cindraai.** { *; }\n-keepclassmembers class com.cindraai.** { *; }\n-keep class com.cindratech.** { *; }\n-keepclassmembers class com.cindratech.** { *; }\n-keep class org.eclipse.jdt.** { *; }\n-keep class com.android.tools.r8.** { *; }\n-keep class com.android.apksig.** { *; }\n-dontwarn org.eclipse.jdt.**\n-dontwarn com.android.tools.r8.**\n-dontwarn com.android.apksig.**\n-dontwarn javax.tools.**\n-dontwarn javax.lang.model.**\n-dontwarn java.lang.module.**",
             "useLegacyPackaging": true,
             "buildArchs": [
