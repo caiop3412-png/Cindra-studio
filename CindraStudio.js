@@ -560,13 +560,30 @@ async function gravarListaProjetosStudio(lista) {
 }
 
 // Cria (ou atualiza, se o pacote já existir) a entrada de um projeto na
-// lista, sempre trazendo ele pro topo. Devolve a lista nova já gravada.
+// lista, sempre trazendo ele pro topo. Preserva o "favorito" que já
+// existia (essa função só atualiza nome/ícone/data). Devolve a lista
+// nova já gravada.
 async function atualizarListaProjetosStudio(resumo) {
   const lista = await lerListaProjetosStudio();
+  const existente = lista.find((p) => p.pacote === resumo.pacote);
   const semEle = lista.filter((p) => p.pacote !== resumo.pacote);
-  const nova = [{ ...resumo, atualizadoEm: Date.now() }, ...semEle];
+  const nova = [{ favorito: false, ...existente, ...resumo, atualizadoEm: Date.now() }, ...semEle];
   await gravarListaProjetosStudio(nova);
   return nova;
+}
+
+// Texto tipo "há 2h", "há 3d" a partir de um timestamp — usado nos cards
+// da tela inicial pra mostrar quando cada projeto foi mexido por último.
+function tempoRelativoStudio(ms) {
+  if (!ms) return '';
+  const diffMin = Math.floor((Date.now() - ms) / 60000);
+  if (diffMin < 1) return 'agora mesmo';
+  if (diffMin < 60) return `há ${diffMin} min`;
+  const h = Math.floor(diffMin / 60);
+  if (h < 24) return `há ${h}h`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `há ${d}d`;
+  return `há ${Math.floor(d / 7)}sem`;
 }
 
 async function removerDaListaProjetosStudio(pacote) {
@@ -785,29 +802,83 @@ const studioStyles = StyleSheet.create({
   },
   criarBtnText: { color: '#1a0806', fontSize: 15, fontWeight: '700' },
   // Tela inicial (lista de projetos)
-  homeVazio: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
-  homeVazioTexto: { color: COLORS.dim, fontSize: 13.5, marginTop: 12, textAlign: 'center', lineHeight: 19 },
-  homeBottomBar: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: '#000000',
+  homeGlowTop: {
+    position: 'absolute',
+    top: -70,
+    right: -50,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: COLORS.emberGlow,
+    opacity: 0.16,
   },
+  homeGlowBottom: {
+    position: 'absolute',
+    bottom: -110,
+    left: -80,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: COLORS.pinkGlow,
+    opacity: 0.10,
+  },
+  homeVazio: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
+  homeVazioIcone: {
+    width: 76,
+    height: 76,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,82,39,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  homeVazioTitulo: { color: COLORS.ink, fontSize: 16, fontWeight: '700', marginBottom: 6 },
+  homeVazioTexto: { color: COLORS.dim, fontSize: 13.5, textAlign: 'center', lineHeight: 19 },
+  secaoLabel: {
+    color: COLORS.dim,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginTop: 18,
+    marginBottom: 10,
+  },
+  fabCriar: {
+    position: 'absolute',
+    right: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.ember,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 30,
+    shadowColor: '#000',
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 10,
+  },
+  fabCriarText: { color: '#1a0806', fontSize: 14.5, fontWeight: '700' },
   projCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(255,255,255,0.045)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    borderRadius: 16,
+    borderColor: 'rgba(255,255,255,0.09)',
+    borderRadius: 18,
     padding: 12,
     marginBottom: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
-  projIcon: { width: 46, height: 46, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  projIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   projNome: { color: COLORS.ink, fontSize: 14.5, fontWeight: '700' },
-  projPacote: { color: COLORS.dim, fontSize: 11.5, marginTop: 2 },
+  projPacote: { color: COLORS.dim, fontSize: 11, marginTop: 3 },
 });
 
 // Nó recursivo do explorador de arquivos (pastas expansíveis + arquivos
@@ -1029,6 +1100,16 @@ function CindraStudioScreen({ visible, onClose }) {
     setErrosCompilacao([]);
     setLogCompilacao([]);
     setEtapa('workspace');
+  };
+
+  // Tela inicial: toque na estrela do card — marca/desmarca favorito sem
+  // precisar abrir o projeto. Persiste na hora.
+  const alternarFavoritoProjeto = (pacote) => {
+    setListaProjetos((atual) => {
+      const nova = atual.map((p) => (p.pacote === pacote ? { ...p, favorito: !p.favorito } : p));
+      gravarListaProjetosStudio(nova).catch(() => {});
+      return nova;
+    });
   };
 
   // Tela inicial: segurar o dedo num projeto abre o card com a opção de
@@ -1261,8 +1342,51 @@ function CindraStudioScreen({ visible, onClose }) {
   const numeroDeLinhas = conteudoAtivo.split('\n').length;
 
   // ---------- Tela 0: lista de projetos (tela inicial) ----------
+  const favoritos = listaProjetos.filter((p) => p.favorito);
+  const recentes = listaProjetos.filter((p) => !p.favorito);
+
+  const renderCardProjeto = (p) => (
+    <TouchableOpacity
+      key={p.pacote}
+      style={studioStyles.projCard}
+      onPress={() => abrirProjetoDaLista(p.pacote)}
+      onLongPress={() => setCardProjeto(p)}
+      delayLongPress={350}
+      activeOpacity={0.8}
+    >
+      <View style={[studioStyles.projIcon, { backgroundColor: hexParaRgba(p.corIcone || CORES_ICONE_STUDIO[0], 0.20) }]}>
+        <MaterialCommunityIcons
+          name={p.iconeEscolhido || ICONES_APP_STUDIO[0]}
+          size={26}
+          color={p.corIcone || CORES_ICONE_STUDIO[0]}
+        />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={studioStyles.projNome} numberOfLines={1}>{p.nomeApp}</Text>
+        <Text style={studioStyles.projPacote} numberOfLines={1}>
+          {p.pacote}{p.atualizadoEm ? `  ·  ${tempoRelativoStudio(p.atualizadoEm)}` : ''}
+        </Text>
+      </View>
+      <TouchableOpacity
+        onPress={() => alternarFavoritoProjeto(p.pacote)}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={{ paddingHorizontal: 6 }}
+      >
+        <MaterialCommunityIcons
+          name={p.favorito ? 'star' : 'star-outline'}
+          size={19}
+          color={p.favorito ? COLORS.gold : COLORS.dim}
+        />
+      </TouchableOpacity>
+      <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.dim} />
+    </TouchableOpacity>
+  );
+
   const renderHome = () => (
     <>
+      <View pointerEvents="none" style={studioStyles.homeGlowTop} />
+      <View pointerEvents="none" style={studioStyles.homeGlowBottom} />
+
       <View style={[styles.chatHeader, { paddingTop: 10 }]}>
         <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <MaterialCommunityIcons name="arrow-left" size={22} color={COLORS.ink} />
@@ -1273,48 +1397,43 @@ function CindraStudioScreen({ visible, onClose }) {
 
       {listaProjetos.length === 0 ? (
         <View style={studioStyles.homeVazio}>
-          <MaterialCommunityIcons name="folder-star-outline" size={44} color={COLORS.dim} />
+          <View style={studioStyles.homeVazioIcone}>
+            <MaterialCommunityIcons name="folder-star-outline" size={38} color={COLORS.ember} />
+          </View>
+          <Text style={studioStyles.homeVazioTitulo}>Nenhum projeto ainda</Text>
           <Text style={studioStyles.homeVazioTexto}>
-            Nenhum projeto ainda. Toque em "Criar projeto" pra começar o primeiro.
+            Toque no botão "Criar projeto" aqui embaixo pra começar o primeiro.
           </Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
-          {listaProjetos.map((p) => (
-            <TouchableOpacity
-              key={p.pacote}
-              style={studioStyles.projCard}
-              onPress={() => abrirProjetoDaLista(p.pacote)}
-              onLongPress={() => setCardProjeto(p)}
-              delayLongPress={350}
-              activeOpacity={0.8}
-            >
-              <View style={[studioStyles.projIcon, { backgroundColor: hexParaRgba(p.corIcone || CORES_ICONE_STUDIO[0], 0.18) }]}>
-                <MaterialCommunityIcons
-                  name={p.iconeEscolhido || ICONES_APP_STUDIO[0]}
-                  size={24}
-                  color={p.corIcone || CORES_ICONE_STUDIO[0]}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={studioStyles.projNome} numberOfLines={1}>{p.nomeApp}</Text>
-                <Text style={studioStyles.projPacote} numberOfLines={1}>{p.pacote}</Text>
-              </View>
-              <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.dim} />
-            </TouchableOpacity>
-          ))}
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 110 }}>
+          {favoritos.length > 0 && (
+            <>
+              <Text style={studioStyles.secaoLabel}>
+                <MaterialCommunityIcons name="star" size={12} color={COLORS.gold} />  Favoritos
+              </Text>
+              {favoritos.map(renderCardProjeto)}
+            </>
+          )}
+          {recentes.length > 0 && (
+            <>
+              <Text style={studioStyles.secaoLabel}>
+                {favoritos.length > 0 ? 'Recentes' : 'Seus projetos'}
+              </Text>
+              {recentes.map(renderCardProjeto)}
+            </>
+          )}
         </ScrollView>
       )}
 
-      <View style={[studioStyles.homeBottomBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
-        <TouchableOpacity
-          style={[studioStyles.criarBtn, { marginTop: 0 }]}
-          onPress={abrirTelaConfigNova}
-          activeOpacity={0.85}
-        >
-          <Text style={studioStyles.criarBtnText}>Criar projeto</Text>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity
+        style={[studioStyles.fabCriar, { bottom: Math.max(insets.bottom, 12) + 14 }]}
+        onPress={abrirTelaConfigNova}
+        activeOpacity={0.85}
+      >
+        <MaterialCommunityIcons name="plus" size={19} color="#1a0806" />
+        <Text style={studioStyles.fabCriarText}>Criar projeto</Text>
+      </TouchableOpacity>
 
       {cardProjeto && (
         <View style={StyleSheet.absoluteFill}>
@@ -1324,6 +1443,20 @@ function CindraStudioScreen({ visible, onClose }) {
             <Text style={studioStyles.cardAcaoCaminho} numberOfLines={1}>{cardProjeto.pacote}</Text>
             <TouchableOpacity
               style={studioStyles.cardAcaoBtn}
+              onPress={() => { alternarFavoritoProjeto(cardProjeto.pacote); setCardProjeto(null); }}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons
+                name={cardProjeto.favorito ? 'star-off-outline' : 'star-outline'}
+                size={18}
+                color={COLORS.gold}
+              />
+              <Text style={[studioStyles.cardAcaoBtnText, { color: COLORS.gold }]}>
+                {cardProjeto.favorito ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[studioStyles.cardAcaoBtn, { marginTop: 8 }]}
               onPress={() => excluirProjetoDaLista(cardProjeto.pacote)}
               activeOpacity={0.8}
             >
@@ -1614,7 +1747,7 @@ function CindraStudioScreen({ visible, onClose }) {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#000000', paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: etapa === 'workspace' ? '#000000' : COLORS.sheet, paddingTop: insets.top }}>
       {etapa === 'home' ? renderHome() : etapa === 'config' ? renderConfig() : renderWorkspace()}
     </View>
   );
