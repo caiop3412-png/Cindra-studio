@@ -523,17 +523,65 @@ function arvoreTemCaminho(nos, caminho) {
   return nos.some((no) => no.caminho === caminho || (no.tipo === 'pasta' && arvoreTemCaminho(no.filhos, caminho)));
 }
 
-// Estado do CindraStudio salvo em disco (arquivos do projeto, abas abertas,
-// nome/ícone). É lido quando o app abre e gravado a cada edição — assim o
-// projeto continua lá depois de fechar a tela ou o app inteiro, sem
-// precisar criar de novo.
-const ARQUIVO_ESTADO_STUDIO = `${FileSystem.documentDirectory}cindrastudio/_estado.json`;
+// Estado do CindraStudio salvo em disco. Agora dá pra ter VÁRIOS projetos:
+// um índice leve (_projetos.json — nome, pacote, ícone, cor) alimenta a
+// tela inicial, e cada projeto tem seu próprio arquivo completo (arquivos,
+// abas abertas...) em _estados/<pacote>.json, lido só quando a pessoa abre
+// aquele projeto específico.
+const PASTA_ESTADOS_STUDIO = `${FileSystem.documentDirectory}cindrastudio/_estados/`;
+const ARQUIVO_LISTA_PROJETOS_STUDIO = `${FileSystem.documentDirectory}cindrastudio/_projetos.json`;
+// Versão antiga (1 projeto só, sem tela inicial) guardava tudo aqui —
+// migrado automaticamente na primeira abertura depois do update.
+const ARQUIVO_ESTADO_ANTIGO_STUDIO = `${FileSystem.documentDirectory}cindrastudio/_estado.json`;
 
-async function lerEstadoStudio() {
+function caminhoEstadoProjeto(pacote) {
+  return `${PASTA_ESTADOS_STUDIO}${pacote}.json`;
+}
+
+async function lerListaProjetosStudio() {
   try {
-    const info = await FileSystem.getInfoAsync(ARQUIVO_ESTADO_STUDIO);
+    const info = await FileSystem.getInfoAsync(ARQUIVO_LISTA_PROJETOS_STUDIO);
+    if (!info.exists) return [];
+    const texto = await FileSystem.readAsStringAsync(ARQUIVO_LISTA_PROJETOS_STUDIO, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+    const lista = JSON.parse(texto);
+    return Array.isArray(lista) ? lista : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+async function gravarListaProjetosStudio(lista) {
+  await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}cindrastudio/`, { intermediates: true });
+  await FileSystem.writeAsStringAsync(ARQUIVO_LISTA_PROJETOS_STUDIO, JSON.stringify(lista), {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+}
+
+// Cria (ou atualiza, se o pacote já existir) a entrada de um projeto na
+// lista, sempre trazendo ele pro topo. Devolve a lista nova já gravada.
+async function atualizarListaProjetosStudio(resumo) {
+  const lista = await lerListaProjetosStudio();
+  const semEle = lista.filter((p) => p.pacote !== resumo.pacote);
+  const nova = [{ ...resumo, atualizadoEm: Date.now() }, ...semEle];
+  await gravarListaProjetosStudio(nova);
+  return nova;
+}
+
+async function removerDaListaProjetosStudio(pacote) {
+  const lista = await lerListaProjetosStudio();
+  const nova = lista.filter((p) => p.pacote !== pacote);
+  await gravarListaProjetosStudio(nova);
+  return nova;
+}
+
+async function lerEstadoStudio(pacote) {
+  try {
+    const caminho = caminhoEstadoProjeto(pacote);
+    const info = await FileSystem.getInfoAsync(caminho);
     if (!info.exists) return null;
-    const texto = await FileSystem.readAsStringAsync(ARQUIVO_ESTADO_STUDIO, {
+    const texto = await FileSystem.readAsStringAsync(caminho, {
       encoding: FileSystem.EncodingType.UTF8,
     });
     const estado = JSON.parse(texto);
@@ -545,10 +593,36 @@ async function lerEstadoStudio() {
 }
 
 async function gravarEstadoStudio(estado) {
-  await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}cindrastudio/`, { intermediates: true });
-  await FileSystem.writeAsStringAsync(ARQUIVO_ESTADO_STUDIO, JSON.stringify(estado), {
+  await FileSystem.makeDirectoryAsync(PASTA_ESTADOS_STUDIO, { intermediates: true });
+  await FileSystem.writeAsStringAsync(caminhoEstadoProjeto(estado.nomePacote), JSON.stringify(estado), {
     encoding: FileSystem.EncodingType.UTF8,
   });
+}
+
+// Migração de versão antiga: se existir o arquivo único de antes (sem
+// tela inicial), vira o primeiro item da lista nova e some.
+async function migrarEstadoAntigoStudio() {
+  try {
+    const info = await FileSystem.getInfoAsync(ARQUIVO_ESTADO_ANTIGO_STUDIO);
+    if (!info.exists) return;
+    const texto = await FileSystem.readAsStringAsync(ARQUIVO_ESTADO_ANTIGO_STUDIO, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+    const estado = JSON.parse(texto);
+    if (estado && estado.projeto && estado.nomePacote) {
+      await gravarEstadoStudio(estado);
+      await atualizarListaProjetosStudio({
+        pacote: estado.nomePacote,
+        nomeApp: estado.nomeApp || 'Meu App',
+        iconeEscolhido: estado.iconeEscolhido || ICONES_APP_STUDIO[0],
+        corIcone: estado.corIcone || CORES_ICONE_STUDIO[0],
+      });
+    }
+  } catch (e) {
+    // se der ruim, só não migra — não trava a tela inicial por causa disso.
+  } finally {
+    FileSystem.deleteAsync(ARQUIVO_ESTADO_ANTIGO_STUDIO, { idempotent: true }).catch(() => {});
+  }
 }
 
 const studioStyles = StyleSheet.create({
@@ -710,6 +784,30 @@ const studioStyles = StyleSheet.create({
     marginTop: 28,
   },
   criarBtnText: { color: '#1a0806', fontSize: 15, fontWeight: '700' },
+  // Tela inicial (lista de projetos)
+  homeVazio: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
+  homeVazioTexto: { color: COLORS.dim, fontSize: 13.5, marginTop: 12, textAlign: 'center', lineHeight: 19 },
+  homeBottomBar: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#000000',
+  },
+  projCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 10,
+  },
+  projIcon: { width: 46, height: 46, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  projNome: { color: COLORS.ink, fontSize: 14.5, fontWeight: '700' },
+  projPacote: { color: COLORS.dim, fontSize: 11.5, marginTop: 2 },
 });
 
 // Nó recursivo do explorador de arquivos (pastas expansíveis + arquivos
@@ -772,11 +870,17 @@ function NoArvoreArquivo({ no, profundidade, pastasAbertas, alternarPasta, arqui
 function CindraStudioScreen({ visible, onClose }) {
   const insets = useSafeAreaInsets();
 
-  const [etapa, setEtapa] = useState('config'); // 'config' | 'workspace'
+  const [etapa, setEtapa] = useState('home'); // 'home' | 'config' | 'workspace'
   const [nomeApp, setNomeApp] = useState('Meu App');
   const [nomePacote, setNomePacote] = useState('com.dev.meuapp');
   const [iconeEscolhido, setIconeEscolhido] = useState(ICONES_APP_STUDIO[0]);
   const [corIcone, setCorIcone] = useState(CORES_ICONE_STUDIO[0]);
+
+  // Tela inicial: lista de projetos já criados (resumo — nome, pacote,
+  // ícone, cor). O conteúdo completo de cada um só é lido quando a
+  // pessoa toca pra abrir.
+  const [listaProjetos, setListaProjetos] = useState([]);
+  const [cardProjeto, setCardProjeto] = useState(null); // projeto segurado (card de ação)
 
   const [projeto, setProjeto] = useState(null); // { arvore, conteudos, arquivoInicial }
   const [pastasAbertas, setPastasAbertas] = useState({});
@@ -799,33 +903,18 @@ function CindraStudioScreen({ visible, onClose }) {
   const [cardNo, setCardNo] = useState(null); // pasta/arquivo segurado (card de ação)
   const estadoRef = useRef(null);
 
-  // Ao abrir o app: lê o que estava salvo e já cai direto no workspace.
+  // Ao abrir o app: migra o projeto único de versões antigas (se existir)
+  // e carrega a lista de projetos pra tela inicial. Não entra direto em
+  // nenhum projeto — quem escolhe é a pessoa, na lista.
   useEffect(() => {
     let vivo = true;
-    lerEstadoStudio().then((e) => {
-      if (!vivo) return;
-      if (e) {
-        const existe = (c) => e.projeto.conteudos[c] !== undefined;
-        setNomeApp(e.nomeApp || 'Meu App');
-        setNomePacote(e.nomePacote || 'com.dev.meuapp');
-        if (e.iconeEscolhido) setIconeEscolhido(e.iconeEscolhido);
-        if (e.corIcone) setCorIcone(e.corIcone);
-        let proj = e.projeto;
-        if (!proj.binarios) proj = { ...proj, binarios: {} };
-        if (!arvoreTemCaminho(proj.arvore, ASSETS_STUDIO)) {
-          proj = {
-            ...proj,
-            arvore: inserirNoNaArvore(proj.arvore, 'app/src/main', { nome: 'assets', caminho: ASSETS_STUDIO, tipo: 'pasta', filhos: [] }),
-          };
-        }
-        setProjeto(proj);
-        setPastasAbertas(e.pastasAbertas || {});
-        setAbasAbertas(Array.isArray(e.abasAbertas) ? e.abasAbertas.filter(existe) : []);
-        setArquivoAtivo(e.arquivoAtivo && existe(e.arquivoAtivo) ? e.arquivoAtivo : null);
-        setEtapa('workspace');
-      }
-      setEstadoCarregado(true);
-    });
+    migrarEstadoAntigoStudio()
+      .then(() => lerListaProjetosStudio())
+      .then((lista) => {
+        if (!vivo) return;
+        setListaProjetos(lista);
+        setEstadoCarregado(true);
+      });
     return () => { vivo = false; };
   }, []);
 
@@ -868,9 +957,11 @@ function CindraStudioScreen({ visible, onClose }) {
     if (!sidebarAberta) { setConfirmandoNovo(false); setCardNo(null); }
   }, [sidebarAberta]);
 
-  // "Novo projeto": apaga o projeto salvo e volta pra tela de config.
+  // "Excluir projeto" (dentro do workspace): apaga o projeto atual de vez
+  // e volta pra tela inicial (lista de projetos).
   const novoProjeto = () => {
     const antigo = projeto;
+    const pacoteAntigo = nomePacote;
     setConfirmandoNovo(false);
     setSidebarAberta(false);
     setProjeto(null);
@@ -881,12 +972,95 @@ function CindraStudioScreen({ visible, onClose }) {
     setLogCompilacao([]);
     setErrosCompilacao([]);
     setApkGerado(null);
-    setEtapa('config');
-    FileSystem.deleteAsync(ARQUIVO_ESTADO_STUDIO, { idempotent: true }).catch(() => {});
+    FileSystem.deleteAsync(caminhoEstadoProjeto(pacoteAntigo), { idempotent: true }).catch(() => {});
     if (antigo && antigo.pacote) {
       FileSystem.deleteAsync(pastaProjetoStudio(antigo.pacote), { idempotent: true }).catch(() => {});
       FileSystem.deleteAsync(pastaBinariosStudio(antigo.pacote), { idempotent: true }).catch(() => {});
     }
+    removerDaListaProjetosStudio(pacoteAntigo)
+      .then(setListaProjetos)
+      .catch(() => {})
+      .finally(() => setEtapa('home'));
+  };
+
+  // Tela inicial → "Criar projeto": zera os campos (pra não herdar dados
+  // do último projeto aberto) e manda pra tela de configuração.
+  const abrirTelaConfigNova = () => {
+    setCardProjeto(null);
+    setNomeApp('Meu App');
+    setNomePacote('com.dev.meuapp');
+    setIconeEscolhido(ICONES_APP_STUDIO[0]);
+    setCorIcone(CORES_ICONE_STUDIO[0]);
+    setProjeto(null);
+    setAbasAbertas([]);
+    setArquivoAtivo(null);
+    setPastasAbertas({});
+    setEtapa('config');
+  };
+
+  // Tela inicial → toque num projeto da lista: lê o estado completo dele
+  // (arquivos, abas, ícone...) e abre direto no workspace.
+  const abrirProjetoDaLista = async (pacote) => {
+    const e = await lerEstadoStudio(pacote);
+    if (!e) {
+      exibirAviso('Não foi possível abrir', 'Esse projeto parece corrompido ou foi removido.', 'erro');
+      removerDaListaProjetosStudio(pacote).then(setListaProjetos).catch(() => {});
+      return;
+    }
+    const existe = (c) => e.projeto.conteudos[c] !== undefined;
+    setNomeApp(e.nomeApp || 'Meu App');
+    setNomePacote(e.nomePacote || pacote);
+    setIconeEscolhido(e.iconeEscolhido || ICONES_APP_STUDIO[0]);
+    setCorIcone(e.corIcone || CORES_ICONE_STUDIO[0]);
+    let proj = e.projeto;
+    if (!proj.binarios) proj = { ...proj, binarios: {} };
+    if (!arvoreTemCaminho(proj.arvore, ASSETS_STUDIO)) {
+      proj = {
+        ...proj,
+        arvore: inserirNoNaArvore(proj.arvore, 'app/src/main', { nome: 'assets', caminho: ASSETS_STUDIO, tipo: 'pasta', filhos: [] }),
+      };
+    }
+    setProjeto(proj);
+    setPastasAbertas(e.pastasAbertas || {});
+    setAbasAbertas(Array.isArray(e.abasAbertas) ? e.abasAbertas.filter(existe) : []);
+    setArquivoAtivo(e.arquivoAtivo && existe(e.arquivoAtivo) ? e.arquivoAtivo : null);
+    setPainelCompilacao(false);
+    setApkGerado(null);
+    setErrosCompilacao([]);
+    setLogCompilacao([]);
+    setEtapa('workspace');
+  };
+
+  // Tela inicial: segurar o dedo num projeto abre o card com a opção de
+  // excluir (sem precisar entrar no projeto pra apagar).
+  const excluirProjetoDaLista = (pacote) => {
+    setCardProjeto(null);
+    FileSystem.deleteAsync(caminhoEstadoProjeto(pacote), { idempotent: true }).catch(() => {});
+    FileSystem.deleteAsync(pastaProjetoStudio(pacote), { idempotent: true }).catch(() => {});
+    FileSystem.deleteAsync(pastaBinariosStudio(pacote), { idempotent: true }).catch(() => {});
+    removerDaListaProjetosStudio(pacote).then(setListaProjetos).catch(() => {});
+  };
+
+  // Workspace → seta de voltar: salva o projeto atual, atualiza a lista
+  // (nome/ícone podem ter mudado desde a última vez) e volta pra home.
+  const voltarParaHome = async () => {
+    if (estadoRef.current) {
+      await gravarEstadoStudio(estadoRef.current).catch(() => {});
+      const lista = await atualizarListaProjetosStudio({
+        pacote: nomePacote,
+        nomeApp,
+        iconeEscolhido,
+        corIcone,
+      }).catch(() => null);
+      if (lista) setListaProjetos(lista);
+    }
+    setSidebarAberta(false);
+    setPainelCompilacao(false);
+    setProjeto(null);
+    setAbasAbertas([]);
+    setArquivoAtivo(null);
+    setPastasAbertas({});
+    setEtapa('home');
   };
 
   // Segurar o dedo numa pasta (ou num arquivo binário) abre o card de ação.
@@ -952,8 +1126,15 @@ function CindraStudioScreen({ visible, onClose }) {
     const novo = montarProjetoNovo(app, pkg, corIcone);
     setProjeto(novo);
     setNomePacote(novo.pacote);
-    // Já deixa o projeto gravado em disco desde o começo.
+    // Já deixa o projeto gravado em disco desde o começo, e cadastrado na
+    // lista de projetos (pra aparecer na tela inicial do CindraStudio).
     gravarProjetoStudio(novo).catch(() => {});
+    atualizarListaProjetosStudio({
+      pacote: novo.pacote,
+      nomeApp: app,
+      iconeEscolhido,
+      corIcone,
+    }).then(setListaProjetos).catch(() => {});
     // Abre as pastas do caminho até o MainActivity, e a raiz, já expandidas.
     const abertas = {};
     let acc = '';
@@ -1079,11 +1260,87 @@ function CindraStudioScreen({ visible, onClose }) {
   const conteudoAtivo = projeto && arquivoAtivo ? (projeto.conteudos[arquivoAtivo] || '') : '';
   const numeroDeLinhas = conteudoAtivo.split('\n').length;
 
+  // ---------- Tela 0: lista de projetos (tela inicial) ----------
+  const renderHome = () => (
+    <>
+      <View style={[styles.chatHeader, { paddingTop: 10 }]}>
+        <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <MaterialCommunityIcons name="arrow-left" size={22} color={COLORS.ink} />
+        </TouchableOpacity>
+        <Text style={styles.chatHeaderTitle}>CindraStudio</Text>
+        <View style={{ width: 22 }} />
+      </View>
+
+      {listaProjetos.length === 0 ? (
+        <View style={studioStyles.homeVazio}>
+          <MaterialCommunityIcons name="folder-star-outline" size={44} color={COLORS.dim} />
+          <Text style={studioStyles.homeVazioTexto}>
+            Nenhum projeto ainda. Toque em "Criar projeto" pra começar o primeiro.
+          </Text>
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
+          {listaProjetos.map((p) => (
+            <TouchableOpacity
+              key={p.pacote}
+              style={studioStyles.projCard}
+              onPress={() => abrirProjetoDaLista(p.pacote)}
+              onLongPress={() => setCardProjeto(p)}
+              delayLongPress={350}
+              activeOpacity={0.8}
+            >
+              <View style={[studioStyles.projIcon, { backgroundColor: hexParaRgba(p.corIcone || CORES_ICONE_STUDIO[0], 0.18) }]}>
+                <MaterialCommunityIcons
+                  name={p.iconeEscolhido || ICONES_APP_STUDIO[0]}
+                  size={24}
+                  color={p.corIcone || CORES_ICONE_STUDIO[0]}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={studioStyles.projNome} numberOfLines={1}>{p.nomeApp}</Text>
+                <Text style={studioStyles.projPacote} numberOfLines={1}>{p.pacote}</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.dim} />
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
+
+      <View style={[studioStyles.homeBottomBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
+        <TouchableOpacity
+          style={[studioStyles.criarBtn, { marginTop: 0 }]}
+          onPress={abrirTelaConfigNova}
+          activeOpacity={0.85}
+        >
+          <Text style={studioStyles.criarBtnText}>Criar projeto</Text>
+        </TouchableOpacity>
+      </View>
+
+      {cardProjeto && (
+        <View style={StyleSheet.absoluteFill}>
+          <Pressable style={studioStyles.sidebarBackdrop} onPress={() => setCardProjeto(null)} />
+          <View style={studioStyles.cardAcao}>
+            <Text style={studioStyles.cardAcaoTitulo} numberOfLines={1}>{cardProjeto.nomeApp}</Text>
+            <Text style={studioStyles.cardAcaoCaminho} numberOfLines={1}>{cardProjeto.pacote}</Text>
+            <TouchableOpacity
+              style={studioStyles.cardAcaoBtn}
+              onPress={() => excluirProjetoDaLista(cardProjeto.pacote)}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons name="delete-outline" size={18} color="#ff8a80" />
+              <Text style={[studioStyles.cardAcaoBtnText, { color: '#ff8a80' }]}>Excluir projeto</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+    </>
+  );
+
   // ---------- Tela 1: configuração do projeto ----------
   const renderConfig = () => (
     <>
       <View style={[styles.chatHeader, { paddingTop: 10 }]}>
-        <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <TouchableOpacity onPress={() => setEtapa('home')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <MaterialCommunityIcons name="arrow-left" size={22} color={COLORS.ink} />
         </TouchableOpacity>
         <Text style={styles.chatHeaderTitle}>CindraStudio</Text>
@@ -1159,6 +1416,9 @@ function CindraStudioScreen({ visible, onClose }) {
   const renderWorkspace = () => (
     <>
       <View style={studioStyles.topBar}>
+        <TouchableOpacity style={studioStyles.topBarIconBtn} onPress={voltarParaHome} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <MaterialCommunityIcons name="arrow-left" size={20} color={COLORS.ink} />
+        </TouchableOpacity>
         <TouchableOpacity style={studioStyles.topBarIconBtn} onPress={() => setSidebarAberta(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <MaterialCommunityIcons name="file-tree-outline" size={20} color={COLORS.ink} />
         </TouchableOpacity>
@@ -1283,12 +1543,12 @@ function CindraStudioScreen({ visible, onClose }) {
               activeOpacity={0.8}
             >
               <MaterialCommunityIcons
-                name={confirmandoNovo ? 'alert-outline' : 'plus'}
+                name={confirmandoNovo ? 'alert-outline' : 'trash-can-outline'}
                 size={16}
                 color={confirmandoNovo ? '#ff8a80' : COLORS.dim}
               />
               <Text style={[studioStyles.novoProjText, confirmandoNovo && { color: '#ff8a80' }]}>
-                {confirmandoNovo ? 'Toque de novo: apaga este projeto' : 'Novo projeto'}
+                {confirmandoNovo ? 'Toque de novo: apaga este projeto' : 'Excluir projeto'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1355,7 +1615,7 @@ function CindraStudioScreen({ visible, onClose }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#000000', paddingTop: insets.top }}>
-      {etapa === 'config' ? renderConfig() : renderWorkspace()}
+      {etapa === 'home' ? renderHome() : etapa === 'config' ? renderConfig() : renderWorkspace()}
     </View>
   );
 }
