@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   AppState,
   Linking,
+  Switch,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -835,20 +836,22 @@ const studioStyles = StyleSheet.create({
   },
   homeVazioTitulo: { color: COLORS.ink, fontSize: 16, fontWeight: '700', marginBottom: 6 },
   homeVazioTexto: { color: COLORS.dim, fontSize: 13.5, textAlign: 'center', lineHeight: 19 },
-  // Cabeçalho: título grande + lupa (a lupa vira barra de busca ao tocar).
+  // Cabeçalho
   homeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
     paddingHorizontal: 18,
-    paddingTop: 10,
+    paddingTop: 8,
     paddingBottom: 6,
-    minHeight: 66,
+    minHeight: 68,
   },
-  homeTitulo: { flex: 1, color: COLORS.ink, fontSize: 26, fontWeight: '700', letterSpacing: -0.3 },
+  homeOverline: { color: COLORS.ember, fontSize: 11, fontWeight: '800', letterSpacing: 1.6 },
+  homeTitulo: { color: COLORS.ink, fontSize: 28, fontWeight: '800', letterSpacing: -0.5, marginTop: 1 },
   homeIconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.07)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -863,60 +866,72 @@ const studioStyles = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
-  buscaInput: {
-    flex: 1,
-    color: COLORS.ink,
-    fontSize: 15,
-    paddingVertical: 0,
-  },
-  // Botão grande "Novo projeto" + botão ⋮
-  homeAcoes: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginTop: 10 },
-  homeBtnNovo: {
-    flex: 1,
+  buscaInput: { flex: 1, color: COLORS.ink, fontSize: 15, paddingVertical: 0 },
+  // Card "Retomar"
+  heroCard: { backgroundColor: '#4a1a26', borderRadius: 28, padding: 18, marginTop: 14, overflow: 'hidden' },
+  heroMarcaDagua: { position: 'absolute', right: -26, top: -22, opacity: 0.07 },
+  heroTopo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  heroSelo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    height: 58,
-    paddingHorizontal: 22,
-    borderRadius: 22,
-    backgroundColor: COLORS.ember,
-  },
-  homeBtnNovoText: { color: '#1a0806', fontSize: 16, fontWeight: '700' },
-  homeBtnMais: {
-    width: 58,
-    height: 58,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // Chips de filtro (Projetos / Favoritos) com contador
-  homeChips: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginTop: 20, marginBottom: 10 },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    height: 36,
-    paddingHorizontal: 14,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  chipAtivo: { backgroundColor: 'rgba(255,82,39,0.22)' },
-  chipTexto: { color: COLORS.dim, fontSize: 14, fontWeight: '600' },
-  chipTextoAtivo: { color: '#ff8a68' },
-  chipContador: {
-    minWidth: 20,
-    height: 20,
+    gap: 5,
+    backgroundColor: 'rgba(255,220,210,0.14)',
     borderRadius: 10,
-    paddingHorizontal: 6,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  heroSeloTexto: { color: '#ffdcd2', fontSize: 11.5, fontWeight: '800', letterSpacing: 1 },
+  heroTempo: { color: 'rgba(255,220,210,0.7)', fontSize: 12.5 },
+  heroCorpo: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
+  heroNome: { color: '#ffffff', fontSize: 20, fontWeight: '800' },
+  heroPacote: { color: 'rgba(255,220,210,0.7)', fontSize: 13, marginTop: 2 },
+  heroBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#ffdcd2',
+  },
+  heroBtnText: { color: '#4a1a26', fontSize: 15, fontWeight: '800' },
+  // Blocos de filtro (Apps / Favoritos / Esta semana)
+  tilesLinha: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  tile: {
+    flex: 1,
+    borderRadius: 20,
+    padding: 14,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  tileAtivo: { backgroundColor: 'rgba(255,82,39,0.16)', borderColor: 'rgba(255,82,39,0.45)' },
+  tileTopo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  tileNumero: { color: COLORS.ink, fontSize: 26, fontWeight: '800' },
+  tileRotulo: { color: COLORS.dim, fontSize: 12.5, fontWeight: '600', marginTop: 2 },
+  // Título da seção + ordenar + modo lista/grade
+  secaoLinha: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 22, marginBottom: 12 },
+  secaoTitulo: { color: COLORS.ink, fontSize: 18, fontWeight: '800' },
+  secaoContagem: { color: COLORS.dim, fontSize: 14, fontWeight: '600' },
+  ordemPilula: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 36,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  ordemTexto: { color: COLORS.ink, fontSize: 12.5, fontWeight: '600' },
+  modoBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.07)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  chipContadorAtivo: { backgroundColor: COLORS.ember },
-  chipContadorTexto: { color: COLORS.dim, fontSize: 12, fontWeight: '700' },
-  chipContadorTextoAtivo: { color: '#1a0806' },
-  // Card de projeto
+  // Cards de app (lista e grade)
   projCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -928,58 +943,48 @@ const studioStyles = StyleSheet.create({
     paddingRight: 6,
     marginBottom: 10,
   },
-  projIcon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   projNome: { color: COLORS.ink, fontSize: 16, fontWeight: '700', flexShrink: 1 },
   projPacote: { color: COLORS.dim, fontSize: 12, marginTop: 3 },
+  projTempoLinha: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5 },
+  projTempo: { color: COLORS.dim, fontSize: 11.5 },
   projMais: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  // Card "Continue de onde parou"
-  continuarCard: { backgroundColor: '#4a1a26', borderRadius: 28, padding: 20, marginTop: 18 },
-  continuarTopo: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
-  continuarTitulo: { color: '#ffdcd2', fontSize: 17, fontWeight: '700' },
-  continuarSub: { color: 'rgba(255,220,210,0.7)', fontSize: 13.5, marginBottom: 16 },
-  continuarBtn: {
-    alignSelf: 'flex-start',
-    maxWidth: '100%',
-    backgroundColor: '#ffdcd2',
-    paddingVertical: 13,
-    paddingHorizontal: 22,
-    borderRadius: 24,
-  },
-  continuarBtnText: { color: '#4a1a26', fontSize: 15, fontWeight: '700' },
-  // Aviso "projetos de versão antiga"
+  gradeWrap: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  gradeCard: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 22, padding: 14 },
+  gradeTopo: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  gradeTempo: { color: COLORS.dim, fontSize: 11.5, marginTop: 8 },
+  // Aviso "versão anterior"
   avisoCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 22,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    gap: 10,
+    backgroundColor: 'rgba(255,82,39,0.10)',
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     marginBottom: 12,
   },
-  avisoTexto: { flex: 1, color: COLORS.ink, fontSize: 14.5, lineHeight: 20 },
-  avisoBtn: { backgroundColor: '#ffdcd2', paddingVertical: 11, paddingHorizontal: 16, borderRadius: 20 },
-  avisoBtnText: { color: '#4a1a26', fontSize: 14, fontWeight: '700' },
-  // Card de anúncio / apoio
-  anuncioCard: {
+  avisoTexto: { flex: 1, color: COLORS.ink, fontSize: 13, lineHeight: 18 },
+  avisoBtnText: { color: '#ff8a68', fontSize: 13, fontWeight: '800' },
+  // Card de apoio
+  apoioCard: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
+    borderStyle: 'dashed',
+    borderColor: 'rgba(255,182,72,0.45)',
     borderRadius: 22,
-    padding: 12,
-    marginTop: 4,
-    marginBottom: 6,
+    padding: 14,
+    marginTop: 8,
   },
-  anuncioTag: {
+  apoioTag: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(255,182,72,0.14)',
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 3,
-    marginBottom: 8,
+    marginBottom: 10,
   },
-  anuncioTagTexto: { color: COLORS.dim, fontSize: 12.5, fontWeight: '600' },
-  anuncioLinha: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  anuncioIcone: {
+  apoioTagTexto: { color: COLORS.gold, fontSize: 12, fontWeight: '700' },
+  apoioLinha: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  apoioIcone: {
     width: 48,
     height: 48,
     borderRadius: 14,
@@ -987,8 +992,20 @@ const studioStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  anuncioTitulo: { color: COLORS.ink, fontSize: 16, fontWeight: '700' },
-  anuncioSub: { color: COLORS.dim, fontSize: 13, marginTop: 2 },
+  apoioTitulo: { color: COLORS.ink, fontSize: 16, fontWeight: '700' },
+  apoioSub: { color: COLORS.dim, fontSize: 13, marginTop: 2 },
+  // Estado vazio
+  vazioBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 20,
+    height: 50,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    backgroundColor: COLORS.ember,
+  },
+  vazioBtnText: { color: '#1a0806', fontSize: 15, fontWeight: '800' },
   // Barra de baixo
   navHome: {
     flexDirection: 'row',
@@ -998,10 +1015,65 @@ const studioStyles = StyleSheet.create({
     paddingTop: 12,
   },
   navItem: { flex: 1, alignItems: 'center', gap: 4 },
-  navPilula: { width: 64, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  navPilula: { width: 56, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   navPilulaAtiva: { backgroundColor: 'rgba(255,82,39,0.22)' },
-  navRotulo: { color: COLORS.dim, fontSize: 12, fontWeight: '600' },
+  navRotulo: { color: COLORS.dim, fontSize: 11.5, fontWeight: '600' },
   navRotuloAtivo: { color: COLORS.ink, fontWeight: '700' },
+  navCriar: {
+    width: 60,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.ember,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: COLORS.ember,
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 6,
+  },
+  // Folha que sobe do rodapé
+  folha: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#1e1110',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 18,
+    paddingTop: 10,
+  },
+  folhaAlca: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.22)', marginBottom: 16 },
+  folhaTopo: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
+  folhaTitulo: { color: COLORS.ink, fontSize: 17, fontWeight: '800' },
+  folhaSub: { color: COLORS.dim, fontSize: 12.5, marginTop: 2 },
+  folhaLinha: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    marginBottom: 8,
+  },
+  folhaLinhaTexto: { flex: 1, color: COLORS.ink, fontSize: 15, fontWeight: '600' },
+  folhaConfirma: { backgroundColor: 'rgba(255,107,107,0.10)', borderRadius: 16, padding: 14 },
+  folhaConfirmaTexto: { color: '#ffb4a8', fontSize: 13.5, lineHeight: 19, marginBottom: 14 },
+  folhaConfirmaBotoes: { flexDirection: 'row', gap: 10 },
+  folhaBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  folhaBtnPerigo: { backgroundColor: '#ff6b6b' },
+  folhaBtnTexto: { color: COLORS.ink, fontSize: 14.5, fontWeight: '700' },
 });
 
 // Nó recursivo do explorador de arquivos (pastas expansíveis + arquivos
@@ -1065,14 +1137,28 @@ function NoArvoreArquivo({ no, profundidade, pastasAbertas, alternarPasta, arqui
 // aviso "em breve" ao tocar; coloque a URL (site, Instagram, Pix...) pra abrir.
 const STUDIO_LINK_APOIO = '';
 
-// Abas da barra de baixo da tela inicial. Só "projetos" tem conteúdo por
-// enquanto — as outras mostram uma tela de "em breve".
+// Barra de baixo da tela inicial: 2 abas, botão "Criar" no meio, 2 abas.
+// Só "apps" tem conteúdo por enquanto — as outras mostram "em breve".
 const ABAS_HOME_STUDIO = [
-  { id: 'projetos', rotulo: 'Projetos', icone: 'folder-open-outline', iconeAtivo: 'folder-open' },
-  { id: 'explorar', rotulo: 'Explorar', icone: 'search-web', iconeAtivo: 'search-web' },
-  { id: 'aprender', rotulo: 'Aprender', icone: 'school-outline', iconeAtivo: 'school' },
-  { id: 'daily', rotulo: 'Daily', icone: 'lightning-bolt-outline', iconeAtivo: 'lightning-bolt' },
+  { id: 'apps', rotulo: 'Meus apps', icone: 'view-dashboard-outline', iconeAtivo: 'view-dashboard' },
+  { id: 'modelos', rotulo: 'Modelos', icone: 'shape-outline', iconeAtivo: 'shape' },
+  { id: 'criar', rotulo: 'Criar', especial: true },
+  { id: 'aulas', rotulo: 'Aulas', icone: 'school-outline', iconeAtivo: 'school' },
+  { id: 'desafios', rotulo: 'Desafios', icone: 'trophy-outline', iconeAtivo: 'trophy' },
 ];
+
+const ROTULOS_ORDEM_STUDIO = {
+  recentes: 'Mais recentes',
+  antigos: 'Mais antigos',
+  nome: 'Nome (A–Z)',
+  nomeDesc: 'Nome (Z–A)',
+};
+const ICONES_ORDEM_STUDIO = {
+  recentes: 'clock-outline',
+  antigos: 'history',
+  nome: 'sort-alphabetical-ascending',
+  nomeDesc: 'sort-alphabetical-descending',
+};
 
 // Preferências pequenas da tela inicial (ex.: aviso já dispensado).
 const ARQUIVO_PREFS_STUDIO = `${FileSystem.documentDirectory}cindrastudio/_prefs.json`;
@@ -1100,6 +1186,123 @@ async function gravarPrefsStudio(prefs) {
   } catch (e) {}
 }
 
+// Item que entra com fade + subida suave (o atraso cresce com a posição na lista).
+function ItemAnimadoStudio({ indice = 0, style, children }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 320,
+      delay: Math.min(indice, 8) * 50,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, []);
+  return (
+    <Animated.View
+      style={[style, { opacity: anim, transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }]}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+// Folha que sobe do rodapé (com fundo escurecendo). "children" recebe a
+// função fechar(), que anima a saída e só depois chama onFechar.
+function FolhaInferiorStudio({ onFechar, insetBottom = 0, children }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(anim, { toValue: 1, duration: 240, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, []);
+  const fechar = () => {
+    Animated.timing(anim, { toValue: 0, duration: 170, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(
+      ({ finished }) => { if (finished) onFechar(); }
+    );
+  };
+  return (
+    <View style={StyleSheet.absoluteFill}>
+      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.62)', opacity: anim }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={fechar} />
+      </Animated.View>
+      <Animated.View
+        style={[
+          studioStyles.folha,
+          {
+            paddingBottom: insetBottom + 18,
+            transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [520, 0] }) }],
+          },
+        ]}
+      >
+        <View style={studioStyles.folhaAlca} />
+        {typeof children === 'function' ? children(fechar) : children}
+      </Animated.View>
+    </View>
+  );
+}
+
+// Conteúdo da folha de ações de um projeto (abrir / favoritar / excluir com
+// confirmação em 2 passos).
+function ConteudoFolhaProjeto({ projeto, onAbrir, onFavoritar, onExcluir, onCancelar }) {
+  const [confirmando, setConfirmando] = useState(false);
+  return (
+    <>
+      <View style={studioStyles.folhaTopo}>
+        <View
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 15,
+            backgroundColor: projeto.corIcone || CORES_ICONE_STUDIO[0],
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <MaterialCommunityIcons name={projeto.iconeEscolhido || ICONES_APP_STUDIO[0]} size={26} color="#1a0806" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={studioStyles.folhaTitulo} numberOfLines={1}>{projeto.nomeApp}</Text>
+          <Text style={studioStyles.folhaSub} numberOfLines={1}>
+            {projeto.pacote}{projeto.atualizadoEm ? `  ·  ${tempoRelativoStudio(projeto.atualizadoEm)}` : ''}
+          </Text>
+        </View>
+      </View>
+
+      {confirmando ? (
+        <View style={studioStyles.folhaConfirma}>
+          <Text style={studioStyles.folhaConfirmaTexto}>
+            Excluir "{projeto.nomeApp}" de vez? Todos os arquivos do projeto serão apagados e isso não dá pra desfazer.
+          </Text>
+          <View style={studioStyles.folhaConfirmaBotoes}>
+            <TouchableOpacity style={studioStyles.folhaBtn} onPress={() => setConfirmando(false)} activeOpacity={0.8}>
+              <Text style={studioStyles.folhaBtnTexto}>Cancelar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[studioStyles.folhaBtn, studioStyles.folhaBtnPerigo]} onPress={onExcluir} activeOpacity={0.85}>
+              <Text style={[studioStyles.folhaBtnTexto, { color: '#1a0806' }]}>Excluir</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <>
+          <TouchableOpacity style={studioStyles.folhaLinha} onPress={onAbrir} activeOpacity={0.8}>
+            <MaterialCommunityIcons name="folder-open-outline" size={20} color={COLORS.ink} />
+            <Text style={studioStyles.folhaLinhaTexto}>Abrir app</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={studioStyles.folhaLinha} onPress={onFavoritar} activeOpacity={0.8}>
+            <MaterialCommunityIcons name={projeto.favorito ? 'star-off-outline' : 'star-outline'} size={20} color={COLORS.gold} />
+            <Text style={[studioStyles.folhaLinhaTexto, { color: COLORS.gold }]}>
+              {projeto.favorito ? 'Remover dos favoritos' : 'Favoritar'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={studioStyles.folhaLinha} onPress={() => setConfirmando(true)} activeOpacity={0.8}>
+            <MaterialCommunityIcons name="delete-outline" size={20} color="#ff8a80" />
+            <Text style={[studioStyles.folhaLinhaTexto, { color: '#ff8a80' }]}>Excluir app</Text>
+          </TouchableOpacity>
+        </>
+      )}
+    </>
+  );
+}
+
 function CindraStudioScreen({ visible, onClose }) {
   const insets = useSafeAreaInsets();
 
@@ -1116,10 +1319,12 @@ function CindraStudioScreen({ visible, onClose }) {
   const [cardProjeto, setCardProjeto] = useState(null); // projeto segurado (card de ação)
   const [buscaProjeto, setBuscaProjeto] = useState('');
   const [buscaAberta, setBuscaAberta] = useState(false); // lupa do topo → vira barra de busca
-  const [filtroProjetos, setFiltroProjetos] = useState('todos'); // 'todos' | 'favoritos'
-  const [ordenacao, setOrdenacao] = useState('recentes'); // 'recentes' | 'nome'
-  const [menuMaisAberto, setMenuMaisAberto] = useState(false); // botão ⋮ ao lado de "Novo projeto"
-  const [abaHome, setAbaHome] = useState('projetos'); // barra de baixo da tela inicial
+  const [filtroProjetos, setFiltroProjetos] = useState('todos'); // 'todos' | 'favoritos' | 'semana'
+  const [ordenacao, setOrdenacao] = useState('recentes'); // 'recentes' | 'antigos' | 'nome' | 'nomeDesc'
+  const [favoritosNoTopo, setFavoritosNoTopo] = useState(true);
+  const [modoLista, setModoLista] = useState('lista'); // 'lista' | 'grade'
+  const [menuOrdenarAberto, setMenuOrdenarAberto] = useState(false); // folha "Ordenar por"
+  const [abaHome, setAbaHome] = useState('apps'); // barra de baixo da tela inicial
   const [avisoRecuperarVisivel, setAvisoRecuperarVisivel] = useState(false); // só depois de ler as prefs
   const prefsRef = useRef({});
 
@@ -1151,6 +1356,9 @@ function CindraStudioScreen({ visible, onClose }) {
       if (!vivo) return;
       prefsRef.current = prefs;
       setAvisoRecuperarVisivel(!prefs.avisoRecuperarDispensado);
+      if (prefs.modoLista === 'grade' || prefs.modoLista === 'lista') setModoLista(prefs.modoLista);
+      if (Object.prototype.hasOwnProperty.call(ROTULOS_ORDEM_STUDIO, prefs.ordenacao)) setOrdenacao(prefs.ordenacao);
+      if (typeof prefs.favoritosNoTopo === 'boolean') setFavoritosNoTopo(prefs.favoritosNoTopo);
     });
     return () => { vivo = false; };
   }, []);
@@ -1532,28 +1740,45 @@ function CindraStudioScreen({ visible, onClose }) {
         (p) => p.nomeApp.toLowerCase().includes(termoBusca) || p.pacote.toLowerCase().includes(termoBusca)
       )
     : listaProjetos;
+  const agora = Date.now();
+  const UMA_SEMANA_MS = 7 * 24 * 60 * 60 * 1000;
+  const editadoNaSemana = (p) => !!p.atualizadoEm && agora - p.atualizadoEm < UMA_SEMANA_MS;
   const totalFavoritos = listaProjetos.filter((p) => p.favorito).length;
-  // Se o último favorito foi removido, o filtro "Favoritos" some — volta pra "todos".
-  const filtroEfetivo = totalFavoritos > 0 ? filtroProjetos : 'todos';
-  const listaExibida = (filtroEfetivo === 'favoritos'
-    ? listaFiltrada.filter((p) => p.favorito)
-    : [...listaFiltrada]
-  ).sort((a, b) => {
-    // Favoritos sempre no topo; depois, por data (mais recente primeiro) ou nome.
-    if (!!a.favorito !== !!b.favorito) return a.favorito ? -1 : 1;
+  const totalSemana = listaProjetos.filter(editadoNaSemana).length;
+
+  const listaPorFiltro = listaFiltrada.filter((p) => {
+    if (filtroProjetos === 'favoritos') return !!p.favorito;
+    if (filtroProjetos === 'semana') return editadoNaSemana(p);
+    return true;
+  });
+  const listaExibida = [...listaPorFiltro].sort((a, b) => {
+    if (favoritosNoTopo && !!a.favorito !== !!b.favorito) return a.favorito ? -1 : 1;
     if (ordenacao === 'nome') return a.nomeApp.localeCompare(b.nomeApp, 'pt-BR', { sensitivity: 'base' });
+    if (ordenacao === 'nomeDesc') return b.nomeApp.localeCompare(a.nomeApp, 'pt-BR', { sensitivity: 'base' });
+    if (ordenacao === 'antigos') return (a.atualizadoEm || 0) - (b.atualizadoEm || 0);
     return (b.atualizadoEm || 0) - (a.atualizadoEm || 0);
   });
-  // "Continue de onde parou": o projeto mexido por último (entre todos, sem filtro).
+  // "Retomar": o projeto mexido por último (entre todos, sem filtro).
   const ultimoProjeto = listaProjetos.reduce(
     (a, p) => (!a || (p.atualizadoEm || 0) > (a.atualizadoEm || 0) ? p : a),
     null
   );
+
+  const salvarPref = (chave, valor) => {
+    prefsRef.current = { ...prefsRef.current, [chave]: valor };
+    gravarPrefsStudio(prefsRef.current);
+  };
   const fecharBusca = () => { setBuscaProjeto(''); setBuscaAberta(false); };
+  const alternarModoLista = () => {
+    const novo = modoLista === 'lista' ? 'grade' : 'lista';
+    setModoLista(novo);
+    salvarPref('modoLista', novo);
+  };
+  const escolherOrdenacao = (id) => { setOrdenacao(id); salvarPref('ordenacao', id); };
+  const alternarFavoritosNoTopo = (valor) => { setFavoritosNoTopo(valor); salvarPref('favoritosNoTopo', valor); };
   const dispensarAvisoRecuperar = () => {
     setAvisoRecuperarVisivel(false);
-    prefsRef.current = { ...prefsRef.current, avisoRecuperarDispensado: true };
-    gravarPrefsStudio(prefsRef.current);
+    salvarPref('avisoRecuperarDispensado', true);
   };
   const abrirLinkApoio = () => {
     if (!STUDIO_LINK_APOIO) {
@@ -1563,217 +1788,302 @@ function CindraStudioScreen({ visible, onClose }) {
     Linking.openURL(STUDIO_LINK_APOIO).catch(() => exibirAviso('Não foi possível abrir', 'Tente de novo mais tarde.', 'erro'));
   };
 
-  const renderCardProjeto = (p) => (
-    <TouchableOpacity
-      key={p.pacote}
-      style={studioStyles.projCard}
-      onPress={() => abrirProjetoDaLista(p.pacote)}
-      onLongPress={() => setCardProjeto(p)}
-      delayLongPress={350}
-      activeOpacity={0.8}
+  const renderIconeProjeto = (p, lado = 52, icone = 28, raio = 16) => (
+    <View
+      style={{
+        width: lado,
+        height: lado,
+        borderRadius: raio,
+        backgroundColor: p.corIcone || CORES_ICONE_STUDIO[0],
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
     >
-      <View style={[studioStyles.projIcon, { backgroundColor: p.corIcone || CORES_ICONE_STUDIO[0] }]}>
-        <MaterialCommunityIcons
-          name={p.iconeEscolhido || ICONES_APP_STUDIO[0]}
-          size={28}
-          color="#1a0806"
-        />
-      </View>
-      <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text style={studioStyles.projNome} numberOfLines={1}>{p.nomeApp}</Text>
-          {p.favorito && <MaterialCommunityIcons name="star" size={14} color={COLORS.gold} />}
-        </View>
-        <Text style={studioStyles.projPacote} numberOfLines={1}>
-          {p.pacote}{p.atualizadoEm ? `  ·  ${tempoRelativoStudio(p.atualizadoEm)}` : ''}
-        </Text>
-      </View>
-      <TouchableOpacity
-        onPress={() => setCardProjeto(p)}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        style={studioStyles.projMais}
-      >
-        <MaterialCommunityIcons name="dots-horizontal" size={22} color={COLORS.dim} />
-      </TouchableOpacity>
-    </TouchableOpacity>
+      <MaterialCommunityIcons name={p.iconeEscolhido || ICONES_APP_STUDIO[0]} size={icone} color="#1a0806" />
+    </View>
   );
 
-  const renderChip = (id, rotulo, total) => {
-    const ativo = filtroEfetivo === id;
+  const renderCardLista = (p, i) => (
+    <ItemAnimadoStudio key={p.pacote} indice={i}>
+      <TouchableOpacity
+        style={studioStyles.projCard}
+        onPress={() => abrirProjetoDaLista(p.pacote)}
+        onLongPress={() => setCardProjeto(p)}
+        delayLongPress={350}
+        activeOpacity={0.8}
+      >
+        {renderIconeProjeto(p)}
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={studioStyles.projNome} numberOfLines={1}>{p.nomeApp}</Text>
+            {p.favorito && <MaterialCommunityIcons name="star" size={14} color={COLORS.gold} />}
+          </View>
+          <Text style={studioStyles.projPacote} numberOfLines={1}>{p.pacote}</Text>
+          {!!p.atualizadoEm && (
+            <View style={studioStyles.projTempoLinha}>
+              <MaterialCommunityIcons name="clock-outline" size={12} color={COLORS.dim} />
+              <Text style={studioStyles.projTempo}>{tempoRelativoStudio(p.atualizadoEm)}</Text>
+            </View>
+          )}
+        </View>
+        <TouchableOpacity
+          onPress={() => setCardProjeto(p)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={studioStyles.projMais}
+        >
+          <MaterialCommunityIcons name="dots-vertical" size={22} color={COLORS.dim} />
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </ItemAnimadoStudio>
+  );
+
+  const renderCardGrade = (p, i) => (
+    <ItemAnimadoStudio key={p.pacote} indice={i} style={{ width: '48.5%', marginBottom: 10 }}>
+      <TouchableOpacity
+        style={studioStyles.gradeCard}
+        onPress={() => abrirProjetoDaLista(p.pacote)}
+        onLongPress={() => setCardProjeto(p)}
+        delayLongPress={350}
+        activeOpacity={0.8}
+      >
+        <View style={studioStyles.gradeTopo}>
+          {renderIconeProjeto(p, 48, 26, 15)}
+          <TouchableOpacity
+            onPress={() => setCardProjeto(p)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={studioStyles.projMais}
+          >
+            <MaterialCommunityIcons name="dots-vertical" size={22} color={COLORS.dim} />
+          </TouchableOpacity>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 12 }}>
+          <Text style={[studioStyles.projNome, { flexShrink: 1 }]} numberOfLines={1}>{p.nomeApp}</Text>
+          {p.favorito && <MaterialCommunityIcons name="star" size={14} color={COLORS.gold} />}
+        </View>
+        <Text style={studioStyles.projPacote} numberOfLines={1}>{p.pacote}</Text>
+        {!!p.atualizadoEm && <Text style={studioStyles.gradeTempo}>{tempoRelativoStudio(p.atualizadoEm)}</Text>}
+      </TouchableOpacity>
+    </ItemAnimadoStudio>
+  );
+
+  const renderTileFiltro = (id, icone, numero, rotulo) => {
+    const ativo = filtroProjetos === id;
     return (
       <TouchableOpacity
         key={id}
-        style={[studioStyles.chip, ativo && studioStyles.chipAtivo]}
+        style={[studioStyles.tile, ativo && studioStyles.tileAtivo]}
         onPress={() => setFiltroProjetos(id)}
-        activeOpacity={0.8}
+        activeOpacity={0.85}
       >
-        <Text style={[studioStyles.chipTexto, ativo && studioStyles.chipTextoAtivo]}>{rotulo}</Text>
-        <View style={[studioStyles.chipContador, ativo && studioStyles.chipContadorAtivo]}>
-          <Text style={[studioStyles.chipContadorTexto, ativo && studioStyles.chipContadorTextoAtivo]}>{total}</Text>
+        <View style={studioStyles.tileTopo}>
+          <Text style={[studioStyles.tileNumero, ativo && { color: '#ff8a68' }]}>{numero}</Text>
+          <MaterialCommunityIcons name={icone} size={20} color={ativo ? '#ff8a68' : COLORS.dim} />
         </View>
+        <Text style={[studioStyles.tileRotulo, ativo && { color: COLORS.ink }]}>{rotulo}</Text>
       </TouchableOpacity>
     );
   };
 
-  const renderAbaProjetos = () => (
-    <>
-      {/* Topo: título + lupa. Tocar na lupa troca o cabeçalho por uma barra de busca. */}
-      <View style={studioStyles.homeHeader}>
-        {buscaAberta ? (
-          <View style={studioStyles.homeBuscaPilula}>
-            <MaterialCommunityIcons name="magnify" size={20} color={COLORS.dim} />
-            <TextInput
-              style={studioStyles.buscaInput}
-              value={buscaProjeto}
-              onChangeText={setBuscaProjeto}
-              placeholder="Buscar projeto..."
-              placeholderTextColor={COLORS.dim}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoFocus
-            />
-            <TouchableOpacity onPress={fecharBusca} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <MaterialCommunityIcons name="close" size={20} color={COLORS.ink} />
+  const renderHero = () => (
+    <View style={studioStyles.heroCard}>
+      <MaterialCommunityIcons
+        name={ultimoProjeto.iconeEscolhido || ICONES_APP_STUDIO[0]}
+        size={170}
+        color="#ffffff"
+        style={studioStyles.heroMarcaDagua}
+      />
+      <View style={studioStyles.heroTopo}>
+        <View style={studioStyles.heroSelo}>
+          <MaterialCommunityIcons name="lightning-bolt" size={13} color="#ffdcd2" />
+          <Text style={studioStyles.heroSeloTexto}>RETOMAR</Text>
+        </View>
+        {!!ultimoProjeto.atualizadoEm && (
+          <Text style={studioStyles.heroTempo}>Editado {tempoRelativoStudio(ultimoProjeto.atualizadoEm)}</Text>
+        )}
+      </View>
+      <View style={studioStyles.heroCorpo}>
+        {renderIconeProjeto(ultimoProjeto, 58, 30, 18)}
+        <View style={{ flex: 1 }}>
+          <Text style={studioStyles.heroNome} numberOfLines={1}>{ultimoProjeto.nomeApp}</Text>
+          <Text style={studioStyles.heroPacote} numberOfLines={1}>Android · {ultimoProjeto.pacote}</Text>
+        </View>
+      </View>
+      <TouchableOpacity
+        style={studioStyles.heroBtn}
+        onPress={() => abrirProjetoDaLista(ultimoProjeto.pacote)}
+        activeOpacity={0.85}
+      >
+        <MaterialCommunityIcons name="play" size={20} color="#4a1a26" />
+        <Text style={studioStyles.heroBtnText}>Continuar editando</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderAbaApps = () => {
+    const buscando = !!termoBusca;
+    const rotuloSecao = buscando
+      ? 'Resultados'
+      : filtroProjetos === 'favoritos'
+        ? 'Favoritos'
+        : filtroProjetos === 'semana'
+          ? 'Esta semana'
+          : 'Seus apps';
+    const msgVazia = buscando
+      ? `Nenhum app encontrado para "${buscaProjeto.trim()}".`
+      : filtroProjetos === 'favoritos'
+        ? 'Você ainda não favoritou nenhum app. Toque em ⋮ num app e escolha "Favoritar".'
+        : 'Nenhum app foi editado nos últimos 7 dias.';
+
+    return (
+      <>
+        <View style={studioStyles.homeHeader}>
+          {buscaAberta ? (
+            <View style={studioStyles.homeBuscaPilula}>
+              <MaterialCommunityIcons name="magnify" size={20} color={COLORS.dim} />
+              <TextInput
+                style={studioStyles.buscaInput}
+                value={buscaProjeto}
+                onChangeText={setBuscaProjeto}
+                placeholder="Buscar app..."
+                placeholderTextColor={COLORS.dim}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoFocus
+              />
+              <TouchableOpacity onPress={fecharBusca} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <MaterialCommunityIcons name="close" size={20} color={COLORS.ink} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ marginRight: 4 }}>
+                <MaterialCommunityIcons name="arrow-left" size={24} color={COLORS.ink} />
+              </TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <Text style={studioStyles.homeOverline}>CINDRASTUDIO</Text>
+                <Text style={studioStyles.homeTitulo} numberOfLines={1}>Meus apps</Text>
+              </View>
+              <TouchableOpacity
+                style={studioStyles.homeIconBtn}
+                onPress={() => exibirAviso('Em breve', 'As notificações ainda não estão disponíveis.', 'aviso')}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="bell-outline" size={22} color={COLORS.ink} />
+              </TouchableOpacity>
+              {listaProjetos.length > 0 && (
+                <TouchableOpacity style={studioStyles.homeIconBtn} onPress={() => setBuscaAberta(true)} activeOpacity={0.8}>
+                  <MaterialCommunityIcons name="magnify" size={22} color={COLORS.ink} />
+                </TouchableOpacity>
+              )}
+            </>
+          )}
+        </View>
+
+        {listaProjetos.length === 0 ? (
+          <View style={studioStyles.homeVazio}>
+            <View style={studioStyles.homeVazioIcone}>
+              <MaterialCommunityIcons name="rocket-launch-outline" size={38} color={COLORS.ember} />
+            </View>
+            <Text style={studioStyles.homeVazioTitulo}>Comece seu primeiro app</Text>
+            <Text style={studioStyles.homeVazioTexto}>
+              Crie um projeto Android, edite o código e gere o APK direto do celular.
+            </Text>
+            <TouchableOpacity style={studioStyles.vazioBtn} onPress={abrirTelaConfigNova} activeOpacity={0.85}>
+              <MaterialCommunityIcons name="plus" size={22} color="#1a0806" />
+              <Text style={studioStyles.vazioBtnText}>Criar app</Text>
             </TouchableOpacity>
           </View>
         ) : (
-          <>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ marginRight: 12 }}>
-              <MaterialCommunityIcons name="arrow-left" size={24} color={COLORS.ink} />
-            </TouchableOpacity>
-            <Text style={studioStyles.homeTitulo} numberOfLines={1}>Seus projetos</Text>
-            <TouchableOpacity
-              style={studioStyles.homeIconBtn}
-              onPress={() => exibirAviso('Em breve', 'A caixa de entrada ainda não está disponível.', 'aviso')}
-              activeOpacity={0.8}
-            >
-              <MaterialCommunityIcons name="inbox-outline" size={22} color={COLORS.ink} />
-            </TouchableOpacity>
-            {listaProjetos.length > 0 && (
-              <TouchableOpacity
-                style={[studioStyles.homeIconBtn, { marginLeft: 8 }]}
-                onPress={() => setBuscaAberta(true)}
-                activeOpacity={0.8}
-              >
-                <MaterialCommunityIcons name="magnify" size={22} color={COLORS.ink} />
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 28 }}
+          >
+            {!buscando && ultimoProjeto && renderHero()}
+
+            {!buscando && (
+              <View style={studioStyles.tilesLinha}>
+                {renderTileFiltro('todos', 'cube-outline', listaProjetos.length, 'Apps')}
+                {renderTileFiltro('favoritos', 'star-outline', totalFavoritos, 'Favoritos')}
+                {renderTileFiltro('semana', 'clock-outline', totalSemana, 'Esta semana')}
+              </View>
+            )}
+
+            <View style={studioStyles.secaoLinha}>
+              <Text style={studioStyles.secaoTitulo}>
+                {rotuloSecao}  <Text style={studioStyles.secaoContagem}>{listaExibida.length}</Text>
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TouchableOpacity style={studioStyles.ordemPilula} onPress={() => setMenuOrdenarAberto(true)} activeOpacity={0.8}>
+                  <MaterialCommunityIcons name="swap-vertical" size={16} color={COLORS.ink} />
+                  <Text style={studioStyles.ordemTexto}>{ROTULOS_ORDEM_STUDIO[ordenacao]}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={studioStyles.modoBtn} onPress={alternarModoLista} activeOpacity={0.8}>
+                  <MaterialCommunityIcons
+                    name={modoLista === 'grade' ? 'format-list-bulleted' : 'view-grid-outline'}
+                    size={20}
+                    color={COLORS.ink}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {!buscando && avisoRecuperarVisivel && (
+              <View style={studioStyles.avisoCard}>
+                <MaterialCommunityIcons name="history" size={22} color="#ff8a68" />
+                <Text style={studioStyles.avisoTexto}>Tem projetos de uma versão anterior? Eles podem ser recuperados.</Text>
+                <TouchableOpacity onPress={dispensarAvisoRecuperar} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Text style={studioStyles.avisoBtnText}>Dispensar</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {listaExibida.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 36, paddingHorizontal: 20 }}>
+                <MaterialCommunityIcons name={buscando ? 'magnify-close' : 'folder-outline'} size={34} color={COLORS.dim} />
+                <Text style={[studioStyles.homeVazioTexto, { marginTop: 12 }]}>{msgVazia}</Text>
+              </View>
+            ) : modoLista === 'grade' ? (
+              <View style={studioStyles.gradeWrap}>{listaExibida.map(renderCardGrade)}</View>
+            ) : (
+              listaExibida.map(renderCardLista)
+            )}
+
+            {!buscando && (
+              <TouchableOpacity style={studioStyles.apoioCard} onPress={abrirLinkApoio} activeOpacity={0.85}>
+                <View style={studioStyles.apoioTag}>
+                  <Text style={studioStyles.apoioTagTexto}>Comunidade</Text>
+                </View>
+                <View style={studioStyles.apoioLinha}>
+                  <View style={studioStyles.apoioIcone}>
+                    <MaterialCommunityIcons name="heart" size={26} color={COLORS.gold} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={studioStyles.apoioTitulo} numberOfLines={1}>Curtiu o CindraStudio?</Text>
+                    <Text style={studioStyles.apoioSub} numberOfLines={2}>Ajude a Cindra a crescer com o seu apoio.</Text>
+                  </View>
+                  <MaterialCommunityIcons name="chevron-right" size={24} color={COLORS.dim} />
+                </View>
               </TouchableOpacity>
             )}
-          </>
+          </ScrollView>
         )}
-      </View>
+      </>
+    );
+  };
 
-      {/* Botão grande "Novo projeto" + botão ⋮ (ordenar) */}
-      <View style={studioStyles.homeAcoes}>
-        <TouchableOpacity style={studioStyles.homeBtnNovo} onPress={abrirTelaConfigNova} activeOpacity={0.85}>
-          <MaterialCommunityIcons name="plus" size={26} color="#1a0806" />
-          <Text style={studioStyles.homeBtnNovoText}>Novo projeto</Text>
-        </TouchableOpacity>
-        {listaProjetos.length > 0 && (
-          <TouchableOpacity style={studioStyles.homeBtnMais} onPress={() => setMenuMaisAberto(true)} activeOpacity={0.8}>
-            <MaterialCommunityIcons name="dots-vertical" size={24} color={COLORS.ink} />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {listaProjetos.length === 0 ? (
-        <View style={studioStyles.homeVazio}>
-          <View style={studioStyles.homeVazioIcone}>
-            <MaterialCommunityIcons name="folder-star-outline" size={38} color={COLORS.ember} />
-          </View>
-          <Text style={studioStyles.homeVazioTitulo}>Nenhum projeto ainda</Text>
-          <Text style={studioStyles.homeVazioTexto}>
-            Toque em "Novo projeto" pra começar o primeiro.
-          </Text>
-        </View>
-      ) : (
-        <>
-          <View style={studioStyles.homeChips}>
-            {renderChip('todos', 'Projetos', listaProjetos.length)}
-            {totalFavoritos > 0 && renderChip('favoritos', 'Favoritos', totalFavoritos)}
-          </View>
-
-          {listaExibida.length === 0 ? (
-            <View style={studioStyles.homeVazio}>
-              <MaterialCommunityIcons name="magnify-close" size={36} color={COLORS.dim} />
-              <Text style={[studioStyles.homeVazioTexto, { marginTop: 12 }]}>
-                Nenhum projeto encontrado para "{buscaProjeto.trim()}".
-              </Text>
-            </View>
-          ) : (
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 24 }}
-            >
-              {avisoRecuperarVisivel && !termoBusca && filtroEfetivo === 'todos' && (
-                <View style={studioStyles.avisoCard}>
-                  <MaterialCommunityIcons name="information-outline" size={24} color={COLORS.ink} />
-                  <Text style={studioStyles.avisoTexto}>Projetos de uma versão antiga podem ser recuperados.</Text>
-                  <TouchableOpacity style={studioStyles.avisoBtn} onPress={dispensarAvisoRecuperar} activeOpacity={0.85}>
-                    <Text style={studioStyles.avisoBtnText}>Dispensar</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {listaExibida.map(renderCardProjeto)}
-
-              {!termoBusca && filtroEfetivo === 'todos' && (
-                <TouchableOpacity style={studioStyles.anuncioCard} onPress={abrirLinkApoio} activeOpacity={0.85}>
-                  <View style={studioStyles.anuncioTag}>
-                    <Text style={studioStyles.anuncioTagTexto}>Anúncio</Text>
-                  </View>
-                  <View style={studioStyles.anuncioLinha}>
-                    <View style={studioStyles.anuncioIcone}>
-                      <MaterialCommunityIcons name="heart" size={26} color={COLORS.gold} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={studioStyles.anuncioTitulo} numberOfLines={1}>Gostando do CindraStudio?</Text>
-                      <Text style={studioStyles.anuncioSub} numberOfLines={2}>Apoie o projeto e ajude a Cindra a crescer.</Text>
-                    </View>
-                    <MaterialCommunityIcons name="chevron-right" size={24} color={COLORS.dim} />
-                  </View>
-                </TouchableOpacity>
-              )}
-
-              {ultimoProjeto && !termoBusca && filtroEfetivo === 'todos' && (
-                <View style={studioStyles.continuarCard}>
-                  <View style={studioStyles.continuarTopo}>
-                    <MaterialCommunityIcons name="lightning-bolt-outline" size={20} color="#ffdcd2" />
-                    <Text style={studioStyles.continuarTitulo}>Continue de onde parou</Text>
-                  </View>
-                  <Text style={studioStyles.continuarSub} numberOfLines={2}>
-                    {[
-                      ultimoProjeto.nomeApp,
-                      'Android',
-                      ultimoProjeto.atualizadoEm ? `Editado ${tempoRelativoStudio(ultimoProjeto.atualizadoEm)}` : '',
-                    ].filter(Boolean).join(' · ')}
-                  </Text>
-                  <TouchableOpacity
-                    style={studioStyles.continuarBtn}
-                    onPress={() => abrirProjetoDaLista(ultimoProjeto.pacote)}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={studioStyles.continuarBtnText} numberOfLines={1}>Abrir {ultimoProjeto.nomeApp}</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </ScrollView>
-          )}
-        </>
-      )}
-
-    </>
-  );
-
-  // Abas ainda sem conteúdo (Explorar / Aprender / Daily).
+  // Abas ainda sem conteúdo (Modelos / Aulas / Desafios).
   const renderAbaEmBreve = () => {
     const aba = ABAS_HOME_STUDIO.find((a) => a.id === abaHome) || ABAS_HOME_STUDIO[0];
     return (
       <>
         <View style={studioStyles.homeHeader}>
-          <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ marginRight: 12 }}>
+          <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ marginRight: 4 }}>
             <MaterialCommunityIcons name="arrow-left" size={24} color={COLORS.ink} />
           </TouchableOpacity>
-          <Text style={studioStyles.homeTitulo} numberOfLines={1}>{aba.rotulo}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={studioStyles.homeOverline}>CINDRASTUDIO</Text>
+            <Text style={studioStyles.homeTitulo} numberOfLines={1}>{aba.rotulo}</Text>
+          </View>
         </View>
         <View style={studioStyles.homeVazio}>
           <View style={studioStyles.homeVazioIcone}>
@@ -1786,10 +2096,20 @@ function CindraStudioScreen({ visible, onClose }) {
     );
   };
 
-  // Barra de navegação de baixo (Projetos / Explorar / Aprender / Daily).
+  // Barra de baixo: 2 abas, botão "Criar" no meio, 2 abas.
   const renderNavHome = () => (
     <View style={[studioStyles.navHome, { paddingBottom: Math.max(insets.bottom, 8) + 4 }]}>
       {ABAS_HOME_STUDIO.map((a) => {
+        if (a.especial) {
+          return (
+            <TouchableOpacity key={a.id} style={studioStyles.navItem} onPress={abrirTelaConfigNova} activeOpacity={0.85}>
+              <View style={studioStyles.navCriar}>
+                <MaterialCommunityIcons name="plus" size={26} color="#1a0806" />
+              </View>
+              <Text style={[studioStyles.navRotulo, { color: '#ff8a68' }]}>{a.rotulo}</Text>
+            </TouchableOpacity>
+          );
+        }
         const ativo = abaHome === a.id;
         return (
           <TouchableOpacity key={a.id} style={studioStyles.navItem} onPress={() => setAbaHome(a.id)} activeOpacity={0.8}>
@@ -1800,7 +2120,7 @@ function CindraStudioScreen({ visible, onClose }) {
                 color={ativo ? '#ff8a68' : COLORS.dim}
               />
             </View>
-            <Text style={[studioStyles.navRotulo, ativo && studioStyles.navRotuloAtivo]}>{a.rotulo}</Text>
+            <Text style={[studioStyles.navRotulo, ativo && studioStyles.navRotuloAtivo]} numberOfLines={1}>{a.rotulo}</Text>
           </TouchableOpacity>
         );
       })}
@@ -1812,68 +2132,57 @@ function CindraStudioScreen({ visible, onClose }) {
       <View pointerEvents="none" style={studioStyles.homeGlowTop} />
       <View pointerEvents="none" style={studioStyles.homeGlowBottom} />
 
-      {abaHome === 'projetos' ? renderAbaProjetos() : renderAbaEmBreve()}
+      {abaHome === 'apps' ? renderAbaApps() : renderAbaEmBreve()}
 
       {renderNavHome()}
 
-      {menuMaisAberto && (
-        <View style={StyleSheet.absoluteFill}>
-          <Pressable style={studioStyles.sidebarBackdrop} onPress={() => setMenuMaisAberto(false)} />
-          <View style={studioStyles.cardAcao}>
-            <Text style={studioStyles.cardAcaoTitulo}>Ordenar por</Text>
-            <Text style={studioStyles.cardAcaoCaminho}>Os favoritos sempre ficam no topo.</Text>
-            {[
-              ['recentes', 'Mais recentes', 'clock-outline'],
-              ['nome', 'Nome (A–Z)', 'sort-alphabetical-ascending'],
-            ].map(([id, rotulo, icone], i) => {
-              const ativo = ordenacao === id;
-              return (
-                <TouchableOpacity
-                  key={id}
-                  style={[studioStyles.cardAcaoBtn, i > 0 && { marginTop: 8 }]}
-                  onPress={() => { setOrdenacao(id); setMenuMaisAberto(false); }}
-                  activeOpacity={0.8}
-                >
-                  <MaterialCommunityIcons name={icone} size={18} color={ativo ? COLORS.ember : COLORS.dim} />
-                  <Text style={[studioStyles.cardAcaoBtnText, ativo && { color: COLORS.ember }]}>{rotulo}</Text>
-                  {ativo && <MaterialCommunityIcons name="check" size={18} color={COLORS.ember} style={{ marginLeft: 'auto' }} />}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
+      {menuOrdenarAberto && (
+        <FolhaInferiorStudio onFechar={() => setMenuOrdenarAberto(false)} insetBottom={insets.bottom}>
+          {(fechar) => (
+            <>
+              <Text style={[studioStyles.folhaTitulo, { marginBottom: 14 }]}>Ordenar por</Text>
+              {Object.keys(ROTULOS_ORDEM_STUDIO).map((id) => {
+                const ativo = ordenacao === id;
+                return (
+                  <TouchableOpacity
+                    key={id}
+                    style={studioStyles.folhaLinha}
+                    onPress={() => { escolherOrdenacao(id); fechar(); }}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialCommunityIcons name={ICONES_ORDEM_STUDIO[id]} size={20} color={ativo ? COLORS.ember : COLORS.dim} />
+                    <Text style={[studioStyles.folhaLinhaTexto, ativo && { color: COLORS.ember }]}>{ROTULOS_ORDEM_STUDIO[id]}</Text>
+                    {ativo && <MaterialCommunityIcons name="check" size={20} color={COLORS.ember} />}
+                  </TouchableOpacity>
+                );
+              })}
+              <View style={studioStyles.folhaLinha}>
+                <MaterialCommunityIcons name="star-outline" size={20} color={COLORS.gold} />
+                <Text style={studioStyles.folhaLinhaTexto}>Favoritos primeiro</Text>
+                <Switch
+                  value={favoritosNoTopo}
+                  onValueChange={alternarFavoritosNoTopo}
+                  trackColor={{ false: 'rgba(255,255,255,0.15)', true: COLORS.ember }}
+                  thumbColor="#ffffff"
+                />
+              </View>
+            </>
+          )}
+        </FolhaInferiorStudio>
       )}
 
       {cardProjeto && (
-        <View style={StyleSheet.absoluteFill}>
-          <Pressable style={studioStyles.sidebarBackdrop} onPress={() => setCardProjeto(null)} />
-          <View style={studioStyles.cardAcao}>
-            <Text style={studioStyles.cardAcaoTitulo} numberOfLines={1}>{cardProjeto.nomeApp}</Text>
-            <Text style={studioStyles.cardAcaoCaminho} numberOfLines={1}>{cardProjeto.pacote}</Text>
-            <TouchableOpacity
-              style={studioStyles.cardAcaoBtn}
-              onPress={() => { alternarFavoritoProjeto(cardProjeto.pacote); setCardProjeto(null); }}
-              activeOpacity={0.8}
-            >
-              <MaterialCommunityIcons
-                name={cardProjeto.favorito ? 'star-off-outline' : 'star-outline'}
-                size={18}
-                color={COLORS.gold}
-              />
-              <Text style={[studioStyles.cardAcaoBtnText, { color: COLORS.gold }]}>
-                {cardProjeto.favorito ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[studioStyles.cardAcaoBtn, { marginTop: 8 }]}
-              onPress={() => excluirProjetoDaLista(cardProjeto.pacote)}
-              activeOpacity={0.8}
-            >
-              <MaterialCommunityIcons name="delete-outline" size={18} color="#ff8a80" />
-              <Text style={[studioStyles.cardAcaoBtnText, { color: '#ff8a80' }]}>Excluir projeto</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <FolhaInferiorStudio onFechar={() => setCardProjeto(null)} insetBottom={insets.bottom}>
+          {(fechar) => (
+            <ConteudoFolhaProjeto
+              projeto={cardProjeto}
+              onAbrir={() => { const pacote = cardProjeto.pacote; setCardProjeto(null); abrirProjetoDaLista(pacote); }}
+              onFavoritar={() => { alternarFavoritoProjeto(cardProjeto.pacote); fechar(); }}
+              onExcluir={() => excluirProjetoDaLista(cardProjeto.pacote)}
+              onCancelar={fechar}
+            />
+          )}
+        </FolhaInferiorStudio>
       )}
     </>
   );
