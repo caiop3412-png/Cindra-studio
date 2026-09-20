@@ -1258,7 +1258,7 @@ function CindraStudioScreen({ visible, onClose }) {
           <Pressable style={studioStyles.sidebarBackdrop} onPress={() => setSidebarAberta(false)} />
           <View style={[studioStyles.sidebarPanel, { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 12) }]}>
             <View style={studioStyles.sidebarHeader}>
-              <Text style={studioStyles.sidebarTitle}>Arquivos do projeto</Text>
+              <Text style={studioStyles.sidebarTitle}>Arquivos de projeto</Text>
               <TouchableOpacity onPress={() => setSidebarAberta(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <MaterialCommunityIcons name="close" size={18} color={COLORS.dim} />
               </TouchableOpacity>
