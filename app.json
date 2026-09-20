@@ -20,6 +20,7 @@
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
+        "android.permission.REQUEST_INSTALL_PACKAGES",
         "android.permission.REQUEST_INSTALL_PACKAGES"
       ]
     },
@@ -46,6 +47,13 @@
         "projectId": "6724e75f-bb9e-4355-9d88-94547db46ec3"
       }
     },
-    "owner": "jhonye"
+    "owner": "jhonye",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/6724e75f-bb9e-4355-9d88-94547db46ec3"
+    },
+    "ios": {}
   }
 }

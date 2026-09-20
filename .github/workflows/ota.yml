@@ -1,0 +1,29 @@
+name: Publicar atualização OTA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**.js"
+  workflow_dispatch:
+    inputs:
+      message:
+        description: "Mensagem da atualização"
+        required: false
+        default: "update"
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm install -g eas-cli
+      - name: Publicar atualização
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          MSG: ${{ github.event.inputs.message || github.event.head_commit.message || 'update' }}
+        run: eas update --channel preview --platform android --non-interactive --message "$MSG"
