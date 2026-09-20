@@ -785,7 +785,7 @@ function CindraStudioScreen({ visible, onClose }) {
   const [sidebarAberta, setSidebarAberta] = useState(false);
 
   // compilação (▶)
-  const [compilando, setCompilando] = useState(false);
+  const [Compilando, setCompilando] = useState(false);
   const [painelCompilacao, setPainelCompilacao] = useState(false);
   const [logCompilacao, setLogCompilacao] = useState([]);
   const [errosCompilacao, setErrosCompilacao] = useState([]);
