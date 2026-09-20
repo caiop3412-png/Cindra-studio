@@ -843,6 +843,51 @@ const studioStyles = StyleSheet.create({
     marginTop: 18,
     marginBottom: 10,
   },
+  // Barra de busca com efeito "3D": brilho fino colado no topo simulando
+  // reflexo de luz + sombra forte embaixo simulando elevação, e bordas
+  // com tons diferentes por lado (mais clara em cima, mais escura embaixo)
+  // pra reforçar a sensação de relevo.
+  buscaWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 4,
+  },
+  buscaBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    height: 50,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    backgroundColor: '#241210',
+    borderWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.16)',
+    borderLeftColor: 'rgba(255,255,255,0.06)',
+    borderRightColor: 'rgba(255,255,255,0.06)',
+    borderBottomColor: 'rgba(0,0,0,0.7)',
+    shadowColor: '#000',
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 9,
+    overflow: 'hidden',
+  },
+  buscaBrilho: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '48%',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderTopLeftRadius: 17,
+    borderTopRightRadius: 17,
+  },
+  buscaInput: {
+    flex: 1,
+    color: COLORS.ink,
+    fontSize: 14.5,
+    paddingVertical: 0,
+  },
   fabCriar: {
     position: 'absolute',
     right: 18,
@@ -952,6 +997,7 @@ function CindraStudioScreen({ visible, onClose }) {
   // pessoa toca pra abrir.
   const [listaProjetos, setListaProjetos] = useState([]);
   const [cardProjeto, setCardProjeto] = useState(null); // projeto segurado (card de ação)
+  const [buscaProjeto, setBuscaProjeto] = useState('');
 
   const [projeto, setProjeto] = useState(null); // { arvore, conteudos, arquivoInicial }
   const [pastasAbertas, setPastasAbertas] = useState({});
@@ -1058,6 +1104,7 @@ function CindraStudioScreen({ visible, onClose }) {
   // do último projeto aberto) e manda pra tela de configuração.
   const abrirTelaConfigNova = () => {
     setCardProjeto(null);
+    setBuscaProjeto('');
     setNomeApp('Meu App');
     setNomePacote('com.dev.meuapp');
     setIconeEscolhido(ICONES_APP_STUDIO[0]);
@@ -1072,6 +1119,7 @@ function CindraStudioScreen({ visible, onClose }) {
   // Tela inicial → toque num projeto da lista: lê o estado completo dele
   // (arquivos, abas, ícone...) e abre direto no workspace.
   const abrirProjetoDaLista = async (pacote) => {
+    setBuscaProjeto('');
     const e = await lerEstadoStudio(pacote);
     if (!e) {
       exibirAviso('Não foi possível abrir', 'Esse projeto parece corrompido ou foi removido.', 'erro');
@@ -1342,8 +1390,14 @@ function CindraStudioScreen({ visible, onClose }) {
   const numeroDeLinhas = conteudoAtivo.split('\n').length;
 
   // ---------- Tela 0: lista de projetos (tela inicial) ----------
-  const favoritos = listaProjetos.filter((p) => p.favorito);
-  const recentes = listaProjetos.filter((p) => !p.favorito);
+  const termoBusca = buscaProjeto.trim().toLowerCase();
+  const listaFiltrada = termoBusca
+    ? listaProjetos.filter(
+        (p) => p.nomeApp.toLowerCase().includes(termoBusca) || p.pacote.toLowerCase().includes(termoBusca)
+      )
+    : listaProjetos;
+  const favoritos = listaFiltrada.filter((p) => p.favorito);
+  const recentes = listaFiltrada.filter((p) => !p.favorito);
 
   const renderCardProjeto = (p) => (
     <TouchableOpacity
@@ -1406,24 +1460,56 @@ function CindraStudioScreen({ visible, onClose }) {
           </Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 110 }}>
-          {favoritos.length > 0 && (
-            <>
-              <Text style={studioStyles.secaoLabel}>
-                <MaterialCommunityIcons name="star" size={12} color={COLORS.gold} />  Favoritos
+        <>
+          <View style={studioStyles.buscaWrap}>
+            <View style={studioStyles.buscaBar}>
+              <View style={studioStyles.buscaBrilho} pointerEvents="none" />
+              <MaterialCommunityIcons name="magnify" size={19} color={COLORS.dim} />
+              <TextInput
+                style={studioStyles.buscaInput}
+                value={buscaProjeto}
+                onChangeText={setBuscaProjeto}
+                placeholder="Buscar projeto..."
+                placeholderTextColor={COLORS.dim}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {buscaProjeto.length > 0 && (
+                <TouchableOpacity onPress={() => setBuscaProjeto('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <MaterialCommunityIcons name="close-circle" size={18} color={COLORS.dim} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {favoritos.length === 0 && recentes.length === 0 ? (
+            <View style={studioStyles.homeVazio}>
+              <MaterialCommunityIcons name="magnify-close" size={36} color={COLORS.dim} />
+              <Text style={[studioStyles.homeVazioTexto, { marginTop: 12 }]}>
+                Nenhum projeto encontrado para "{buscaProjeto.trim()}".
               </Text>
-              {favoritos.map(renderCardProjeto)}
-            </>
+            </View>
+          ) : (
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 110 }}>
+              {favoritos.length > 0 && (
+                <>
+                  <Text style={studioStyles.secaoLabel}>
+                    <MaterialCommunityIcons name="star" size={12} color={COLORS.gold} />  Favoritos
+                  </Text>
+                  {favoritos.map(renderCardProjeto)}
+                </>
+              )}
+              {recentes.length > 0 && (
+                <>
+                  <Text style={studioStyles.secaoLabel}>
+                    {favoritos.length > 0 ? 'Recentes' : 'Seus projetos'}
+                  </Text>
+                  {recentes.map(renderCardProjeto)}
+                </>
+              )}
+            </ScrollView>
           )}
-          {recentes.length > 0 && (
-            <>
-              <Text style={studioStyles.secaoLabel}>
-                {favoritos.length > 0 ? 'Recentes' : 'Seus projetos'}
-              </Text>
-              {recentes.map(renderCardProjeto)}
-            </>
-          )}
-        </ScrollView>
+        </>
       )}
 
       <TouchableOpacity
