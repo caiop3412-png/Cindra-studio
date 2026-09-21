@@ -843,8 +843,18 @@ const studioStyles = StyleSheet.create({
   },
   emptyEditorBtnText: { color: '#1a0806', fontSize: 13.5, fontWeight: '700' },
   sidebarBackdrop: { position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)' },
-  sidebarPanel: { position: 'absolute', top: 0, bottom: 0, left: 0, width: '78%', maxWidth: 320, backgroundColor: '#0d0d0f', borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.08)' },
-  sidebarHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)', gap: 10 },
+  sidebarPanel: { position: 'absolute', top: 0, bottom: 0, left: 0, width: '78%', maxWidth: 320, backgroundColor: '#0d0d0f', borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
+  sidebarGlow: {
+    position: 'absolute',
+    top: -70,
+    left: -60,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: COLORS.emberGlow,
+    opacity: 0.09,
+  },
+  sidebarHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)', gap: 8 },
   sidebarHeaderIcone: {
     width: 34,
     height: 34,
@@ -852,10 +862,23 @@ const studioStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,82,39,0.14)',
+    marginRight: 2,
   },
+  sidebarHeaderBtn: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.05)' },
   sidebarTitle: { flex: 1, color: COLORS.ink, fontSize: 14, fontWeight: '700' },
-  treeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, paddingRight: 12, borderRadius: 10, marginHorizontal: 6 },
+  treeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, paddingRight: 12, borderRadius: 10, marginHorizontal: 8, marginBottom: 2 },
+  treeRowPasta: { paddingLeft: 8, backgroundColor: 'rgba(255,255,255,0.03)' },
+  treeRowArquivo: { paddingLeft: 26 },
+  treeRowArquivoAtiva: { backgroundColor: 'rgba(255,82,39,0.16)' },
+  treeIndent: {
+    marginLeft: 25,
+    marginBottom: 2,
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(255,255,255,0.08)',
+    paddingLeft: 8,
+  },
   treeText: { color: COLORS.ink, fontSize: 13 },
+  treeTextPasta: { fontWeight: '600' },
   cfgLabel: { color: COLORS.dim, fontSize: 12.5, fontWeight: '700', marginBottom: 8, marginTop: 20, textTransform: 'uppercase', letterSpacing: 0.5 },
   cfgInput: {
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -1162,7 +1185,10 @@ const studioStyles = StyleSheet.create({
 // Nó recursivo do explorador de arquivos (pastas expansíveis + arquivos
 // clicáveis, igual à estrutura "app > src > main > java > ... > MainActivity.java"
 // que aparece no CodeAssist).
-function NoArvoreArquivo({ no, profundidade, pastasAbertas, alternarPasta, arquivoAtivo, onAbrirArquivo, aoSegurar }) {
+// A indentação de cada nível vem do wrapper "treeIndent" (com sua linha-guia
+// à esquerda), então o componente não precisa mais calcular profundidade — o
+// aninhamento das Views já cuida disso, e cada nível ganha sua própria guia.
+function NoArvoreArquivo({ no, pastasAbertas, alternarPasta, arquivoAtivo, onAbrirArquivo, aoSegurar }) {
   if (no.tipo === 'pasta') {
     const aberta = !!pastasAbertas[no.caminho];
     return (
@@ -1171,25 +1197,28 @@ function NoArvoreArquivo({ no, profundidade, pastasAbertas, alternarPasta, arqui
           onPress={() => alternarPasta(no.caminho)}
           onLongPress={() => aoSegurar && aoSegurar(no)}
           delayLongPress={350}
-          style={[studioStyles.treeRow, { paddingLeft: 14 + profundidade * 16 }]}
+          style={[studioStyles.treeRow, studioStyles.treeRowPasta]}
           activeOpacity={0.7}
         >
           <MaterialCommunityIcons name={aberta ? 'chevron-down' : 'chevron-right'} size={14} color={COLORS.dim} style={{ marginRight: 2 }} />
           <MaterialCommunityIcons name={aberta ? 'folder-open' : 'folder'} size={16} color={COLORS.ember} style={{ marginRight: 8, marginLeft: 2 }} />
-          <Text style={studioStyles.treeText}>{no.nome}</Text>
+          <Text style={[studioStyles.treeText, studioStyles.treeTextPasta]}>{no.nome}</Text>
         </TouchableOpacity>
-        {aberta && no.filhos.map((filho) => (
-          <NoArvoreArquivo
-            key={filho.caminho}
-            no={filho}
-            profundidade={profundidade + 1}
-            pastasAbertas={pastasAbertas}
-            alternarPasta={alternarPasta}
-            arquivoAtivo={arquivoAtivo}
-            onAbrirArquivo={onAbrirArquivo}
-            aoSegurar={aoSegurar}
-          />
-        ))}
+        {aberta && (
+          <View style={studioStyles.treeIndent}>
+            {no.filhos.map((filho) => (
+              <NoArvoreArquivo
+                key={filho.caminho}
+                no={filho}
+                pastasAbertas={pastasAbertas}
+                alternarPasta={alternarPasta}
+                arquivoAtivo={arquivoAtivo}
+                onAbrirArquivo={onAbrirArquivo}
+                aoSegurar={aoSegurar}
+              />
+            ))}
+          </View>
+        )}
       </View>
     );
   }
@@ -1200,7 +1229,7 @@ function NoArvoreArquivo({ no, profundidade, pastasAbertas, alternarPasta, arqui
       onPress={() => onAbrirArquivo(no.caminho)}
       onLongPress={() => aoSegurar && aoSegurar(no)}
       delayLongPress={350}
-      style={[studioStyles.treeRow, { paddingLeft: 32 + profundidade * 16, backgroundColor: ativo ? 'rgba(255,82,39,0.12)' : 'transparent' }]}
+      style={[studioStyles.treeRow, studioStyles.treeRowArquivo, ativo && studioStyles.treeRowArquivoAtiva]}
       activeOpacity={0.7}
     >
       <MaterialCommunityIcons name={icon} size={16} color={color} style={{ marginRight: 8 }} />
@@ -1452,6 +1481,7 @@ function CindraStudioScreen({ visible, onClose }) {
   const [abasAbertas, setAbasAbertas] = useState([]); // array de caminhos
   const [arquivoAtivo, setArquivoAtivo] = useState(null);
   const [sidebarAberta, setSidebarAberta] = useState(false);
+  const [menuProjetoAberto, setMenuProjetoAberto] = useState(false); // folha "Opções do projeto" (fora do menu lateral)
 
   // Compilação (▶)
   const [compilando, setCompilando] = useState(false);
@@ -1533,8 +1563,12 @@ function CindraStudioScreen({ visible, onClose }) {
   }, [visible]);
 
   useEffect(() => {
-    if (!sidebarAberta) { setConfirmandoNovo(false); setCardNo(null); }
+    if (!sidebarAberta) { setCardNo(null); }
   }, [sidebarAberta]);
+
+  useEffect(() => {
+    if (!menuProjetoAberto) { setConfirmandoNovo(false); }
+  }, [menuProjetoAberto]);
 
   // "Excluir projeto" (dentro do workspace): apaga o projeto atual de vez
   // e volta pra tela inicial (lista de projetos).
@@ -1543,6 +1577,7 @@ function CindraStudioScreen({ visible, onClose }) {
     const pacoteAntigo = nomePacote;
     setConfirmandoNovo(false);
     setSidebarAberta(false);
+    setMenuProjetoAberto(false);
     setProjeto(null);
     setAbasAbertas([]);
     setArquivoAtivo(null);
@@ -2513,21 +2548,29 @@ function CindraStudioScreen({ visible, onClose }) {
         <PainelLateralStudio onFechar={() => setSidebarAberta(false)}>
           {(fechar) => (
             <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 12) }}>
+              <View pointerEvents="none" style={studioStyles.sidebarGlow} />
               <View style={studioStyles.sidebarHeader}>
                 <View style={studioStyles.sidebarHeaderIcone}>
                   <MaterialCommunityIcons name="folder-outline" size={16} color={COLORS.ember} />
                 </View>
                 <Text style={studioStyles.sidebarTitle}>Arquivos do projeto</Text>
-                <TouchableOpacity onPress={fechar} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <TouchableOpacity
+                  style={studioStyles.sidebarHeaderBtn}
+                  onPress={() => { fechar(); setMenuProjetoAberto(true); }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  activeOpacity={0.75}
+                >
+                  <MaterialCommunityIcons name="dots-vertical" size={18} color={COLORS.dim} />
+                </TouchableOpacity>
+                <TouchableOpacity style={studioStyles.sidebarHeaderBtn} onPress={fechar} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.75}>
                   <MaterialCommunityIcons name="close" size={18} color={COLORS.dim} />
                 </TouchableOpacity>
               </View>
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: 6 }}>
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: 8, paddingHorizontal: 2 }}>
                 {projeto && projeto.arvore.map((no) => (
                   <NoArvoreArquivo
                     key={no.caminho}
                     no={no}
-                    profundidade={0}
                     pastasAbertas={pastasAbertas}
                     alternarPasta={alternarPasta}
                     arquivoAtivo={arquivoAtivo}
@@ -2536,23 +2579,33 @@ function CindraStudioScreen({ visible, onClose }) {
                   />
                 ))}
               </ScrollView>
+            </View>
+          )}
+        </PainelLateralStudio>
+      )}
+
+      {menuProjetoAberto && (
+        <FolhaInferiorStudio onFechar={() => setMenuProjetoAberto(false)} insetBottom={insets.bottom}>
+          {(fechar) => (
+            <>
+              <Text style={[studioStyles.folhaTitulo, { marginBottom: 14 }]}>Opções do projeto</Text>
               <TouchableOpacity
-                style={[studioStyles.novoProjBtn, confirmandoNovo && { borderColor: 'rgba(255,90,78,0.5)' }]}
+                style={[studioStyles.folhaLinha, confirmandoNovo && { backgroundColor: 'rgba(255,107,107,0.12)' }]}
                 onPress={() => (confirmandoNovo ? novoProjeto() : setConfirmandoNovo(true))}
                 activeOpacity={0.8}
               >
                 <MaterialCommunityIcons
                   name={confirmandoNovo ? 'alert-outline' : 'trash-can-outline'}
-                  size={16}
+                  size={20}
                   color={confirmandoNovo ? '#ff8a80' : COLORS.dim}
                 />
-                <Text style={[studioStyles.novoProjText, confirmandoNovo && { color: '#ff8a80' }]}>
+                <Text style={[studioStyles.folhaLinhaTexto, confirmandoNovo && { color: '#ff8a80' }]}>
                   {confirmandoNovo ? 'Toque de novo: apaga este projeto' : 'Excluir projeto'}
                 </Text>
               </TouchableOpacity>
-            </View>
+            </>
           )}
-        </PainelLateralStudio>
+        </FolhaInferiorStudio>
       )}
 
       {cardNo && (
