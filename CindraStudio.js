@@ -16,6 +16,7 @@ import {
   Switch,
   PixelRatio,
   Keyboard,
+  Image,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,6 +26,15 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 // Módulo nativo local (modules/apk-builder): aapt2 + ECJ + D8 + apksig.
 import * as ApkBuilder from './modules/apk-builder';
+
+// Foto do ícone do app (galeria → recorte quadrado → PNG 512×512). Precisa
+// de: npx expo install expo-image-picker expo-image-manipulator (e um build
+// novo). Carregados de forma opcional: se algum faltar, o resto do Studio
+// continua funcionando normal e só o botão de foto avisa o que instalar.
+let ImagePicker = null;
+let ImageManipulator = null;
+try { ImagePicker = require('expo-image-picker'); } catch (e) { ImagePicker = null; }
+try { ImageManipulator = require('expo-image-manipulator'); } catch (e) { ImageManipulator = null; }
 
 const CODIGO_FONTE = 13; // fonte do editor (também usada pra calcular a largura do código)
 
@@ -232,12 +242,13 @@ function pacotePraCaminho(pkg) {
 }
 
 // Ícones disponíveis pro seletor de "ícone do app" na tela de config.
-const ICONES_APP_STUDIO = [
-  'android', 'sword-cross', 'gamepad-variant', 'rocket-launch-outline',
-  'shield-star-outline', 'skull-crossbones-outline', 'castle', 'fire',
-  'water', 'earth', 'star-four-points-outline', 'controller-classic-outline',
-  'ghost-outline', 'diamond-stone', 'chess-knight', 'lightning-bolt-outline',
-];
+// Só o robozinho do Android: qualquer outro visual vem de uma foto da galeria.
+const ICONES_APP_STUDIO = ['android'];
+// Quando o app usa foto no lugar do ícone padrão, o PNG entra aqui (e o
+// ic_launcher.xml deixa de existir — os dois com o mesmo nome dariam
+// recurso duplicado no aapt2).
+const ICONE_FOTO_CAMINHO = 'app/src/main/res/drawable/ic_launcher.png';
+const PASTA_ICONES_STUDIO = `${FileSystem.documentDirectory}cindrastudio/_icones/`;
 const CORES_ICONE_STUDIO = ['#ff5227', '#8b5cf6', '#38bdf8', '#34d399', '#ffb648', '#ff2e7e', '#eab308', '#60a5fa'];
 
 // Ícone + cor por extensão de arquivo, pro explorador do CindraStudio
@@ -333,7 +344,7 @@ function escaparStringAndroid(texto) {
 // de um projeto novo, a partir do nome do app, do nome do pacote e da
 // cor do ícone. Já gera tudo que o manifest referencia (tema, ícone,
 // <uses-sdk>), senão o aapt2 recusa o projeto na hora de compilar.
-function montarProjetoNovo(nomeApp, nomePacoteBruto, corIcone) {
+function montarProjetoNovo(nomeApp, nomePacoteBruto, corIcone, comFoto = false) {
   const nomePacote = normalizarPacote(nomePacoteBruto);
   const cor = /^#[0-9a-fA-F]{6}$/.test(corIcone || '') ? corIcone : '#ff5227';
   const pkgPath = pacotePraCaminho(nomePacote);
@@ -445,10 +456,14 @@ android {
 `,
   };
 
+  // Com foto: o ícone é o PNG (binário, gravado depois em criarProjeto).
+  if (comFoto) delete conteudos[iconePath];
+
   // Transforma o mapa de caminhos num array de nós (pastas/arquivos)
   // pro explorador desenhar em árvore.
   const raiz = [];
-  Object.keys(conteudos).forEach((caminho) => {
+  const caminhosArvore = comFoto ? Object.keys(conteudos).concat(ICONE_FOTO_CAMINHO) : Object.keys(conteudos);
+  caminhosArvore.forEach((caminho) => {
     const partes = caminho.split('/');
     let nivel = raiz;
     let acumulado = '';
@@ -467,7 +482,8 @@ android {
   // Pasta assets já aparece (vazia) no explorador: é onde a pessoa segura o
   // dedo pra "Adicionar arquivo" (modelo .glb, imagem, som...).
   const arvore = inserirNoNaArvore(raiz, 'app/src/main', { nome: 'assets', caminho: ASSETS_STUDIO, tipo: 'pasta', filhos: [] });
-  return { arvore, conteudos, binarios: {}, arquivoInicial: mainActivityPath, pacote: nomePacote };
+  const binarios = comFoto ? { [ICONE_FOTO_CAMINHO]: { tamanho: 0 } } : {};
+  return { arvore, conteudos, binarios, arquivoInicial: mainActivityPath, pacote: nomePacote };
 }
 
 // Pasta do projeto no armazenamento interno do app — é daqui que o
@@ -894,24 +910,43 @@ const studioStyles = StyleSheet.create({
     fontSize: 14.5,
   },
   cfgHint: { color: COLORS.dim, fontSize: 11.5, marginTop: 6, lineHeight: 15 },
-  iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  iconOption: { width: 52, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent', backgroundColor: 'rgba(255,255,255,0.05)' },
-  iconOptionAtiva: { borderColor: COLORS.ink },
-  colorRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  colorDot: { width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderColor: 'transparent' },
+  colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  colorDot: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: 'transparent' },
   colorDotAtiva: { borderColor: '#fff' },
-  previewCard: { alignItems: 'center', marginTop: 24, marginBottom: 8 },
-  previewIcon: { width: 76, height: 76, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  previewName: { color: COLORS.ink, fontSize: 15, fontWeight: '700' },
-  previewPkg: { color: COLORS.dim, fontSize: 12, marginTop: 2 },
+  // Tela de configuração (novo app)
+  cfgHero: { alignItems: 'center', marginTop: 18, marginBottom: 18, paddingVertical: 8 },
+  cfgHeroGlow: { position: 'absolute', top: -10, width: 170, height: 170, borderRadius: 85, opacity: 0.16 },
+  cfgIconeWrap: { width: 116, height: 116, marginBottom: 14 },
+  cfgIconeBase: { width: 116, height: 116, borderRadius: 30, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  cfgIconeFoto: { width: 116, height: 116, borderRadius: 30, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.18)', backgroundColor: '#1a0f0e' },
+  cfgIconeBadge: { position: 'absolute', right: -6, bottom: -6, width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.ember, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#170c0b' },
+  cfgCard: { backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', borderRadius: 20, padding: 16, marginBottom: 14 },
+  cfgCampo: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(0,0,0,0.28)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', borderRadius: 14, paddingHorizontal: 14 },
+  cfgCampoFoco: { borderColor: 'rgba(255,82,39,0.65)', backgroundColor: 'rgba(255,82,39,0.06)' },
+  cfgCampoInput: { flex: 1, color: COLORS.ink, fontSize: 15, paddingVertical: 13 },
+  cfgBtnRow: { flexDirection: 'row', gap: 10 },
+  cfgBtnPrimario: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, borderRadius: 14, backgroundColor: 'rgba(255,82,39,0.13)', borderWidth: 1, borderColor: 'rgba(255,82,39,0.4)' },
+  cfgBtnPrimarioTexto: { color: '#ff8a68', fontSize: 14, fontWeight: '700' },
+  cfgBtnSecundario: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, paddingHorizontal: 14, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' },
+  cfgBtnSecundarioTexto: { color: COLORS.ink, fontSize: 13.5, fontWeight: '600' },
+  cfgFooter: { paddingHorizontal: 18, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.07)', backgroundColor: COLORS.sheet },
+  previewName: { color: COLORS.ink, fontSize: 18, fontWeight: '800' },
+  previewPkg: { color: COLORS.dim, fontSize: 12.5, marginTop: 3 },
   criarBtn: {
+    flexDirection: 'row',
+    gap: 9,
     backgroundColor: COLORS.ember,
     borderRadius: 16,
     paddingVertical: 15,
     alignItems: 'center',
-    marginTop: 28,
+    justifyContent: 'center',
+    elevation: 6,
+    shadowColor: COLORS.ember,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
   },
-  criarBtnText: { color: '#1a0806', fontSize: 15, fontWeight: '700' },
+  criarBtnText: { color: '#1a0806', fontSize: 15.5, fontWeight: '800' },
   // Tela inicial (lista de projetos)
   homeGlowTop: {
     position: 'absolute',
@@ -1403,18 +1438,7 @@ function ConteudoFolhaProjeto({ projeto, onAbrir, onFavoritar, onExcluir, onCanc
   return (
     <>
       <View style={studioStyles.folhaTopo}>
-        <View
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 15,
-            backgroundColor: projeto.corIcone || CORES_ICONE_STUDIO[0],
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <MaterialCommunityIcons name={projeto.iconeEscolhido || ICONES_APP_STUDIO[0]} size={26} color="#1a0806" />
-        </View>
+        <IconeAppStudio dados={projeto} lado={48} icone={26} raio={15} />
         <View style={{ flex: 1 }}>
           <Text style={studioStyles.folhaTitulo} numberOfLines={1}>{projeto.nomeApp}</Text>
           <Text style={studioStyles.folhaSub} numberOfLines={1}>
@@ -1459,6 +1483,27 @@ function ConteudoFolhaProjeto({ projeto, onAbrir, onFavoritar, onExcluir, onCanc
   );
 }
 
+// Ícone do app nos cards/listas: a foto escolhida, ou o robozinho na cor.
+function IconeAppStudio({ dados, lado = 52, icone = 28, raio = 16 }) {
+  if (dados && dados.fotoIcone) {
+    return <Image source={{ uri: dados.fotoIcone }} style={{ width: lado, height: lado, borderRadius: raio, backgroundColor: '#1a0f0e' }} />;
+  }
+  return (
+    <View
+      style={{
+        width: lado,
+        height: lado,
+        borderRadius: raio,
+        backgroundColor: (dados && dados.corIcone) || CORES_ICONE_STUDIO[0],
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <MaterialCommunityIcons name={(dados && dados.iconeEscolhido) || ICONES_APP_STUDIO[0]} size={icone} color="#1a0806" />
+    </View>
+  );
+}
+
 // Histórico de desfazer/refazer: guarda só o TRECHO que mudou (posição,
 // texto removido, texto inserido), não o arquivo inteiro. Cada evento de
 // digitação vira 1 passo (letra por letra); colar um bloco é 1 evento só,
@@ -1481,6 +1526,10 @@ function CindraStudioScreen({ visible, onClose }) {
   const [nomePacote, setNomePacote] = useState('com.dev.meuapp');
   const [iconeEscolhido, setIconeEscolhido] = useState(ICONES_APP_STUDIO[0]);
   const [corIcone, setCorIcone] = useState(CORES_ICONE_STUDIO[0]);
+  const [fotoIcone, setFotoIcone] = useState(null); // uri do PNG do ícone (foto da galeria), ou null = robozinho
+  const [processandoFoto, setProcessandoFoto] = useState(false);
+  const [criandoProjeto, setCriandoProjeto] = useState(false);
+  const [campoFoco, setCampoFoco] = useState(null); // 'nome' | 'pacote'
 
   // Tela inicial: lista de projetos já criados (resumo — nome, pacote,
   // ícone, cor). O conteúdo completo de cada um só é lido quando a
@@ -1560,7 +1609,7 @@ function CindraStudioScreen({ visible, onClose }) {
 
   // Foto do estado atual (só existe depois de carregar e com projeto criado).
   estadoRef.current = estadoCarregado && projeto
-    ? { versao: 1, nomeApp, nomePacote, iconeEscolhido, corIcone, projeto, pastasAbertas, abasAbertas, arquivoAtivo }
+    ? { versao: 1, nomeApp, nomePacote, iconeEscolhido, corIcone, fotoIcone, projeto, pastasAbertas, abasAbertas, arquivoAtivo }
     : null;
 
   // Salva sozinho, meio segundo depois da última mudança (digitar, abrir
@@ -1571,7 +1620,7 @@ function CindraStudioScreen({ visible, onClose }) {
       if (estadoRef.current) gravarEstadoStudio(estadoRef.current).catch(() => {});
     }, 500);
     return () => clearTimeout(t);
-  }, [estadoCarregado, projeto, pastasAbertas, abasAbertas, arquivoAtivo, nomeApp, nomePacote, iconeEscolhido, corIcone]);
+  }, [estadoCarregado, projeto, pastasAbertas, abasAbertas, arquivoAtivo, nomeApp, nomePacote, iconeEscolhido, corIcone, fotoIcone]);
 
   // Salva na hora quando o app vai pra segundo plano (não perde nada se o
   // sistema matar o app logo em seguida).
@@ -1618,6 +1667,8 @@ function CindraStudioScreen({ visible, onClose }) {
     setErrosCompilacao([]);
     setApkGerado(null);
     FileSystem.deleteAsync(caminhoEstadoProjeto(pacoteAntigo), { idempotent: true }).catch(() => {});
+    if (fotoIcone) FileSystem.deleteAsync(fotoIcone, { idempotent: true }).catch(() => {});
+    setFotoIcone(null);
     if (antigo && antigo.pacote) {
       FileSystem.deleteAsync(pastaProjetoStudio(antigo.pacote), { idempotent: true }).catch(() => {});
       FileSystem.deleteAsync(pastaBinariosStudio(antigo.pacote), { idempotent: true }).catch(() => {});
@@ -1637,6 +1688,7 @@ function CindraStudioScreen({ visible, onClose }) {
     setNomePacote('com.dev.meuapp');
     setIconeEscolhido(ICONES_APP_STUDIO[0]);
     setCorIcone(CORES_ICONE_STUDIO[0]);
+    setFotoIcone(null);
     setProjeto(null);
     setAbasAbertas([]);
     setArquivoAtivo(null);
@@ -1660,6 +1712,7 @@ function CindraStudioScreen({ visible, onClose }) {
     setNomePacote(e.nomePacote || pacote);
     setIconeEscolhido(e.iconeEscolhido || ICONES_APP_STUDIO[0]);
     setCorIcone(e.corIcone || CORES_ICONE_STUDIO[0]);
+    setFotoIcone(e.fotoIcone || null);
     let proj = e.projeto;
     if (!proj.binarios) proj = { ...proj, binarios: {} };
     if (!arvoreTemCaminho(proj.arvore, ASSETS_STUDIO)) {
@@ -1693,6 +1746,8 @@ function CindraStudioScreen({ visible, onClose }) {
   // excluir (sem precisar entrar no projeto pra apagar).
   const excluirProjetoDaLista = (pacote) => {
     setCardProjeto(null);
+    const itemLista = listaProjetos.find((p) => p.pacote === pacote);
+    if (itemLista && itemLista.fotoIcone) FileSystem.deleteAsync(itemLista.fotoIcone, { idempotent: true }).catch(() => {});
     FileSystem.deleteAsync(caminhoEstadoProjeto(pacote), { idempotent: true }).catch(() => {});
     FileSystem.deleteAsync(pastaProjetoStudio(pacote), { idempotent: true }).catch(() => {});
     FileSystem.deleteAsync(pastaBinariosStudio(pacote), { idempotent: true }).catch(() => {});
@@ -1709,6 +1764,7 @@ function CindraStudioScreen({ visible, onClose }) {
         nomeApp,
         iconeEscolhido,
         corIcone,
+        fotoIcone: fotoIcone || null,
       }).catch(() => null);
       if (lista) setListaProjetos(lista);
     }
@@ -1778,10 +1834,76 @@ function CindraStudioScreen({ visible, onClose }) {
     });
   };
 
-  const criarProjeto = () => {
+  // Galeria → recorte quadrado (editor do próprio seletor) → PNG 512×512.
+  // Foto grande no ícone pesa no APK e trava o launcher, então reduz aqui.
+  const escolherFotoIcone = async () => {
+    if (processandoFoto) return;
+    if (!ImagePicker || !ImageManipulator) {
+      exibirAviso(
+        'Faltam pacotes',
+        'Pra usar foto no ícone instale expo-image-picker e expo-image-manipulator (npx expo install ...) e gere um build novo.',
+        'erro'
+      );
+      return;
+    }
+    try {
+      const r = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaType ? ['images'] : ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 1,
+      });
+      if (r.canceled || !r.assets || !r.assets.length) return;
+      setProcessandoFoto(true);
+      const uri = r.assets[0].uri;
+      const base = await ImageManipulator.manipulateAsync(uri, [], {});
+      const lado = Math.min(base.width, base.height);
+      const acoes = [];
+      if (base.width !== base.height) {
+        acoes.push({ crop: { originX: Math.floor((base.width - lado) / 2), originY: Math.floor((base.height - lado) / 2), width: lado, height: lado } });
+      }
+      const alvo = Math.min(512, lado);
+      acoes.push({ resize: { width: alvo, height: alvo } });
+      const saida = await ImageManipulator.manipulateAsync(uri, acoes, { format: ImageManipulator.SaveFormat.PNG, compress: 1 });
+      setFotoIcone(saida.uri);
+    } catch (e) {
+      exibirAviso('Não deu pra usar a foto', String(e && e.message ? e.message : e), 'erro');
+    } finally {
+      setProcessandoFoto(false);
+    }
+  };
+
+  const criarProjeto = async () => {
+    if (criandoProjeto) return;
+    setCriandoProjeto(true);
     const app = nomeApp.trim() || 'Meu App';
     const pkg = nomePacote.trim() || 'com.dev.meuapp';
-    const novo = montarProjetoNovo(app, pkg, corIcone);
+    let novo = montarProjetoNovo(app, pkg, corIcone, !!fotoIcone);
+    let fotoFinal = null;
+
+    // Foto: vira o ic_launcher.png do projeto (guardado em _bin/, de onde
+    // gravarProjetoStudio copia pro lugar certo) e ganha uma cópia própria
+    // pros cards da lista. Se algo falhar, cai no ícone padrão.
+    if (fotoIcone) {
+      try {
+        const destinoBin = pastaBinariosStudio(novo.pacote) + ICONE_FOTO_CAMINHO;
+        await FileSystem.makeDirectoryAsync(destinoBin.split('/').slice(0, -1).join('/'), { intermediates: true });
+        await FileSystem.deleteAsync(destinoBin, { idempotent: true });
+        await FileSystem.copyAsync({ from: fotoIcone, to: destinoBin });
+        const info = await FileSystem.getInfoAsync(destinoBin);
+        novo.binarios[ICONE_FOTO_CAMINHO] = { tamanho: info.size || 0 };
+
+        await FileSystem.makeDirectoryAsync(PASTA_ICONES_STUDIO, { intermediates: true });
+        fotoFinal = `${PASTA_ICONES_STUDIO}${novo.pacote}_${Date.now()}.png`;
+        await FileSystem.copyAsync({ from: destinoBin, to: fotoFinal });
+      } catch (e) {
+        novo = montarProjetoNovo(app, pkg, corIcone, false);
+        fotoFinal = null;
+        exibirAviso('Foto não aplicada', 'Não consegui gravar a foto no projeto — usei o ícone padrão.', 'aviso');
+      }
+    }
+
+    setFotoIcone(fotoFinal);
     setProjeto(novo);
     setNomePacote(novo.pacote);
     // Já deixa o projeto gravado em disco desde o começo, e cadastrado na
@@ -1792,6 +1914,7 @@ function CindraStudioScreen({ visible, onClose }) {
       nomeApp: app,
       iconeEscolhido,
       corIcone,
+      fotoIcone: fotoFinal,
     }).then(setListaProjetos).catch(() => {});
     // Abre as pastas do caminho até o MainActivity, e a raiz, já expandidas.
     const abertas = {};
@@ -1803,6 +1926,7 @@ function CindraStudioScreen({ visible, onClose }) {
     setPastasAbertas(abertas);
     setAbasAbertas([novo.arquivoInicial]);
     setArquivoAtivo(novo.arquivoInicial);
+    setCriandoProjeto(false);
     setEtapa('workspace');
   };
 
@@ -2079,18 +2203,7 @@ function CindraStudioScreen({ visible, onClose }) {
   };
 
   const renderIconeProjeto = (p, lado = 52, icone = 28, raio = 16) => (
-    <View
-      style={{
-        width: lado,
-        height: lado,
-        borderRadius: raio,
-        backgroundColor: p.corIcone || CORES_ICONE_STUDIO[0],
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <MaterialCommunityIcons name={p.iconeEscolhido || ICONES_APP_STUDIO[0]} size={icone} color="#1a0806" />
-    </View>
+    <IconeAppStudio dados={p} lado={lado} icone={icone} raio={raio} />
   );
 
   const renderCardLista = (p, i) => (
@@ -2479,78 +2592,126 @@ function CindraStudioScreen({ visible, onClose }) {
 
   // ---------- Tela 1: configuração do projeto ----------
   const renderConfig = () => (
-    <>
+    <View style={{ flex: 1 }}>
       <View style={[styles.chatHeader, { paddingTop: 10 }]}>
         <TouchableOpacity onPress={() => setEtapa('home')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <MaterialCommunityIcons name="arrow-left" size={22} color={COLORS.ink} />
         </TouchableOpacity>
-        <Text style={styles.chatHeaderTitle}>CindraStudio</Text>
+        <Text style={styles.chatHeaderTitle}>Novo app</Text>
         <View style={{ width: 22 }} />
       </View>
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: Math.max(insets.bottom, 20) + 20 }} keyboardShouldPersistTaps="handled">
-        <View style={studioStyles.previewCard}>
-          <View style={[studioStyles.previewIcon, { backgroundColor: hexParaRgba(corIcone, 0.18) }]}>
-            <MaterialCommunityIcons name={iconeEscolhido} size={40} color={corIcone} />
-          </View>
-          <Text style={studioStyles.previewName}>{nomeApp.trim() || 'Meu App'}</Text>
-          <Text style={studioStyles.previewPkg}>{nomePacote.trim() || 'com.dev.meuapp'}</Text>
+
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 28 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Ícone grande: toque pra escolher a foto da galeria */}
+        <View style={studioStyles.cfgHero}>
+          <View pointerEvents="none" style={[studioStyles.cfgHeroGlow, { backgroundColor: fotoIcone ? COLORS.emberGlow : hexParaRgba(corIcone, 0.55) }]} />
+          <TouchableOpacity activeOpacity={0.85} onPress={escolherFotoIcone} style={studioStyles.cfgIconeWrap}>
+            {fotoIcone ? (
+              <Image source={{ uri: fotoIcone }} style={studioStyles.cfgIconeFoto} />
+            ) : (
+              <View style={[studioStyles.cfgIconeBase, { backgroundColor: hexParaRgba(corIcone, 0.16), borderColor: hexParaRgba(corIcone, 0.5) }]}>
+                <MaterialCommunityIcons name="android" size={58} color={corIcone} />
+              </View>
+            )}
+            <View style={studioStyles.cfgIconeBadge}>
+              {processandoFoto
+                ? <ActivityIndicator size="small" color="#1a0806" />
+                : <MaterialCommunityIcons name="camera-plus-outline" size={17} color="#1a0806" />}
+            </View>
+          </TouchableOpacity>
+          <Text style={studioStyles.previewName} numberOfLines={1}>{nomeApp.trim() || 'Meu App'}</Text>
+          <Text style={studioStyles.previewPkg} numberOfLines={1}>{nomePacote.trim() || 'com.dev.meuapp'}</Text>
         </View>
 
-        <Text style={studioStyles.cfgLabel}>Nome do app</Text>
-        <TextInput
-          style={studioStyles.cfgInput}
-          value={nomeApp}
-          onChangeText={setNomeApp}
-          placeholder="Ex: Abismo de Lumen"
-          placeholderTextColor={COLORS.dim}
-        />
-
-        <Text style={studioStyles.cfgLabel}>Nome do pacote</Text>
-        <TextInput
-          style={studioStyles.cfgInput}
-          value={nomePacote}
-          onChangeText={setNomePacote}
-          placeholder="com.seunome.appname"
-          placeholderTextColor={COLORS.dim}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        <Text style={studioStyles.cfgHint}>Identificador único do app (convenção: com.seunome.nomedoapp). Evite espaços e acentos.</Text>
-
-        <Text style={studioStyles.cfgLabel}>Ícone do app</Text>
-        <View style={studioStyles.iconGrid}>
-          {ICONES_APP_STUDIO.map((nome) => (
-            <TouchableOpacity
-              key={nome}
-              style={[
-                studioStyles.iconOption,
-                { backgroundColor: hexParaRgba(corIcone, 0.15) },
-                iconeEscolhido === nome && studioStyles.iconOptionAtiva,
-              ]}
-              onPress={() => setIconeEscolhido(nome)}
-              activeOpacity={0.75}
-            >
-              <MaterialCommunityIcons name={nome} size={24} color={corIcone} />
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <View style={studioStyles.colorRow}>
-          {CORES_ICONE_STUDIO.map((cor) => (
-            <TouchableOpacity
-              key={cor}
-              style={[studioStyles.colorDot, { backgroundColor: cor }, corIcone === cor && studioStyles.colorDotAtiva]}
-              onPress={() => setCorIcone(cor)}
-              activeOpacity={0.75}
+        {/* Dados do app */}
+        <View style={studioStyles.cfgCard}>
+          <Text style={[studioStyles.cfgLabel, { marginTop: 0 }]}>Nome do app</Text>
+          <View style={[studioStyles.cfgCampo, campoFoco === 'nome' && studioStyles.cfgCampoFoco]}>
+            <MaterialCommunityIcons name="application-outline" size={18} color={campoFoco === 'nome' ? COLORS.ember : COLORS.dim} />
+            <TextInput
+              style={studioStyles.cfgCampoInput}
+              value={nomeApp}
+              onChangeText={setNomeApp}
+              onFocus={() => setCampoFoco('nome')}
+              onBlur={() => setCampoFoco(null)}
+              placeholder="Ex: Abismo de Lumen"
+              placeholderTextColor={COLORS.dim}
             />
-          ))}
+          </View>
+
+          <Text style={studioStyles.cfgLabel}>Nome do pacote</Text>
+          <View style={[studioStyles.cfgCampo, campoFoco === 'pacote' && studioStyles.cfgCampoFoco]}>
+            <MaterialCommunityIcons name="package-variant-closed" size={18} color={campoFoco === 'pacote' ? COLORS.ember : COLORS.dim} />
+            <TextInput
+              style={studioStyles.cfgCampoInput}
+              value={nomePacote}
+              onChangeText={setNomePacote}
+              onFocus={() => setCampoFoco('pacote')}
+              onBlur={() => setCampoFoco(null)}
+              placeholder="com.seunome.appname"
+              placeholderTextColor={COLORS.dim}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+          <Text style={studioStyles.cfgHint}>Identificador único do app (convenção: com.seunome.nomedoapp). Evite espaços e acentos.</Text>
         </View>
 
-        <TouchableOpacity style={studioStyles.criarBtn} onPress={criarProjeto} activeOpacity={0.85}>
-          <Text style={studioStyles.criarBtnText}>Criar projeto</Text>
-        </TouchableOpacity>
+        {/* Ícone */}
+        <View style={studioStyles.cfgCard}>
+          <Text style={[studioStyles.cfgLabel, { marginTop: 0 }]}>Ícone do app</Text>
+          <View style={studioStyles.cfgBtnRow}>
+            <TouchableOpacity style={studioStyles.cfgBtnPrimario} onPress={escolherFotoIcone} activeOpacity={0.85} disabled={processandoFoto}>
+              <MaterialCommunityIcons name="image-multiple-outline" size={18} color={COLORS.ember} />
+              <Text style={studioStyles.cfgBtnPrimarioTexto}>{fotoIcone ? 'Trocar foto' : 'Escolher da galeria'}</Text>
+            </TouchableOpacity>
+            {!!fotoIcone && (
+              <TouchableOpacity style={studioStyles.cfgBtnSecundario} onPress={() => setFotoIcone(null)} activeOpacity={0.85}>
+                <MaterialCommunityIcons name="android" size={18} color={COLORS.ink} />
+                <Text style={studioStyles.cfgBtnSecundarioTexto}>Usar Android</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <Text style={studioStyles.cfgHint}>
+            {fotoIcone
+              ? 'Essa foto vira o ícone do app (recortada em quadrado).'
+              : 'Escolha uma foto da galeria pra ser o ícone do app, ou deixe o robozinho do Android.'}
+          </Text>
+
+          {!fotoIcone && (
+            <>
+              <Text style={[studioStyles.cfgLabel, { marginTop: 18 }]}>Cor do ícone</Text>
+              <View style={studioStyles.colorRow}>
+                {CORES_ICONE_STUDIO.map((cor) => (
+                  <TouchableOpacity
+                    key={cor}
+                    style={[studioStyles.colorDot, { backgroundColor: cor }, corIcone === cor && studioStyles.colorDotAtiva]}
+                    onPress={() => setCorIcone(cor)}
+                    activeOpacity={0.75}
+                  />
+                ))}
+              </View>
+            </>
+          )}
+        </View>
       </ScrollView>
-    </>
+
+      {alturaTeclado === 0 && (
+        <View style={[studioStyles.cfgFooter, { paddingBottom: Math.max(insets.bottom, 12) + 4 }]}>
+          <TouchableOpacity style={[studioStyles.criarBtn, criandoProjeto && { opacity: 0.7 }]} onPress={criarProjeto} activeOpacity={0.85} disabled={criandoProjeto}>
+            {criandoProjeto
+              ? <ActivityIndicator size="small" color="#1a0806" />
+              : <MaterialCommunityIcons name="rocket-launch-outline" size={19} color="#1a0806" />}
+            <Text style={studioStyles.criarBtnText}>Criar projeto</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
   );
 
   // ---------- Tela 2: workspace (explorador + editor) ----------
