@@ -717,44 +717,98 @@ const studioStyles = StyleSheet.create({
     marginTop: 4,
   },
   instalarBtnText: { color: '#1a0806', fontSize: 14.5, fontWeight: '700' },
+  // ---- Workspace: barra superior ----
+  workspaceTopWrap: {
+    backgroundColor: '#0d0d0f',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
+  },
+  workspaceGlow: {
+    position: 'absolute',
+    top: -60,
+    right: -40,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: COLORS.emberGlow,
+    opacity: 0.1,
+  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: '#0d0d0f',
+    gap: 4,
   },
-  topBarTitle: { flex: 1, color: '#e8efe9', fontSize: 15, fontWeight: '700', marginLeft: 10 },
-  topBarIconBtn: { padding: 6, marginLeft: 4 },
-  tabsBar: {
+  topBarTitle: { flex: 1, color: '#e8efe9', fontSize: 15, fontWeight: '700', marginLeft: 6 },
+  topBarIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  topBarActionsCard: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: '#111113',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 13,
+    padding: 3,
+    gap: 2,
+  },
+  topBarDivider: { width: 1, height: 16, backgroundColor: 'rgba(255,255,255,0.10)', marginHorizontal: 2 },
+  // ---- Abas de arquivo em formato de card (substituem a antiga barra
+  // de abas + breadcrumb, que juntas tomavam duas linhas inteiras) ----
+  tabsBar: {
+    maxHeight: 52,
+  },
+  tabsBarConteudo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 8,
   },
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    borderRightWidth: 1,
-    borderRightColor: 'rgba(255,255,255,0.06)',
+    paddingVertical: 8,
+    paddingHorizontal: 11,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderWidth: 1,
+    borderColor: 'transparent',
+    maxWidth: 168,
   },
-  tabAtiva: { backgroundColor: 'rgba(255,82,39,0.14)', borderBottomWidth: 2, borderBottomColor: COLORS.ember },
-  tabText: { color: COLORS.dim, fontSize: 12.5, maxWidth: 130 },
+  tabAtiva: {
+    backgroundColor: 'rgba(255,82,39,0.14)',
+    borderColor: 'rgba(255,82,39,0.45)',
+  },
+  tabText: { color: COLORS.dim, fontSize: 12.5, maxWidth: 96 },
   tabTextAtiva: { color: COLORS.ink, fontWeight: '700' },
-  breadcrumb: {
+  // Chip flutuante com o caminho do arquivo ativo — some sobre o canto do
+  // editor em vez de ocupar uma faixa inteira da tela.
+  pathChip: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: '#0a0a0c',
+    maxWidth: '72%',
+    backgroundColor: 'rgba(13,13,15,0.86)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    gap: 5,
+    zIndex: 5,
   },
-  breadcrumbText: { color: COLORS.dim, fontSize: 11.5 },
+  pathChipText: { color: COLORS.dim, fontSize: 10.5 },
   editorRow: { flexDirection: 'row', minHeight: '100%' },
-  lineNumbers: { paddingVertical: 12, paddingHorizontal: 8, backgroundColor: '#0a0a0c' },
+  lineNumbers: { paddingVertical: 14, paddingHorizontal: 8, backgroundColor: '#0a0a0c', borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.05)' },
   lineNumberText: { color: 'rgba(255,255,255,0.28)', fontSize: 13, lineHeight: 20, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', textAlign: 'right' },
   codeInput: {
     flex: 1,
@@ -762,16 +816,45 @@ const studioStyles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    paddingVertical: 12,
-    paddingHorizontal: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
     textAlignVertical: 'top',
   },
-  emptyEditor: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
+  emptyEditor: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 36 },
+  emptyEditorIcone: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,82,39,0.12)',
+    marginBottom: 16,
+  },
+  emptyEditorTitulo: { color: COLORS.ink, fontSize: 15.5, fontWeight: '700', marginBottom: 6, textAlign: 'center' },
+  emptyEditorBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 18,
+    paddingVertical: 11,
+    paddingHorizontal: 18,
+    borderRadius: 13,
+    backgroundColor: COLORS.ember,
+  },
+  emptyEditorBtnText: { color: '#1a0806', fontSize: 13.5, fontWeight: '700' },
   sidebarBackdrop: { position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)' },
   sidebarPanel: { position: 'absolute', top: 0, bottom: 0, left: 0, width: '78%', maxWidth: 320, backgroundColor: '#0d0d0f', borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.08)' },
-  sidebarHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
-  sidebarTitle: { color: COLORS.ink, fontSize: 14, fontWeight: '700' },
-  treeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingRight: 12 },
+  sidebarHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)', gap: 10 },
+  sidebarHeaderIcone: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,82,39,0.14)',
+  },
+  sidebarTitle: { flex: 1, color: COLORS.ink, fontSize: 14, fontWeight: '700' },
+  treeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, paddingRight: 12, borderRadius: 10, marginHorizontal: 6 },
   treeText: { color: COLORS.ink, fontSize: 13 },
   cfgLabel: { color: COLORS.dim, fontSize: 12.5, fontWeight: '700', marginBottom: 8, marginTop: 20, textTransform: 'uppercase', letterSpacing: 0.5 },
   cfgInput: {
@@ -1234,6 +1317,42 @@ function FolhaInferiorStudio({ onFechar, insetBottom = 0, children }) {
         ]}
       >
         <View style={studioStyles.folhaAlca} />
+        {typeof children === 'function' ? children(fechar) : children}
+      </Animated.View>
+    </View>
+  );
+}
+
+// Painel lateral (explorador de arquivos) que desliza a partir da
+// esquerda, no mesmo espírito de animação da FolhaInferiorStudio —
+// fundo escurecendo + painel entrando com easing suave.
+function PainelLateralStudio({ onFechar, children, largura = '78%' }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(anim, { toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, []);
+  const fechar = () => {
+    Animated.timing(anim, { toValue: 0, duration: 190, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(
+      ({ finished }) => { if (finished) onFechar(); }
+    );
+  };
+  return (
+    <View style={StyleSheet.absoluteFill}>
+      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.55)', opacity: anim }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={fechar} />
+      </Animated.View>
+      <Animated.View
+        style={[
+          studioStyles.sidebarPanel,
+          {
+            width: largura,
+            opacity: anim,
+            transform: [
+              { translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [-40, 0] }) },
+            ],
+          },
+        ]}
+      >
         {typeof children === 'function' ? children(fechar) : children}
       </Animated.View>
     </View>
@@ -2266,144 +2385,174 @@ function CindraStudioScreen({ visible, onClose }) {
   // ---------- Tela 2: workspace (explorador + editor) ----------
   const renderWorkspace = () => (
     <>
-      <View style={studioStyles.topBar}>
-        <TouchableOpacity style={studioStyles.topBarIconBtn} onPress={voltarParaHome} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <MaterialCommunityIcons name="arrow-left" size={20} color={COLORS.ink} />
-        </TouchableOpacity>
-        <TouchableOpacity style={studioStyles.topBarIconBtn} onPress={() => setSidebarAberta(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <MaterialCommunityIcons name="file-tree-outline" size={20} color={COLORS.ink} />
-        </TouchableOpacity>
-        <Text style={studioStyles.topBarTitle} numberOfLines={1}>{nomeApp || 'Meu App'}</Text>
-        <TouchableOpacity
-          style={studioStyles.topBarIconBtn}
-          onPress={() => exibirAviso('Em breve', 'Undo/redo ainda não estão disponíveis.', 'aviso')}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <MaterialCommunityIcons name="undo" size={19} color={COLORS.dim} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={studioStyles.topBarIconBtn}
-          onPress={async () => {
-            const pasta = await salvarNoDisco();
-            if (pasta) exibirAviso('Salvo', 'Projeto gravado no armazenamento do app.', 'sucesso');
-          }}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <MaterialCommunityIcons name="content-save-outline" size={19} color={COLORS.dim} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={studioStyles.topBarIconBtn}
-          onPress={compilarProjeto}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          {compilando
-            ? <ActivityIndicator size="small" color="#8bd450" />
-            : <MaterialCommunityIcons name="play-circle" size={24} color="#8bd450" />}
-        </TouchableOpacity>
-        <TouchableOpacity style={studioStyles.topBarIconBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <MaterialCommunityIcons name="close" size={20} color={COLORS.dim} />
-        </TouchableOpacity>
+      <View style={studioStyles.workspaceTopWrap}>
+        <View pointerEvents="none" style={studioStyles.workspaceGlow} />
+
+        <View style={studioStyles.topBar}>
+          <TouchableOpacity style={studioStyles.topBarIconBtn} onPress={voltarParaHome} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.75}>
+            <MaterialCommunityIcons name="arrow-left" size={18} color={COLORS.ink} />
+          </TouchableOpacity>
+          <TouchableOpacity style={studioStyles.topBarIconBtn} onPress={() => setSidebarAberta(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.75}>
+            <MaterialCommunityIcons name="folder-outline" size={18} color={COLORS.ember} />
+          </TouchableOpacity>
+          <Text style={studioStyles.topBarTitle} numberOfLines={1}>{nomeApp || 'Meu App'}</Text>
+
+          <View style={studioStyles.topBarActionsCard}>
+            <TouchableOpacity
+              style={studioStyles.topBarIconBtn}
+              onPress={() => exibirAviso('Em breve', 'Undo/redo ainda não estão disponíveis.', 'aviso')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.75}
+            >
+              <MaterialCommunityIcons name="undo" size={17} color={COLORS.dim} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={studioStyles.topBarIconBtn}
+              onPress={async () => {
+                const pasta = await salvarNoDisco();
+                if (pasta) exibirAviso('Salvo', 'Projeto gravado no armazenamento do app.', 'sucesso');
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.75}
+            >
+              <MaterialCommunityIcons name="content-save-outline" size={17} color={COLORS.dim} />
+            </TouchableOpacity>
+            <View style={studioStyles.topBarDivider} />
+            <TouchableOpacity
+              style={studioStyles.topBarIconBtn}
+              onPress={compilarProjeto}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.75}
+            >
+              {compilando
+                ? <ActivityIndicator size="small" color="#8bd450" />
+                : <MaterialCommunityIcons name="play-circle" size={22} color="#8bd450" />}
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity style={studioStyles.topBarIconBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.75}>
+            <MaterialCommunityIcons name="close" size={17} color={COLORS.dim} />
+          </TouchableOpacity>
+        </View>
+
+        {abasAbertas.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={studioStyles.tabsBar}
+            contentContainerStyle={studioStyles.tabsBarConteudo}
+          >
+            {abasAbertas.map((caminho) => {
+              const ativa = caminho === arquivoAtivo;
+              const nomeArquivo = caminho.split('/').pop();
+              const { icon, color } = iconeArquivoStudio(nomeArquivo);
+              return (
+                <TouchableOpacity
+                  key={caminho}
+                  style={[studioStyles.tab, ativa && studioStyles.tabAtiva]}
+                  onPress={() => setArquivoAtivo(caminho)}
+                  activeOpacity={0.75}
+                >
+                  <MaterialCommunityIcons name={icon} size={14} color={ativa ? color : COLORS.dim} style={{ marginRight: 6 }} />
+                  <Text style={[studioStyles.tabText, ativa && studioStyles.tabTextAtiva]} numberOfLines={1}>{nomeArquivo}</Text>
+                  <TouchableOpacity onPress={() => fecharAba(caminho)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginLeft: 7 }}>
+                    <MaterialCommunityIcons name="close" size={12} color={COLORS.dim} />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
       </View>
 
-      {abasAbertas.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={studioStyles.tabsBar}>
-          {abasAbertas.map((caminho) => {
-            const ativa = caminho === arquivoAtivo;
-            const nomeArquivo = caminho.split('/').pop();
-            const { icon, color } = iconeArquivoStudio(nomeArquivo);
-            return (
-              <TouchableOpacity
-                key={caminho}
-                style={[studioStyles.tab, ativa && studioStyles.tabAtiva]}
-                onPress={() => setArquivoAtivo(caminho)}
-                activeOpacity={0.75}
-              >
-                <MaterialCommunityIcons name={icon} size={14} color={ativa ? color : COLORS.dim} style={{ marginRight: 6 }} />
-                <Text style={[studioStyles.tabText, ativa && studioStyles.tabTextAtiva]} numberOfLines={1}>{nomeArquivo}</Text>
-                <TouchableOpacity onPress={() => fecharAba(caminho)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginLeft: 8 }}>
-                  <MaterialCommunityIcons name="close" size={13} color={COLORS.dim} />
-                </TouchableOpacity>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      )}
-
-      {arquivoAtivo && (
-        <View style={studioStyles.breadcrumb}>
-          <Text style={studioStyles.breadcrumbText} numberOfLines={1}>{arquivoAtivo.split('/').join(' \u203a ')}</Text>
-        </View>
-      )}
-
       {arquivoAtivo ? (
-        <ScrollView style={{ flex: 1, backgroundColor: '#0a0a0c' }}>
-          <View style={studioStyles.editorRow}>
-            <View style={studioStyles.lineNumbers}>
-              {Array.from({ length: numeroDeLinhas }).map((_, i) => (
-                <Text key={i} style={studioStyles.lineNumberText}>{i + 1}</Text>
-              ))}
-            </View>
-            <TextInput
-              style={studioStyles.codeInput}
-              value={conteudoAtivo}
-              onChangeText={alterarConteudo}
-              multiline
-              autoCapitalize="none"
-              autoCorrect={false}
-              spellCheck={false}
-              scrollEnabled={false}
-            />
+        <View style={{ flex: 1 }}>
+          <ItemAnimadoStudio key={arquivoAtivo} indice={0} style={{ flex: 1 }}>
+            <ScrollView style={{ flex: 1, backgroundColor: '#0a0a0c' }}>
+              <View style={studioStyles.editorRow}>
+                <View style={studioStyles.lineNumbers}>
+                  {Array.from({ length: numeroDeLinhas }).map((_, i) => (
+                    <Text key={i} style={studioStyles.lineNumberText}>{i + 1}</Text>
+                  ))}
+                </View>
+                <TextInput
+                  style={studioStyles.codeInput}
+                  value={conteudoAtivo}
+                  onChangeText={alterarConteudo}
+                  multiline
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  scrollEnabled={false}
+                />
+              </View>
+            </ScrollView>
+          </ItemAnimadoStudio>
+          <View style={studioStyles.pathChip} pointerEvents="none">
+            <MaterialCommunityIcons name="folder-outline" size={11} color={COLORS.dim} />
+            <Text style={studioStyles.pathChipText} numberOfLines={1}>{arquivoAtivo.split('/').join(' \u203a ')}</Text>
           </View>
-        </ScrollView>
+        </View>
       ) : (
         <View style={studioStyles.emptyEditor}>
-          <MaterialCommunityIcons name="file-tree-outline" size={40} color={COLORS.dim} />
-          <Text style={{ color: COLORS.dim, fontSize: 13.5, marginTop: 12, textAlign: 'center' }}>
-            Nenhum arquivo aberto. Toque no ícone de pastas, no canto superior esquerdo, pra ver os arquivos do projeto.
+          <View style={studioStyles.emptyEditorIcone}>
+            <MaterialCommunityIcons name="folder-open-outline" size={32} color={COLORS.ember} />
+          </View>
+          <Text style={studioStyles.emptyEditorTitulo}>Nenhum arquivo aberto</Text>
+          <Text style={{ color: COLORS.dim, fontSize: 13, textAlign: 'center', lineHeight: 18 }}>
+            Abra a pasta do projeto pra escolher um arquivo e começar a editar.
           </Text>
+          <TouchableOpacity style={studioStyles.emptyEditorBtn} onPress={() => setSidebarAberta(true)} activeOpacity={0.85}>
+            <MaterialCommunityIcons name="folder-outline" size={16} color="#1a0806" />
+            <Text style={studioStyles.emptyEditorBtnText}>Ver arquivos</Text>
+          </TouchableOpacity>
         </View>
       )}
 
       {sidebarAberta && (
-        <View style={StyleSheet.absoluteFill}>
-          <Pressable style={studioStyles.sidebarBackdrop} onPress={() => setSidebarAberta(false)} />
-          <View style={[studioStyles.sidebarPanel, { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 12) }]}>
-            <View style={studioStyles.sidebarHeader}>
-              <Text style={studioStyles.sidebarTitle}>Arquivos do lrojeto</Text>
-              <TouchableOpacity onPress={() => setSidebarAberta(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <MaterialCommunityIcons name="close" size={18} color={COLORS.dim} />
+        <PainelLateralStudio onFechar={() => setSidebarAberta(false)}>
+          {(fechar) => (
+            <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 12) }}>
+              <View style={studioStyles.sidebarHeader}>
+                <View style={studioStyles.sidebarHeaderIcone}>
+                  <MaterialCommunityIcons name="folder-outline" size={16} color={COLORS.ember} />
+                </View>
+                <Text style={studioStyles.sidebarTitle}>Arquivos do projeto</Text>
+                <TouchableOpacity onPress={fechar} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <MaterialCommunityIcons name="close" size={18} color={COLORS.dim} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: 6 }}>
+                {projeto && projeto.arvore.map((no) => (
+                  <NoArvoreArquivo
+                    key={no.caminho}
+                    no={no}
+                    profundidade={0}
+                    pastasAbertas={pastasAbertas}
+                    alternarPasta={alternarPasta}
+                    arquivoAtivo={arquivoAtivo}
+                    onAbrirArquivo={(caminho) => { abrirArquivo(caminho); fechar(); }}
+                    aoSegurar={abrirCardArquivo}
+                  />
+                ))}
+              </ScrollView>
+              <TouchableOpacity
+                style={[studioStyles.novoProjBtn, confirmandoNovo && { borderColor: 'rgba(255,90,78,0.5)' }]}
+                onPress={() => (confirmandoNovo ? novoProjeto() : setConfirmandoNovo(true))}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons
+                  name={confirmandoNovo ? 'alert-outline' : 'trash-can-outline'}
+                  size={16}
+                  color={confirmandoNovo ? '#ff8a80' : COLORS.dim}
+                />
+                <Text style={[studioStyles.novoProjText, confirmandoNovo && { color: '#ff8a80' }]}>
+                  {confirmandoNovo ? 'Toque de novo: apaga este projeto' : 'Excluir projeto'}
+                </Text>
               </TouchableOpacity>
             </View>
-            <ScrollView style={{ flex: 1 }}>
-              {projeto && projeto.arvore.map((no) => (
-                <NoArvoreArquivo
-                  key={no.caminho}
-                  no={no}
-                  profundidade={0}
-                  pastasAbertas={pastasAbertas}
-                  alternarPasta={alternarPasta}
-                  arquivoAtivo={arquivoAtivo}
-                  onAbrirArquivo={abrirArquivo}
-                  aoSegurar={abrirCardArquivo}
-                />
-              ))}
-            </ScrollView>
-            <TouchableOpacity
-              style={[studioStyles.novoProjBtn, confirmandoNovo && { borderColor: 'rgba(255,90,78,0.5)' }]}
-              onPress={() => (confirmandoNovo ? novoProjeto() : setConfirmandoNovo(true))}
-              activeOpacity={0.8}
-            >
-              <MaterialCommunityIcons
-                name={confirmandoNovo ? 'alert-outline' : 'trash-can-outline'}
-                size={16}
-                color={confirmandoNovo ? '#ff8a80' : COLORS.dim}
-              />
-              <Text style={[studioStyles.novoProjText, confirmandoNovo && { color: '#ff8a80' }]}>
-                {confirmandoNovo ? 'Toque de novo: apaga este projeto' : 'Excluir projeto'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+          )}
+        </PainelLateralStudio>
       )}
 
       {cardNo && (
