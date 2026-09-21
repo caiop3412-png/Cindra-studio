@@ -1459,6 +1459,20 @@ function ConteudoFolhaProjeto({ projeto, onAbrir, onFavoritar, onExcluir, onCanc
   );
 }
 
+// Histórico de desfazer/refazer: guarda só o TRECHO que mudou (posição,
+// texto removido, texto inserido), não o arquivo inteiro. Cada evento de
+// digitação vira 1 passo (letra por letra); colar um bloco é 1 evento só,
+// então desfazer tira o bloco colado de uma vez.
+const LIMITE_HISTORICO = 500;
+function diffTexto(antes, depois) {
+  const max = Math.min(antes.length, depois.length);
+  let p = 0;
+  while (p < max && antes.charCodeAt(p) === depois.charCodeAt(p)) p++;
+  let q = 0;
+  while (q < max - p && antes.charCodeAt(antes.length - 1 - q) === depois.charCodeAt(depois.length - 1 - q)) q++;
+  return { p, removido: antes.slice(p, antes.length - q), inserido: depois.slice(p, depois.length - q) };
+}
+
 function CindraStudioScreen({ visible, onClose }) {
   const insets = useSafeAreaInsets();
 
@@ -1489,6 +1503,9 @@ function CindraStudioScreen({ visible, onClose }) {
   const [abasAbertas, setAbasAbertas] = useState([]); // array de caminhos
   const [arquivoAtivo, setArquivoAtivo] = useState(null);
   const [sidebarAberta, setSidebarAberta] = useState(false);
+  const historicoRef = useRef({}); // { [caminho]: { undo: [], redo: [] } }
+  const conteudoAtivoRef = useRef(''); // texto mais recente do arquivo ativo (síncrono, antes do re-render)
+  const [selecaoForcada, setSelecaoForcada] = useState(null); // posiciona o cursor depois de desfazer/refazer
   const [alturaTeclado, setAlturaTeclado] = useState(0); // teclado aberto → editor encolhe pra ficar acima dele
   const [caretPos, setCaretPos] = useState(0); // posição do cursor no texto (pra rolar até ele)
   const scrollEditorRef = useRef(null);
@@ -1810,9 +1827,63 @@ function CindraStudioScreen({ visible, onClose }) {
     });
   };
 
+  const historicoDe = (caminho) => {
+    if (!historicoRef.current[caminho]) historicoRef.current[caminho] = { undo: [], redo: [] };
+    return historicoRef.current[caminho];
+  };
+
+  const gravarTextoAtivo = (texto) => {
+    conteudoAtivoRef.current = texto;
+    setProjeto((atual) => ({ ...atual, conteudos: { ...atual.conteudos, [arquivoAtivo]: texto } }));
+  };
+
   const alterarConteudo = (texto) => {
     if (!arquivoAtivo) return;
-    setProjeto((atual) => ({ ...atual, conteudos: { ...atual.conteudos, [arquivoAtivo]: texto } }));
+    const antes = conteudoAtivoRef.current;
+    if (texto === antes) return;
+    const h = historicoDe(arquivoAtivo);
+    h.undo.push(diffTexto(antes, texto));
+    if (h.undo.length > LIMITE_HISTORICO) h.undo.shift();
+    h.redo = []; // editou de novo → o "refazer" antigo perde o sentido
+    gravarTextoAtivo(texto);
+  };
+
+  const posicionarCursor = (pos) => {
+    setCaretPos(pos);
+    setSelecaoForcada({ start: pos, end: pos });
+    setTimeout(() => setSelecaoForcada(null), 80);
+  };
+
+  // 👈 volta o último passo (1 letra digitada, ou 1 colagem inteira).
+  const desfazer = () => {
+    if (!arquivoAtivo) return;
+    const h = historicoDe(arquivoAtivo);
+    const passo = h.undo.pop();
+    if (!passo) return;
+    const atual = conteudoAtivoRef.current;
+    if (atual.slice(passo.p, passo.p + passo.inserido.length) !== passo.inserido) {
+      h.undo = []; h.redo = []; // texto mudou por fora: histórico não vale mais
+      return;
+    }
+    h.redo.push(passo);
+    gravarTextoAtivo(atual.slice(0, passo.p) + passo.removido + atual.slice(passo.p + passo.inserido.length));
+    posicionarCursor(passo.p + passo.removido.length);
+  };
+
+  // 👉 refaz o que o 👈 desfez.
+  const refazer = () => {
+    if (!arquivoAtivo) return;
+    const h = historicoDe(arquivoAtivo);
+    const passo = h.redo.pop();
+    if (!passo) return;
+    const atual = conteudoAtivoRef.current;
+    if (atual.slice(passo.p, passo.p + passo.removido.length) !== passo.removido) {
+      h.undo = []; h.redo = [];
+      return;
+    }
+    h.undo.push(passo);
+    gravarTextoAtivo(atual.slice(0, passo.p) + passo.inserido + atual.slice(passo.p + passo.removido.length));
+    posicionarCursor(passo.p + passo.inserido.length);
   };
 
   const alternarPasta = (caminho) => {
@@ -1899,6 +1970,10 @@ function CindraStudioScreen({ visible, onClose }) {
   };
 
   const conteudoAtivo = projeto && arquivoAtivo ? (projeto.conteudos[arquivoAtivo] || '') : '';
+  conteudoAtivoRef.current = conteudoAtivo;
+  const hist = arquivoAtivo ? historicoRef.current[arquivoAtivo] : null;
+  const podeDesfazer = !!(hist && hist.undo.length > 0);
+  const podeRefazer = !!(hist && hist.redo.length > 0);
   const linhasAtivas = conteudoAtivo.split('\n');
   const numeroDeLinhas = linhasAtivas.length;
   // Sem quebra de linha: cada linha lógica ocupa exatamente uma linha visual
@@ -1912,6 +1987,10 @@ function CindraStudioScreen({ visible, onClose }) {
     if (linhasAtivas[i].length > maiorLinha) maiorLinha = linhasAtivas[i].length;
   }
   const larguraCodigo = Math.max(larguraVisivelCodigo, Math.ceil((maiorLinha + 4) * larguraCaractere) + 24);
+
+  // Trocou de tela (home ↔ workspace): começa com histórico limpo, pra um
+  // projeto novo nunca herdar passos de outro que tenha os mesmos caminhos.
+  useEffect(() => { historicoRef.current = {}; }, [etapa]);
 
   // Altura do teclado: o app desenha de ponta a ponta (edge-to-edge) e o
   // teclado fica POR CIMA da tela, então a gente encolhe a área do editor
@@ -2491,12 +2570,22 @@ function CindraStudioScreen({ visible, onClose }) {
 
           <View style={studioStyles.topBarActionsCard}>
             <TouchableOpacity
-              style={studioStyles.topBarIconBtn}
-              onPress={() => exibirAviso('Em breve', 'Undo/redo ainda não estão disponíveis.', 'aviso')}
+              style={[studioStyles.topBarIconBtn, !podeDesfazer && { opacity: 0.35 }]}
+              onPress={desfazer}
+              disabled={!podeDesfazer}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.75}
             >
-              <MaterialCommunityIcons name="undo" size={17} color={COLORS.dim} />
+              <MaterialCommunityIcons name="undo" size={17} color={podeDesfazer ? COLORS.ink : COLORS.dim} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[studioStyles.topBarIconBtn, !podeRefazer && { opacity: 0.35 }]}
+              onPress={refazer}
+              disabled={!podeRefazer}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.75}
+            >
+              <MaterialCommunityIcons name="redo" size={17} color={podeRefazer ? COLORS.ink : COLORS.dim} />
             </TouchableOpacity>
             <TouchableOpacity
               style={studioStyles.topBarIconBtn}
@@ -2521,10 +2610,6 @@ function CindraStudioScreen({ visible, onClose }) {
                 : <MaterialCommunityIcons name="play-circle" size={22} color="#8bd450" />}
             </TouchableOpacity>
           </View>
-
-          <TouchableOpacity style={studioStyles.topBarIconBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.75}>
-            <MaterialCommunityIcons name="close" size={17} color={COLORS.dim} />
-          </TouchableOpacity>
         </View>
 
         {abasAbertas.length > 0 && (
@@ -2592,6 +2677,7 @@ function CindraStudioScreen({ visible, onClose }) {
                     value={conteudoAtivo}
                     onChangeText={alterarConteudo}
                     onSelectionChange={(e) => setCaretPos(e.nativeEvent.selection.end)}
+                    selection={selecaoForcada || undefined}
                     multiline
                     autoCapitalize="none"
                     autoCorrect={false}
