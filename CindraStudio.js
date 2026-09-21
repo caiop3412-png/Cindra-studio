@@ -14,6 +14,7 @@ import {
   AppState,
   Linking,
   Switch,
+  PixelRatio,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,6 +24,8 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 // Módulo nativo local (modules/apk-builder): aapt2 + ECJ + D8 + apksig.
 import * as ApkBuilder from './modules/apk-builder';
+
+const CODIGO_FONTE = 13; // fonte do editor (também usada pra calcular a largura do código)
 
 const COLORS = {
   ink: '#ffffff',
@@ -788,32 +791,25 @@ const studioStyles = StyleSheet.create({
   },
   tabText: { color: COLORS.dim, fontSize: 12.5, maxWidth: 96 },
   tabTextAtiva: { color: COLORS.ink, fontWeight: '700' },
-  // Chip flutuante com o caminho do arquivo ativo — some sobre o canto do
-  // editor em vez de ocupar uma faixa inteira da tela.
-  pathChip: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
+  // Caminho do arquivo ativo: faixa fina FORA do editor (no fluxo do layout),
+  // pra nunca ficar flutuando por cima do código.
+  pathBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    maxWidth: '72%',
-    backgroundColor: 'rgba(13,13,15,0.86)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    borderRadius: 10,
-    paddingHorizontal: 9,
+    gap: 6,
+    paddingHorizontal: 12,
     paddingVertical: 5,
-    gap: 5,
-    zIndex: 5,
+    backgroundColor: '#0d0d0f',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
-  pathChipText: { color: COLORS.dim, fontSize: 10.5 },
+  pathBarText: { flex: 1, color: COLORS.dim, fontSize: 11 },
   editorRow: { flexDirection: 'row', minHeight: '100%' },
   lineNumbers: { paddingVertical: 14, paddingHorizontal: 8, backgroundColor: '#0a0a0c', borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.05)' },
   lineNumberText: { color: 'rgba(255,255,255,0.28)', fontSize: 13, lineHeight: 20, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', textAlign: 'right' },
   codeInput: {
-    flex: 1,
     color: '#d4d4d4',
-    fontSize: 13,
+    fontSize: CODIGO_FONTE,
     lineHeight: 20,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     paddingVertical: 14,
@@ -1492,6 +1488,7 @@ function CindraStudioScreen({ visible, onClose }) {
   const [abasAbertas, setAbasAbertas] = useState([]); // array de caminhos
   const [arquivoAtivo, setArquivoAtivo] = useState(null);
   const [sidebarAberta, setSidebarAberta] = useState(false);
+  const [larguraVisivelCodigo, setLarguraVisivelCodigo] = useState(0); // largura da área do código (sem a coluna de números)
   const [menuProjetoAberto, setMenuProjetoAberto] = useState(false); // folha "Opções do projeto" (fora do menu lateral)
 
   // Compilação (▶)
@@ -1896,7 +1893,19 @@ function CindraStudioScreen({ visible, onClose }) {
   };
 
   const conteudoAtivo = projeto && arquivoAtivo ? (projeto.conteudos[arquivoAtivo] || '') : '';
-  const numeroDeLinhas = conteudoAtivo.split('\n').length;
+  const linhasAtivas = conteudoAtivo.split('\n');
+  const numeroDeLinhas = linhasAtivas.length;
+  // Sem quebra de linha: cada linha lógica ocupa exatamente uma linha visual
+  // (os números da esquerda batem com o código) e linhas compridas rolam na
+  // horizontal. Largura do código = maior linha × largura do caractere
+  // monoespaçado (~0,6em, corrigida pela escala de fonte do sistema) + folga,
+  // nunca menor que a área visível.
+  const larguraCaractere = CODIGO_FONTE * 0.6 * PixelRatio.getFontScale();
+  let maiorLinha = 0;
+  for (let i = 0; i < linhasAtivas.length; i++) {
+    if (linhasAtivas[i].length > maiorLinha) maiorLinha = linhasAtivas[i].length;
+  }
+  const larguraCodigo = Math.max(larguraVisivelCodigo, Math.ceil((maiorLinha + 4) * larguraCaractere) + 24);
 
   // ---------- Tela 0: lista de projetos (tela inicial) ----------
   const termoBusca = buscaProjeto.trim().toLowerCase();
@@ -2513,6 +2522,10 @@ function CindraStudioScreen({ visible, onClose }) {
 
       {arquivoAtivo ? (
         <View style={{ flex: 1 }}>
+          <View style={studioStyles.pathBar}>
+            <MaterialCommunityIcons name="folder-outline" size={12} color={COLORS.dim} />
+            <Text style={studioStyles.pathBarText} numberOfLines={1} ellipsizeMode="head" maxFontSizeMultiplier={1.1}>{arquivoAtivo.split('/').join(' \u203a ')}</Text>
+          </View>
           <ItemAnimadoStudio key={arquivoAtivo} indice={0} style={{ flex: 1 }}>
             <ScrollView style={{ flex: 1, backgroundColor: '#0a0a0c' }}>
               <View style={studioStyles.editorRow}>
@@ -2521,23 +2534,28 @@ function CindraStudioScreen({ visible, onClose }) {
                     <Text key={i} style={studioStyles.lineNumberText}>{i + 1}</Text>
                   ))}
                 </View>
-                <TextInput
-                  style={studioStyles.codeInput}
-                  value={conteudoAtivo}
-                  onChangeText={alterarConteudo}
-                  multiline
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  spellCheck={false}
-                  scrollEnabled={false}
-                />
+                <ScrollView
+                  horizontal
+                  nestedScrollEnabled
+                  style={{ flex: 1 }}
+                  showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  onLayout={(e) => setLarguraVisivelCodigo(Math.floor(e.nativeEvent.layout.width))}
+                >
+                  <TextInput
+                    style={[studioStyles.codeInput, { width: larguraCodigo }]}
+                    value={conteudoAtivo}
+                    onChangeText={alterarConteudo}
+                    multiline
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    spellCheck={false}
+                    scrollEnabled={false}
+                  />
+                </ScrollView>
               </View>
             </ScrollView>
           </ItemAnimadoStudio>
-          <View style={studioStyles.pathChip} pointerEvents="none">
-            <MaterialCommunityIcons name="folder-outline" size={11} color={COLORS.dim} />
-            <Text style={studioStyles.pathChipText} numberOfLines={1}>{arquivoAtivo.split('/').join(' \u203a ')}</Text>
-          </View>
         </View>
       ) : (
         <View style={studioStyles.emptyEditor}>
