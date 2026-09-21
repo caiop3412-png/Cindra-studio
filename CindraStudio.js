@@ -843,7 +843,8 @@ const studioStyles = StyleSheet.create({
   },
   emptyEditorBtnText: { color: '#1a0806', fontSize: 13.5, fontWeight: '700' },
   sidebarBackdrop: { position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)' },
-  sidebarPanel: { position: 'absolute', top: 0, bottom: 0, left: 0, width: '78%', maxWidth: 320, backgroundColor: '#0d0d0f', borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
+  sidebarPanel: { position: 'absolute', top: 0, bottom: 0, left: 0, width: '86%', maxWidth: 380, backgroundColor: '#0d0d0f', borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.08)', overflow: 'hidden', elevation: 24, shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 18, shadowOffset: { width: 6, height: 0 } },
+  overlayRaiz: { zIndex: 50, elevation: 50 },
   sidebarGlow: {
     position: 'absolute',
     top: -70,
@@ -864,21 +865,26 @@ const studioStyles = StyleSheet.create({
     backgroundColor: 'rgba(255,82,39,0.14)',
     marginRight: 2,
   },
-  sidebarHeaderBtn: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.05)' },
-  sidebarTitle: { flex: 1, color: COLORS.ink, fontSize: 14, fontWeight: '700' },
-  treeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, paddingRight: 12, borderRadius: 10, marginHorizontal: 8, marginBottom: 2 },
-  treeRowPasta: { paddingLeft: 8, backgroundColor: 'rgba(255,255,255,0.03)' },
-  treeRowArquivo: { paddingLeft: 26 },
-  treeRowArquivoAtiva: { backgroundColor: 'rgba(255,82,39,0.16)' },
+  sidebarHeaderBtn: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.05)' },
+  sidebarTitle: { flex: 1, color: COLORS.ink, fontSize: 15, fontWeight: '700', letterSpacing: 0.2 },
+  // Árvore de arquivos. Cada nível só soma ~19px de recuo (margem da linha-guia
+  // + padding); antes cada nível somava a margem lateral da linha também,
+  // por isso o conteúdo vazava pra fora do painel em pastas mais fundas.
+  treeRow: { flexDirection: 'row', alignItems: 'center', minHeight: 40, paddingVertical: 8, paddingRight: 10, borderRadius: 11, marginBottom: 2, borderWidth: 1, borderColor: 'transparent' },
+  treeRowPasta: { paddingLeft: 6, backgroundColor: 'rgba(255,255,255,0.035)' },
+  treeRowArquivo: { paddingLeft: 24 },
+  treeRowArquivoAtiva: { backgroundColor: 'rgba(255,82,39,0.15)', borderColor: 'rgba(255,82,39,0.42)' },
   treeIndent: {
-    marginLeft: 25,
+    marginLeft: 13,
     marginBottom: 2,
     borderLeftWidth: 1,
-    borderLeftColor: 'rgba(255,255,255,0.08)',
-    paddingLeft: 8,
+    borderLeftColor: 'rgba(255,255,255,0.09)',
+    paddingLeft: 6,
   },
-  treeText: { color: COLORS.ink, fontSize: 13 },
-  treeTextPasta: { fontWeight: '600' },
+  treeText: { flex: 1, flexShrink: 1, color: 'rgba(255,255,255,0.86)', fontSize: 13.5 },
+  treeTextPasta: { color: COLORS.ink, fontWeight: '600' },
+  treeBadge: { marginLeft: 8, minWidth: 20, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.07)', alignItems: 'center' },
+  treeBadgeText: { color: COLORS.dim, fontSize: 11, fontWeight: '600' },
   cfgLabel: { color: COLORS.dim, fontSize: 12.5, fontWeight: '700', marginBottom: 8, marginTop: 20, textTransform: 'uppercase', letterSpacing: 0.5 },
   cfgInput: {
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -1202,7 +1208,12 @@ function NoArvoreArquivo({ no, pastasAbertas, alternarPasta, arquivoAtivo, onAbr
         >
           <MaterialCommunityIcons name={aberta ? 'chevron-down' : 'chevron-right'} size={14} color={COLORS.dim} style={{ marginRight: 2 }} />
           <MaterialCommunityIcons name={aberta ? 'folder-open' : 'folder'} size={16} color={COLORS.ember} style={{ marginRight: 8, marginLeft: 2 }} />
-          <Text style={[studioStyles.treeText, studioStyles.treeTextPasta]}>{no.nome}</Text>
+          <Text style={[studioStyles.treeText, studioStyles.treeTextPasta]} numberOfLines={1} ellipsizeMode="middle" maxFontSizeMultiplier={1.15}>{no.nome}</Text>
+          {no.filhos.length > 0 && (
+            <View style={studioStyles.treeBadge}>
+              <Text style={studioStyles.treeBadgeText} maxFontSizeMultiplier={1.1}>{no.filhos.length}</Text>
+            </View>
+          )}
         </TouchableOpacity>
         {aberta && (
           <View style={studioStyles.treeIndent}>
@@ -1233,7 +1244,7 @@ function NoArvoreArquivo({ no, pastasAbertas, alternarPasta, arquivoAtivo, onAbr
       activeOpacity={0.7}
     >
       <MaterialCommunityIcons name={icon} size={16} color={color} style={{ marginRight: 8 }} />
-      <Text style={[studioStyles.treeText, ativo && { color: COLORS.ink, fontWeight: '700' }]}>{no.nome}</Text>
+      <Text style={[studioStyles.treeText, ativo && { color: COLORS.ink, fontWeight: '700' }]} numberOfLines={1} ellipsizeMode="middle" maxFontSizeMultiplier={1.15}>{no.nome}</Text>
     </TouchableOpacity>
   );
 }
@@ -1332,7 +1343,7 @@ function FolhaInferiorStudio({ onFechar, insetBottom = 0, children }) {
     );
   };
   return (
-    <View style={StyleSheet.absoluteFill}>
+    <View style={[StyleSheet.absoluteFill, studioStyles.overlayRaiz]}>
       <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.62)', opacity: anim }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={fechar} />
       </Animated.View>
@@ -1355,7 +1366,7 @@ function FolhaInferiorStudio({ onFechar, insetBottom = 0, children }) {
 // Painel lateral (explorador de arquivos) que desliza a partir da
 // esquerda, no mesmo espírito de animação da FolhaInferiorStudio —
 // fundo escurecendo + painel entrando com easing suave.
-function PainelLateralStudio({ onFechar, children, largura = '78%' }) {
+function PainelLateralStudio({ onFechar, children, largura = '86%' }) {
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(anim, { toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
@@ -1366,7 +1377,7 @@ function PainelLateralStudio({ onFechar, children, largura = '78%' }) {
     );
   };
   return (
-    <View style={StyleSheet.absoluteFill}>
+    <View style={[StyleSheet.absoluteFill, studioStyles.overlayRaiz]}>
       <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.55)', opacity: anim }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={fechar} />
       </Animated.View>
@@ -2553,7 +2564,7 @@ function CindraStudioScreen({ visible, onClose }) {
                 <View style={studioStyles.sidebarHeaderIcone}>
                   <MaterialCommunityIcons name="folder-outline" size={16} color={COLORS.ember} />
                 </View>
-                <Text style={studioStyles.sidebarTitle}>Arquivos do projeto</Text>
+                <Text style={studioStyles.sidebarTitle} numberOfLines={1} maxFontSizeMultiplier={1.15}>Arquivos do projeto</Text>
                 <TouchableOpacity
                   style={studioStyles.sidebarHeaderBtn}
                   onPress={() => { fechar(); setMenuProjetoAberto(true); }}
@@ -2566,7 +2577,7 @@ function CindraStudioScreen({ visible, onClose }) {
                   <MaterialCommunityIcons name="close" size={18} color={COLORS.dim} />
                 </TouchableOpacity>
               </View>
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: 8, paddingHorizontal: 2 }}>
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 10, paddingBottom: 24, paddingHorizontal: 10 }} showsVerticalScrollIndicator={false}>
                 {projeto && projeto.arvore.map((no) => (
                   <NoArvoreArquivo
                     key={no.caminho}
@@ -2609,7 +2620,7 @@ function CindraStudioScreen({ visible, onClose }) {
       )}
 
       {cardNo && (
-        <View style={StyleSheet.absoluteFill}>
+        <View style={[StyleSheet.absoluteFill, studioStyles.overlayRaiz]}>
           <Pressable style={studioStyles.sidebarBackdrop} onPress={() => setCardNo(null)} />
           <View style={studioStyles.cardAcao}>
             <Text style={studioStyles.cardAcaoTitulo} numberOfLines={1}>{cardNo.nome}</Text>
@@ -2630,7 +2641,7 @@ function CindraStudioScreen({ visible, onClose }) {
       )}
 
       {painelCompilacao && (
-        <View style={StyleSheet.absoluteFill}>
+        <View style={[StyleSheet.absoluteFill, studioStyles.overlayRaiz]}>
           <Pressable style={studioStyles.sidebarBackdrop} onPress={() => !compilando && setPainelCompilacao(false)} />
           <View style={[studioStyles.compilePanel, { paddingBottom: Math.max(insets.bottom, 12) }]}>
             <View style={studioStyles.sidebarHeader}>
