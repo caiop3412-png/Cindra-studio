@@ -15,6 +15,7 @@ import {
   Linking,
   Switch,
   PixelRatio,
+  Keyboard,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1488,6 +1489,11 @@ function CindraStudioScreen({ visible, onClose }) {
   const [abasAbertas, setAbasAbertas] = useState([]); // array de caminhos
   const [arquivoAtivo, setArquivoAtivo] = useState(null);
   const [sidebarAberta, setSidebarAberta] = useState(false);
+  const [alturaTeclado, setAlturaTeclado] = useState(0); // teclado aberto → editor encolhe pra ficar acima dele
+  const [caretPos, setCaretPos] = useState(0); // posição do cursor no texto (pra rolar até ele)
+  const scrollEditorRef = useRef(null);
+  const scrollYEditorRef = useRef(0);
+  const alturaAreaEditorRef = useRef(0);
   const [larguraVisivelCodigo, setLarguraVisivelCodigo] = useState(0); // largura da área do código (sem a coluna de números)
   const [menuProjetoAberto, setMenuProjetoAberto] = useState(false); // folha "Opções do projeto" (fora do menu lateral)
 
@@ -1906,6 +1912,37 @@ function CindraStudioScreen({ visible, onClose }) {
     if (linhasAtivas[i].length > maiorLinha) maiorLinha = linhasAtivas[i].length;
   }
   const larguraCodigo = Math.max(larguraVisivelCodigo, Math.ceil((maiorLinha + 4) * larguraCaractere) + 24);
+
+  // Altura do teclado: o app desenha de ponta a ponta (edge-to-edge) e o
+  // teclado fica POR CIMA da tela, então a gente encolhe a área do editor
+  // pelo tamanho do teclado — o código passa a terminar logo acima dele.
+  useEffect(() => {
+    const [evMostrar, evEsconder] = Platform.OS === 'ios'
+      ? ['keyboardWillShow', 'keyboardWillHide']
+      : ['keyboardDidShow', 'keyboardDidHide'];
+    const a = Keyboard.addListener(evMostrar, (e) => setAlturaTeclado((e && e.endCoordinates && e.endCoordinates.height) || 0));
+    const b = Keyboard.addListener(evEsconder, () => setAlturaTeclado(0));
+    return () => { a.remove(); b.remove(); };
+  }, []);
+
+  // Com o teclado aberto, rola o editor pra linha do cursor nunca ficar
+  // escondida (TextInput multiline dentro de ScrollView não faz isso sozinho).
+  useEffect(() => {
+    if (!arquivoAtivo || alturaTeclado === 0) return undefined;
+    const t = setTimeout(() => {
+      const rolagem = scrollEditorRef.current;
+      const visivel = alturaAreaEditorRef.current;
+      if (!rolagem || !visivel) return;
+      const alturaLinha = 20 * PixelRatio.getFontScale();
+      const linha = conteudoAtivo.slice(0, caretPos).split('\n').length - 1;
+      const topo = 14 + linha * alturaLinha;
+      const base = topo + alturaLinha;
+      const y = scrollYEditorRef.current;
+      if (base + 12 > y + visivel) rolagem.scrollTo({ y: base + 12 - visivel, animated: true });
+      else if (topo - 12 < y) rolagem.scrollTo({ y: Math.max(0, topo - 12), animated: true });
+    }, 140);
+    return () => clearTimeout(t);
+  }, [caretPos, alturaTeclado, conteudoAtivo, arquivoAtivo]);
 
   // ---------- Tela 0: lista de projetos (tela inicial) ----------
   const termoBusca = buscaProjeto.trim().toLowerCase();
@@ -2521,13 +2558,21 @@ function CindraStudioScreen({ visible, onClose }) {
       </View>
 
       {arquivoAtivo ? (
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, paddingBottom: alturaTeclado }}>
           <View style={studioStyles.pathBar}>
             <MaterialCommunityIcons name="folder-outline" size={12} color={COLORS.dim} />
             <Text style={studioStyles.pathBarText} numberOfLines={1} ellipsizeMode="head" maxFontSizeMultiplier={1.1}>{arquivoAtivo.split('/').join(' \u203a ')}</Text>
           </View>
           <ItemAnimadoStudio key={arquivoAtivo} indice={0} style={{ flex: 1 }}>
-            <ScrollView style={{ flex: 1, backgroundColor: '#0a0a0c' }}>
+            <ScrollView
+              ref={scrollEditorRef}
+              style={{ flex: 1, backgroundColor: '#0a0a0c' }}
+              contentContainerStyle={{ paddingBottom: alturaTeclado > 0 ? 24 : Math.max(insets.bottom, 0) + 24 }}
+              keyboardShouldPersistTaps="handled"
+              scrollEventThrottle={16}
+              onScroll={(e) => { scrollYEditorRef.current = e.nativeEvent.contentOffset.y; }}
+              onLayout={(e) => { alturaAreaEditorRef.current = e.nativeEvent.layout.height; }}
+            >
               <View style={studioStyles.editorRow}>
                 <View style={studioStyles.lineNumbers}>
                   {Array.from({ length: numeroDeLinhas }).map((_, i) => (
@@ -2546,6 +2591,7 @@ function CindraStudioScreen({ visible, onClose }) {
                     style={[studioStyles.codeInput, { width: larguraCodigo }]}
                     value={conteudoAtivo}
                     onChangeText={alterarConteudo}
+                    onSelectionChange={(e) => setCaretPos(e.nativeEvent.selection.end)}
                     multiline
                     autoCapitalize="none"
                     autoCorrect={false}
