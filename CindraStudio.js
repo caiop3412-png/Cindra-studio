@@ -369,7 +369,7 @@ function montarProjetoNovo(nomeApp, nomePacoteBruto, corIcone, comFoto = false) 
     -->
 
     <application
-        android:name=".CindraApplication"
+        android:name="com.cindrastudio.security.CindraApplication"
         android:allowBackup="true"
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
