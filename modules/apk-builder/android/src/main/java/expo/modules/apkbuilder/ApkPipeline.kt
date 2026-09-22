@@ -132,11 +132,6 @@ class ApkPipeline(private val ctx: Context, private val log: (String) -> Unit) {
           .filter { it.isFile && it.extension == "java" }
           .forEach { fontes += it.path }
       }
-      // Injeta a verificação de assinatura (camada de segurança) em todo
-      // app gerado. Não faz parte do projeto do usuário — o .java vem
-      // embutido no próprio CindraStudio (assets/seguranca/) e é
-      // copiado aqui pra dentro do build antes de compilar.
-      copiarClasseSeguranca(gen).forEach { fontes += it.path }
       if (fontes.isEmpty()) {
         erros += ErroCompilacao("app/src/main/java", 0, "Nenhum arquivo .java no projeto")
         return falha("ecj")
@@ -189,9 +184,8 @@ class ApkPipeline(private val ctx: Context, private val log: (String) -> Unit) {
       }
 
       // 5) junta o dex no APK base (com resources.arsc alinhado em 4 bytes)
-      // + bibliotecas nativas (.so) de app/src/main/jniLibs/<abi>/, se houver
       log("5/6 montando APK")
-      montarApkAlinhado(projeto, base, classesDex, alinhado)
+      montarApkAlinhado(base, classesDex, alinhado)
 
       // 6) assina
       log("6/6 assinando (apksig)")
@@ -205,32 +199,6 @@ class ApkPipeline(private val ctx: Context, private val log: (String) -> Unit) {
       erros += ErroCompilacao("interno", 0, "${e.javaClass.simpleName}: ${e.message}")
       return falha("interno")
     }
-  }
-
-  // ---------- camada de segurança (verificação de assinatura) ----------
-  // Copia SegurancaNativa.java e CindraApplication.java, embutidos nos
-  // assets do próprio CindraStudio, pra dentro do build de CADA app
-  // gerado. Se os assets não existirem (build antigo do CindraStudio sem
-  // essa pasta), simplesmente não injeta nada — não quebra a compilação
-  // de quem ainda não atualizou.
-  private fun copiarClasseSeguranca(gen: File): List<File> {
-    val destinos = listOf(
-      "SegurancaNativa.java" to File(gen, "com/cindrastudio/security/SegurancaNativa.java"),
-      "CindraApplication.java" to File(gen, "com/cindrastudio/security/CindraApplication.java")
-    )
-    val copiados = mutableListOf<File>()
-    for ((nomeAsset, destino) in destinos) {
-      try {
-        destino.parentFile?.mkdirs()
-        ctx.assets.open("seguranca/$nomeAsset").use { entrada ->
-          destino.outputStream().use { saida -> entrada.copyTo(saida) }
-        }
-        copiados += destino
-      } catch (e: java.io.IOException) {
-        log("aviso: seguranca/$nomeAsset não encontrado nos assets — pulando")
-      }
-    }
-    return copiados
   }
 
   // ---------- execução do aapt2 ----------
@@ -311,7 +279,7 @@ class ApkPipeline(private val ctx: Context, private val log: (String) -> Unit) {
   // Android 11+ exige resources.arsc SEM compressão e alinhado em 4 bytes
   // (o que o zipalign faz). Aqui copiamos o APK do aapt2 e acrescentamos
   // o classes.dex, alinhando o resources.arsc com padding no "extra".
-  private fun montarApkAlinhado(projeto: File, base: File, dex: File, destino: File) {
+  private fun montarApkAlinhado(base: File, dex: File, destino: File) {
     val contador = ContaBytes(BufferedOutputStream(FileOutputStream(destino)))
     ZipOutputStream(contador).use { zos ->
       ZipFile(base).use { zin ->
@@ -322,34 +290,6 @@ class ApkPipeline(private val ctx: Context, private val log: (String) -> Unit) {
         }
       }
       gravarEntrada(zos, contador, "classes.dex", dex.readBytes(), false)
-
-      // Bibliotecas nativas: qualquer .so em app/src/main/jniLibs/<abi>/
-      // entra em lib/<abi>/ dentro do APK, sem compressão (igual o Android
-      // Studio faz), pra poder ser carregada direto via System.loadLibrary
-      // sem precisar extrair pra disco em runtime.
-      val jniLibs = File(projeto, "app/src/main/jniLibs")
-      if (jniLibs.isDirectory) {
-        jniLibs.listFiles()?.filter { it.isDirectory }?.forEach { abiDir ->
-          abiDir.listFiles()?.filter { it.isFile && it.extension == "so" }?.forEach { so ->
-            val nomeZip = "lib/${abiDir.name}/${so.name}"
-            gravarEntrada(zos, contador, nomeZip, so.readBytes(), true)
-          }
-        }
-      }
-
-      // libseguranca.so embutido nos assets do próprio CindraStudio —
-      // vai em TODO app gerado, mesmo que o projeto do usuário não tenha
-      // nenhuma jniLibs própria. Se o asset não existir (CindraStudio
-      // antigo), ignora silenciosamente.
-      listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64").forEach { abi ->
-        try {
-          ctx.assets.open("seguranca/lib/$abi/libseguranca.so").use { entrada ->
-            gravarEntrada(zos, contador, "lib/$abi/libseguranca.so", entrada.readBytes(), true)
-          }
-        } catch (e: java.io.IOException) {
-          // ABI sem asset — segue sem essa arquitetura.
-        }
-      }
     }
   }
 
