@@ -922,13 +922,43 @@ const studioStyles = StyleSheet.create({
   lineNumbers: { paddingVertical: 14, paddingHorizontal: 8, backgroundColor: '#0a0a0c', borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.05)' },
   lineNumberText: { color: 'rgba(255,255,255,0.28)', fontSize: 13, lineHeight: 20, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', textAlign: 'right' },
   codeInput: {
-    color: '#d4d4d4',
+    // Texto do próprio TextInput fica invisível — quem aparece é a camada
+    // colorida (codeHighlightOverlay) logo atrás. O cursor (cursorColor) e
+    // a seleção (selectionColor) continuam normais, só o glifo do texto
+    // some, então nunca dá "texto duplicado" nem descolamento de cor.
+    color: 'transparent',
     fontSize: CODIGO_FONTE,
     lineHeight: 20,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     paddingVertical: 14,
     paddingHorizontal: 12,
     textAlignVertical: 'top',
+    // Sem isso o Android reserva um respiro extra em cima/embaixo da fonte
+    // que MUDA de tamanho conforme o glifo — é a causa clássica do overlay
+    // de highlight ir "descolando" verticalmente linha a linha conforme
+    // rola o arquivo. Com includeFontPadding:false a métrica fica idêntica
+    // à do Text do overlay (que usa o mesmo valor), então as duas camadas
+    // ficam sempre grudadas, igual um editor nativo (tipo o do MT Manager).
+    includeFontPadding: false,
+  },
+  // Camada de cor por trás do TextInput: mesma fonte/tamanho/padding do
+  // codeInput, cada linha posicionada de forma absoluta na altura exata
+  // dela (mesma fórmula da coluna de números), pra ficar sempre alinhada
+  // mesmo com o editor virtualizando só a janela visível.
+  codeHighlightOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
+  codeHighlightLine: {
+    position: 'absolute',
+    left: 12,
+    right: 0,
+    color: '#d4d4d4',
+    fontSize: CODIGO_FONTE,
+    lineHeight: 20,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    includeFontPadding: false,
   },
   emptyEditor: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 36 },
   emptyEditorIcone: {
@@ -2252,6 +2282,26 @@ function CindraStudioScreen({ visible, onClose }) {
   const larguraGutter = Math.ceil(digitosNumeroLinhas * 13 * 0.6 * escalaFonte) + 16;
   const alturaTotalCodigo = 28 + numeroDeLinhas * alturaLinhaEditor;
 
+  // Destaque de sintaxe: linguagem do arquivo aberto e a regex já cacheada
+  // pra ela (null pra extensão desconhecida = sem cor, comportamento antigo).
+  const linguagemAtiva = useMemo(() => detectarLinguagem(arquivoAtivo), [arquivoAtivo]);
+  const regexLinguagemAtiva = useMemo(() => obterRegexLinguagem(linguagemAtiva), [linguagemAtiva]);
+
+  // Tokeniza só as linhas da janela visível — igual à coluna de números —
+  // e só refaz quando essas linhas, a janela ou a linguagem mudam de fato.
+  // Guardamos o texto de cada linha junto com o índice pra nunca "sobrar"
+  // cor de uma janela antiga colada numa linha errada enquanto o novo
+  // cálculo não chega (a causa mais comum de highlight bugado/dessincronizado
+  // nesse tipo de overlay).
+  const linhasDestacadas = useMemo(() => {
+    const resultado = [];
+    for (let i = janelaInicio; i < janelaFim; i++) {
+      const texto = linhasAtivas[i] !== undefined ? linhasAtivas[i] : '';
+      resultado.push({ i, texto, partes: tokenizarLinha(texto, regexLinguagemAtiva) });
+    }
+    return resultado;
+  }, [linhasAtivas, janelaInicio, janelaFim, regexLinguagemAtiva]);
+
   // Trocou de tela (home ↔ workspace): começa com histórico limpo, pra um
   // projeto novo nunca herdar passos de outro que tenha os mesmos caminhos.
   useEffect(() => { historicoRef.current = {}; }, [etapa]);
@@ -3015,6 +3065,29 @@ function CindraStudioScreen({ visible, onClose }) {
                   onLayout={(e) => setLarguraVisivelCodigo(Math.floor(e.nativeEvent.layout.width))}
                 >
                   <View style={{ width: larguraCodigo }}>
+                    {/* Camada de cor: fica ATRÁS do texto (o TextInput acima
+                        dela fica com o texto transparente), só desenhando as
+                        linhas da janela visível — igual à coluna de números.
+                        "pointerEvents: none" garante que toque/seleção
+                        continuam indo 100% pro TextInput, nunca pra cá. */}
+                    <View
+                      pointerEvents="none"
+                      style={[studioStyles.codeHighlightOverlay, { width: larguraCodigo, height: alturaTotalCodigo }]}
+                    >
+                      {linhasDestacadas.map(({ i, texto, partes }) => (
+                        <Text
+                          key={i}
+                          numberOfLines={1}
+                          style={[studioStyles.codeHighlightLine, { top: 14 + i * alturaLinhaEditor }]}
+                        >
+                          {texto === ''
+                            ? ' '
+                            : partes.map((p, idx) => (
+                              <Text key={idx} style={p.c ? { color: p.c } : null}>{p.t}</Text>
+                            ))}
+                        </Text>
+                      ))}
+                    </View>
                     <TextInput
                       style={[studioStyles.codeInput, { width: larguraCodigo }]}
                       value={conteudoAtivo}
