@@ -2243,12 +2243,6 @@ function CindraStudioScreen({ visible, onClose }) {
     return { linhasAtivas: linhas, numeroDeLinhas: linhas.length, larguraCodigo: largura };
   }, [conteudoAtivo, larguraVisivelCodigo, escalaFonte]);
 
-  // Linguagem do arquivo aberto (pra escolher as regras de destaque) e a
-  // regex já compilada pra ela — `null` pra extensão sem suporte, e aí o
-  // editor mostra o texto normal, sem highlight, como sempre mostrou.
-  const linguagemAtiva = useMemo(() => detectarLinguagem(arquivoAtivo), [arquivoAtivo]);
-  const regexLinguagemAtiva = useMemo(() => obterRegexLinguagem(linguagemAtiva), [linguagemAtiva]);
-
   // Recorte de linhas que a janela do editor manda desenhar agora, já
   // limitado ao tamanho real do arquivo (o arquivo pode ter menos linhas
   // que a janela pedida, ex.: arquivo pequeno ou acabou de abrir).
@@ -2257,18 +2251,6 @@ function CindraStudioScreen({ visible, onClose }) {
   const digitosNumeroLinhas = String(numeroDeLinhas).length;
   const larguraGutter = Math.ceil(digitosNumeroLinhas * 13 * 0.6 * escalaFonte) + 16;
   const alturaTotalCodigo = 28 + numeroDeLinhas * alturaLinhaEditor;
-
-  // Só tokeniza (destaque de sintaxe) as linhas da janela, e só de novo
-  // quando o texto ou a janela realmente mudam — não a cada re-render que
-  // não mexe em nenhum dos dois (ex.: teclado abrindo).
-  const linhasDestacadas = useMemo(() => {
-    if (!regexLinguagemAtiva) return [];
-    const lista = [];
-    for (let i = janelaInicio; i < janelaFim; i++) {
-      lista.push({ i, partes: tokenizarLinha(linhasAtivas[i] || '', regexLinguagemAtiva) });
-    }
-    return lista;
-  }, [regexLinguagemAtiva, linhasAtivas, janelaInicio, janelaFim]);
 
   // Trocou de tela (home ↔ workspace): começa com histórico limpo, pra um
   // projeto novo nunca herdar passos de outro que tenha os mesmos caminhos.
@@ -3033,30 +3015,8 @@ function CindraStudioScreen({ visible, onClose }) {
                   onLayout={(e) => setLarguraVisivelCodigo(Math.floor(e.nativeEvent.layout.width))}
                 >
                   <View style={{ width: larguraCodigo }}>
-                    {!!regexLinguagemAtiva && (
-                      // Destaque de sintaxe: um "papel de fundo" com o texto
-                      // colorido, desenhado só nas linhas da janela — fica por
-                      // baixo do TextInput (que fica com o texto invisível,
-                      // mas o cursor continua aparecendo normalmente).
-                      <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: alturaTotalCodigo }}>
-                        {linhasDestacadas.map(({ i, partes }) => (
-                          <Text
-                            key={i}
-                            style={[studioStyles.codeInput, { position: 'absolute', top: 14 + i * alturaLinhaEditor, left: 12, paddingVertical: 0, paddingHorizontal: 0 }]}
-                          >
-                            {partes.map((p, j) => (
-                              <Text key={j} style={p.c ? { color: p.c } : null}>{p.t}</Text>
-                            ))}
-                          </Text>
-                        ))}
-                      </View>
-                    )}
                     <TextInput
-                      style={[
-                        studioStyles.codeInput,
-                        { width: larguraCodigo },
-                        !!regexLinguagemAtiva && { color: 'transparent' },
-                      ]}
+                      style={[studioStyles.codeInput, { width: larguraCodigo }]}
                       value={conteudoAtivo}
                       onChangeText={alterarConteudo}
                       onSelectionChange={(e) => setCaretPos(e.nativeEvent.selection.end)}
