@@ -922,11 +922,16 @@ const studioStyles = StyleSheet.create({
   lineNumbers: { paddingVertical: 14, paddingHorizontal: 8, backgroundColor: '#0a0a0c', borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.05)' },
   lineNumberText: { color: 'rgba(255,255,255,0.28)', fontSize: 13, lineHeight: 20, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', textAlign: 'right' },
   codeInput: {
-    // Texto do próprio TextInput fica invisível — quem aparece é a camada
-    // colorida (codeHighlightOverlay) logo atrás. O cursor (cursorColor) e
-    // a seleção (selectionColor) continuam normais, só o glifo do texto
-    // some, então nunca dá "texto duplicado" nem descolamento de cor.
-    color: 'transparent',
+    // Texto do próprio TextInput fica "invisível" — quem aparece é a camada
+    // colorida (codeHighlightOverlay) logo atrás. IMPORTANTE: usar a MESMA
+    // cor sólida do fundo do editor aqui, e não 'transparent'. No Android,
+    // texto com cor transparente ainda deixa um "fantasma" borrado das
+    // letras por causa do anti-aliasing (suavização de borda), mesmo com
+    // alpha 0 — é isso que causava aquele efeito de texto duplicado/borrado.
+    // Com uma cor sólida igual ao fundo não tem blend nenhum, então some
+    // de verdade. O cursor (cursorColor) e a seleção (selectionColor)
+    // continuam normais, só o glifo do texto que fica "camuflado".
+    color: '#0a0a0c',
     fontSize: CODIGO_FONTE,
     lineHeight: 20,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
