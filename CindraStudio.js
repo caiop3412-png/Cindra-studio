@@ -922,16 +922,12 @@ const studioStyles = StyleSheet.create({
   lineNumbers: { paddingVertical: 14, paddingHorizontal: 8, backgroundColor: '#0a0a0c', borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.05)' },
   lineNumberText: { color: 'rgba(255,255,255,0.28)', fontSize: 13, lineHeight: 20, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', textAlign: 'right' },
   codeInput: {
-    // Texto do próprio TextInput fica "invisível" — quem aparece é a camada
-    // colorida (codeHighlightOverlay) logo atrás. IMPORTANTE: usar a MESMA
-    // cor sólida do fundo do editor aqui, e não 'transparent'. No Android,
-    // texto com cor transparente ainda deixa um "fantasma" borrado das
-    // letras por causa do anti-aliasing (suavização de borda), mesmo com
-    // alpha 0 — é isso que causava aquele efeito de texto duplicado/borrado.
-    // Com uma cor sólida igual ao fundo não tem blend nenhum, então some
-    // de verdade. O cursor (cursorColor) e a seleção (selectionColor)
-    // continuam normais, só o glifo do texto que fica "camuflado".
-    color: '#0a0a0c',
+    // Texto do próprio TextInput fica invisível de verdade (alpha 0). O
+    // resquício antialiasado que o Android deixa mesmo em texto transparente
+    // fica escondido pela camada colorida (codeHighlightOverlay), que agora
+    // é desenhada POR CIMA dele (ver ordem no JSX). O cursor (cursorColor) e
+    // a seleção (selectionColor) continuam normais.
+    color: 'transparent',
     fontSize: CODIGO_FONTE,
     lineHeight: 20,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
@@ -3070,29 +3066,6 @@ function CindraStudioScreen({ visible, onClose }) {
                   onLayout={(e) => setLarguraVisivelCodigo(Math.floor(e.nativeEvent.layout.width))}
                 >
                   <View style={{ width: larguraCodigo }}>
-                    {/* Camada de cor: fica ATRÁS do texto (o TextInput acima
-                        dela fica com o texto transparente), só desenhando as
-                        linhas da janela visível — igual à coluna de números.
-                        "pointerEvents: none" garante que toque/seleção
-                        continuam indo 100% pro TextInput, nunca pra cá. */}
-                    <View
-                      pointerEvents="none"
-                      style={[studioStyles.codeHighlightOverlay, { width: larguraCodigo, height: alturaTotalCodigo }]}
-                    >
-                      {linhasDestacadas.map(({ i, texto, partes }) => (
-                        <Text
-                          key={i}
-                          numberOfLines={1}
-                          style={[studioStyles.codeHighlightLine, { top: 14 + i * alturaLinhaEditor }]}
-                        >
-                          {texto === ''
-                            ? ' '
-                            : partes.map((p, idx) => (
-                              <Text key={idx} style={p.c ? { color: p.c } : null}>{p.t}</Text>
-                            ))}
-                        </Text>
-                      ))}
-                    </View>
                     <TextInput
                       style={[studioStyles.codeInput, { width: larguraCodigo }]}
                       value={conteudoAtivo}
@@ -3106,7 +3079,37 @@ function CindraStudioScreen({ visible, onClose }) {
                       scrollEnabled={false}
                       selectionColor={COLORS.ember}
                       cursorColor={COLORS.ember}
+                      allowFontScaling={false}
                     />
+                    {/* Camada de cor: vai DEPOIS do TextInput no JSX de
+                        propósito, pra ser desenhada POR CIMA dele. É essa
+                        ordem que resolve o "fantasma"/borrado: texto
+                        transparente no Android ainda deixa um resquício
+                        antialiasado visível, e se essa camada colorida
+                        estiver por baixo (como estava antes) o resquício do
+                        TextInput fica por cima escondendo a cor. Com a cor
+                        por cima, ela cobre esse resquício por completo.
+                        "pointerEvents: none" garante que toque/seleção
+                        continuam indo 100% pro TextInput por baixo. */}
+                    <View
+                      pointerEvents="none"
+                      style={[studioStyles.codeHighlightOverlay, { width: larguraCodigo, height: alturaTotalCodigo }]}
+                    >
+                      {linhasDestacadas.map(({ i, texto, partes }) => (
+                        <Text
+                          key={i}
+                          numberOfLines={1}
+                          allowFontScaling={false}
+                          style={[studioStyles.codeHighlightLine, { top: 14 + i * alturaLinhaEditor }]}
+                        >
+                          {texto === ''
+                            ? ' '
+                            : partes.map((p, idx) => (
+                              <Text key={idx} allowFontScaling={false} style={p.c ? { color: p.c } : null}>{p.t}</Text>
+                            ))}
+                        </Text>
+                      ))}
+                    </View>
                   </View>
                 </ScrollView>
               </View>
