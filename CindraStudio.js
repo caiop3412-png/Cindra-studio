@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -77,7 +77,104 @@ const COLORS = {
   pensamentoBlueLight: '#7ebdfa',
   pensamentoBlueGlow: 'rgba(79,163,247,0.35)',
   pensamentoBlueSoft: 'rgba(79,163,247,0.10)',
+  // Cores do destaque de sintaxe do editor (Studio) — paleta própria pra
+  // não colidir com os selos/badges que já usam ember/roxo/azul acima.
+  syntaxKeyword: '#ff9d6b',
+  syntaxString: '#ffd479',
+  syntaxComment: 'rgba(255,255,255,0.32)',
+  syntaxNumber: '#8fd6ff',
+  syntaxTag: '#8fd6ff',
+  syntaxAttr: '#c9a7ff',
 };
+
+// ─────────────────────────────────────────────────────────
+// Destaque de sintaxe do editor (Studio) — leve de propósito: roda só nas
+// linhas que estão realmente visíveis na tela (ver "janela" do editor mais
+// abaixo), nunca no arquivo inteiro, pra não pesar em arquivos grandes.
+// ─────────────────────────────────────────────────────────
+const PALAVRAS_CHAVE_POR_LINGUAGEM = {
+  js: ['const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while', 'switch', 'case', 'default',
+    'break', 'continue', 'class', 'extends', 'new', 'this', 'import', 'export', 'from', 'as', 'try', 'catch',
+    'finally', 'throw', 'typeof', 'instanceof', 'in', 'of', 'async', 'await', 'yield', 'static', 'get', 'set',
+    'null', 'undefined', 'true', 'false', 'void', 'delete', 'super', 'do'],
+  java: ['public', 'private', 'protected', 'class', 'interface', 'extends', 'implements', 'new', 'return', 'if',
+    'else', 'for', 'while', 'switch', 'case', 'default', 'break', 'continue', 'import', 'package', 'static',
+    'final', 'void', 'int', 'long', 'float', 'double', 'boolean', 'char', 'byte', 'short', 'this', 'super',
+    'try', 'catch', 'finally', 'throw', 'throws', 'null', 'true', 'false', 'instanceof', 'abstract',
+    'synchronized', 'volatile', 'enum', 'do'],
+  py: ['def', 'class', 'return', 'if', 'elif', 'else', 'for', 'while', 'break', 'continue', 'import', 'from',
+    'as', 'try', 'except', 'finally', 'raise', 'with', 'lambda', 'pass', 'None', 'True', 'False', 'and', 'or',
+    'not', 'in', 'is', 'yield', 'global', 'nonlocal', 'async', 'await', 'self', 'del'],
+};
+
+// Extensão do arquivo → linguagem reconhecida (null = sem destaque, mostra
+// o texto normal como sempre mostrou).
+function detectarLinguagem(caminho) {
+  if (!caminho) return null;
+  const m = /\.([a-zA-Z0-9]+)$/.exec(caminho);
+  const ext = m ? m[1].toLowerCase() : '';
+  if (['js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs'].includes(ext)) return 'js';
+  if (ext === 'java') return 'java';
+  if (ext === 'py') return 'py';
+  if (ext === 'xml') return 'xml';
+  if (ext === 'json') return 'json';
+  if (['css', 'scss'].includes(ext)) return 'css';
+  return null;
+}
+
+// Uma regex "cacheada" por linguagem (monta uma vez só, reaproveita sempre).
+const CACHE_REGEX_LINGUAGEM = {};
+function obterRegexLinguagem(ling) {
+  if (!ling) return null;
+  if (CACHE_REGEX_LINGUAGEM[ling]) return CACHE_REGEX_LINGUAGEM[ling];
+  const partes = [];
+  if (ling === 'py') partes.push('(?<comentario>#.*)');
+  else if (ling === 'xml') partes.push('(?<comentario><!--[\\s\\S]*?-->)');
+  else if (ling !== 'json') partes.push('(?<comentario>//.*|/\\*[\\s\\S]*?\\*/)');
+  partes.push(
+    "(?<string>\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*'" +
+    (ling === 'js' ? '|`(?:[^`\\\\]|\\\\.)*`' : '') + ')'
+  );
+  if (ling === 'xml') {
+    partes.push('(?<tag></?[a-zA-Z_][\\w:.-]*)');
+    partes.push('(?<atributo>[a-zA-Z_][\\w:-]*(?=\\s*=))');
+  }
+  partes.push('(?<numero>\\b\\d+\\.?\\d*\\b)');
+  const chaves = PALAVRAS_CHAVE_POR_LINGUAGEM[ling];
+  if (chaves && chaves.length) partes.push('(?<chave>\\b(?:' + chaves.join('|') + ')\\b)');
+  const regex = new RegExp(partes.join('|'), 'g');
+  CACHE_REGEX_LINGUAGEM[ling] = regex;
+  return regex;
+}
+
+function corDoGrupo(grupos) {
+  if (!grupos) return null;
+  if (grupos.comentario) return COLORS.syntaxComment;
+  if (grupos.string) return COLORS.syntaxString;
+  if (grupos.numero) return COLORS.syntaxNumber;
+  if (grupos.chave) return COLORS.syntaxKeyword;
+  if (grupos.tag) return COLORS.syntaxTag;
+  if (grupos.atributo) return COLORS.syntaxAttr;
+  return null;
+}
+
+// Quebra UMA linha em pedaços coloridos. Só é chamada pras linhas que estão
+// de fato na tela (ver janela do editor) — nunca pro arquivo inteiro.
+function tokenizarLinha(linha, regex) {
+  if (!regex || !linha) return [{ t: linha || '', c: null }];
+  regex.lastIndex = 0;
+  const partes = [];
+  let ultimo = 0;
+  let m;
+  while ((m = regex.exec(linha))) {
+    if (m.index > ultimo) partes.push({ t: linha.slice(ultimo, m.index), c: null });
+    partes.push({ t: m[0], c: corDoGrupo(m.groups) });
+    ultimo = m.index + m[0].length;
+    if (m[0].length === 0) regex.lastIndex += 1; // trava de segurança contra loop infinito
+  }
+  if (ultimo < linha.length) partes.push({ t: linha.slice(ultimo), c: null });
+  return partes;
+}
 
 function hexParaRgba(hex, alpha) {
   const h = hex.replace('#', '');
@@ -1561,6 +1658,14 @@ function CindraStudioScreen({ visible, onClose }) {
   const scrollYEditorRef = useRef(0);
   const alturaAreaEditorRef = useRef(0);
   const [larguraVisivelCodigo, setLarguraVisivelCodigo] = useState(0); // largura da área do código (sem a coluna de números)
+  // "Janela" de linhas realmente desenhadas (números + destaque de sintaxe).
+  // Em vez de criar um <Text> pra cada linha do arquivo inteiro (pesado em
+  // arquivo grande), só desenha as linhas perto do que está visível na tela
+  // — o resto vira espaço em branco do tamanho certo, então a rolagem não
+  // "pula" nada.
+  const [janelaEditor, setJanelaEditor] = useState({ inicio: 0, fim: 120 });
+  const janelaEditorRef = useRef(janelaEditor);
+  janelaEditorRef.current = janelaEditor;
   const [menuProjetoAberto, setMenuProjetoAberto] = useState(false); // folha "Opções do projeto" (fora do menu lateral)
 
   // Compilação (▶)
@@ -1930,6 +2035,22 @@ function CindraStudioScreen({ visible, onClose }) {
     setEtapa('workspace');
   };
 
+  // Recalcula quais linhas devem ser desenhadas, a partir de onde a rolagem
+  // está e da altura visível da área do editor. "overscan" (linhas extras
+  // pra cada lado) evita que apareça um flash em branco ao rolar rápido.
+  // Só atualiza o estado quando a janela realmente muda de posição, pra não
+  // gerar um re-render a cada pixel de rolagem.
+  const OVERSCAN_LINHAS_EDITOR = 30;
+  const atualizarJanelaEditor = useCallback((offsetY, alturaVisivel, alturaLinha) => {
+    const linha = Math.max(0, Math.floor((offsetY || 0) / (alturaLinha || 20)));
+    const linhasNaTela = Math.ceil((alturaVisivel || 700) / (alturaLinha || 20));
+    const novoInicio = Math.max(0, linha - OVERSCAN_LINHAS_EDITOR);
+    const novoFim = linha + linhasNaTela + OVERSCAN_LINHAS_EDITOR;
+    const atual = janelaEditorRef.current;
+    if (Math.abs(atual.inicio - novoInicio) < 15 && Math.abs(atual.fim - novoFim) < 15) return;
+    setJanelaEditor({ inicio: novoInicio, fim: novoFim });
+  }, []);
+
   const abrirArquivo = (caminho) => {
     if (projeto && projeto.binarios && projeto.binarios[caminho]) {
       const kb = Math.max(1, Math.round((projeto.binarios[caminho].tamanho || 0) / 1024));
@@ -1937,7 +2058,7 @@ function CindraStudioScreen({ visible, onClose }) {
       return;
     }
     setAbasAbertas((atual) => (atual.includes(caminho) ? atual : [...atual, caminho]));
-    setArquivoAtivo(caminho);
+    setArquivoAtivo(caminho); // o efeito abaixo (trocou de arquivo ativo) já reseta a janela/rolagem
     setSidebarAberta(false);
   };
 
@@ -2098,23 +2219,68 @@ function CindraStudioScreen({ visible, onClose }) {
   const hist = arquivoAtivo ? historicoRef.current[arquivoAtivo] : null;
   const podeDesfazer = !!(hist && hist.undo.length > 0);
   const podeRefazer = !!(hist && hist.redo.length > 0);
-  const linhasAtivas = conteudoAtivo.split('\n');
-  const numeroDeLinhas = linhasAtivas.length;
-  // Sem quebra de linha: cada linha lógica ocupa exatamente uma linha visual
-  // (os números da esquerda batem com o código) e linhas compridas rolam na
-  // horizontal. Largura do código = maior linha × largura do caractere
-  // monoespaçado (~0,6em, corrigida pela escala de fonte do sistema) + folga,
-  // nunca menor que a área visível.
-  const larguraCaractere = CODIGO_FONTE * 0.6 * PixelRatio.getFontScale();
-  let maiorLinha = 0;
-  for (let i = 0; i < linhasAtivas.length; i++) {
-    if (linhasAtivas[i].length > maiorLinha) maiorLinha = linhasAtivas[i].length;
-  }
-  const larguraCodigo = Math.max(larguraVisivelCodigo, Math.ceil((maiorLinha + 4) * larguraCaractere) + 24);
+  const escalaFonte = PixelRatio.getFontScale();
+  const alturaLinhaEditor = 20 * escalaFonte;
+
+  // Só recalcula (split da string inteira + varredura pra achar a linha mais
+  // comprida) quando o TEXTO muda de verdade. Antes isso rodava em TODO
+  // re-render — inclusive os que não mexem no conteúdo, tipo só mover o
+  // cursor ou o teclado abrir/fechar — e num arquivo grande cada varredura
+  // dessas trava a digitação por um instante.
+  const { linhasAtivas, numeroDeLinhas, larguraCodigo } = useMemo(() => {
+    const linhas = conteudoAtivo.split('\n');
+    let maior = 0;
+    for (let i = 0; i < linhas.length; i++) {
+      if (linhas[i].length > maior) maior = linhas[i].length;
+    }
+    // Sem quebra de linha: cada linha lógica ocupa exatamente uma linha
+    // visual (os números da esquerda batem com o código) e linhas compridas
+    // rolam na horizontal. Largura do código = maior linha × largura do
+    // caractere monoespaçado (~0,6em, corrigida pela escala de fonte do
+    // sistema) + folga, nunca menor que a área visível.
+    const larguraCaractere = CODIGO_FONTE * 0.6 * escalaFonte;
+    const largura = Math.max(larguraVisivelCodigo, Math.ceil((maior + 4) * larguraCaractere) + 24);
+    return { linhasAtivas: linhas, numeroDeLinhas: linhas.length, larguraCodigo: largura };
+  }, [conteudoAtivo, larguraVisivelCodigo, escalaFonte]);
+
+  // Linguagem do arquivo aberto (pra escolher as regras de destaque) e a
+  // regex já compilada pra ela — `null` pra extensão sem suporte, e aí o
+  // editor mostra o texto normal, sem highlight, como sempre mostrou.
+  const linguagemAtiva = useMemo(() => detectarLinguagem(arquivoAtivo), [arquivoAtivo]);
+  const regexLinguagemAtiva = useMemo(() => obterRegexLinguagem(linguagemAtiva), [linguagemAtiva]);
+
+  // Recorte de linhas que a janela do editor manda desenhar agora, já
+  // limitado ao tamanho real do arquivo (o arquivo pode ter menos linhas
+  // que a janela pedida, ex.: arquivo pequeno ou acabou de abrir).
+  const janelaInicio = Math.max(0, Math.min(janelaEditor.inicio, numeroDeLinhas));
+  const janelaFim = Math.max(janelaInicio, Math.min(janelaEditor.fim, numeroDeLinhas));
+  const digitosNumeroLinhas = String(numeroDeLinhas).length;
+  const larguraGutter = Math.ceil(digitosNumeroLinhas * 13 * 0.6 * escalaFonte) + 16;
+  const alturaTotalCodigo = 28 + numeroDeLinhas * alturaLinhaEditor;
+
+  // Só tokeniza (destaque de sintaxe) as linhas da janela, e só de novo
+  // quando o texto ou a janela realmente mudam — não a cada re-render que
+  // não mexe em nenhum dos dois (ex.: teclado abrindo).
+  const linhasDestacadas = useMemo(() => {
+    if (!regexLinguagemAtiva) return [];
+    const lista = [];
+    for (let i = janelaInicio; i < janelaFim; i++) {
+      lista.push({ i, partes: tokenizarLinha(linhasAtivas[i] || '', regexLinguagemAtiva) });
+    }
+    return lista;
+  }, [regexLinguagemAtiva, linhasAtivas, janelaInicio, janelaFim]);
 
   // Trocou de tela (home ↔ workspace): começa com histórico limpo, pra um
   // projeto novo nunca herdar passos de outro que tenha os mesmos caminhos.
   useEffect(() => { historicoRef.current = {}; }, [etapa]);
+
+  // Trocou de arquivo ativo (aba nova, ou fechou uma aba e caiu noutra):
+  // a janela de linhas desenhadas volta pro topo, senão ficaria mostrando
+  // as linhas de onde o arquivo anterior estava rolado.
+  useEffect(() => {
+    scrollYEditorRef.current = 0;
+    setJanelaEditor({ inicio: 0, fim: 120 });
+  }, [arquivoAtivo]);
 
   // Altura do teclado: o app desenha de ponta a ponta (edge-to-edge) e o
   // teclado fica POR CIMA da tela, então a gente encolhe a área do editor
@@ -2136,16 +2302,30 @@ function CindraStudioScreen({ visible, onClose }) {
       const rolagem = scrollEditorRef.current;
       const visivel = alturaAreaEditorRef.current;
       if (!rolagem || !visivel) return;
-      const alturaLinha = 20 * PixelRatio.getFontScale();
       const linha = conteudoAtivo.slice(0, caretPos).split('\n').length - 1;
-      const topo = 14 + linha * alturaLinha;
-      const base = topo + alturaLinha;
+      const topo = 14 + linha * alturaLinhaEditor;
+      const base = topo + alturaLinhaEditor;
       const y = scrollYEditorRef.current;
       if (base + 12 > y + visivel) rolagem.scrollTo({ y: base + 12 - visivel, animated: true });
       else if (topo - 12 < y) rolagem.scrollTo({ y: Math.max(0, topo - 12), animated: true });
     }, 140);
     return () => clearTimeout(t);
-  }, [caretPos, alturaTeclado, conteudoAtivo, arquivoAtivo]);
+  }, [caretPos, alturaTeclado, conteudoAtivo, arquivoAtivo, alturaLinhaEditor]);
+
+  // Garante que a linha onde o cursor está sempre faz parte da janela
+  // desenhada — assim, ao digitar rápido ou pular de linha, o trecho atual
+  // nunca fica "sumido" esperando a próxima rolagem pra reaparecer.
+  useEffect(() => {
+    if (!arquivoAtivo) return;
+    const linha = conteudoAtivo.slice(0, caretPos).split('\n').length - 1;
+    const atual = janelaEditorRef.current;
+    if (linha < atual.inicio + 5 || linha > atual.fim - 5) {
+      setJanelaEditor({
+        inicio: Math.max(0, linha - OVERSCAN_LINHAS_EDITOR),
+        fim: linha + OVERSCAN_LINHAS_EDITOR * 2,
+      });
+    }
+  }, [caretPos, conteudoAtivo, arquivoAtivo]);
 
   // ---------- Tela 0: lista de projetos (tela inicial) ----------
   const termoBusca = buscaProjeto.trim().toLowerCase();
@@ -2816,14 +2996,33 @@ function CindraStudioScreen({ visible, onClose }) {
               contentContainerStyle={{ paddingBottom: alturaTeclado > 0 ? 24 : Math.max(insets.bottom, 0) + 24 }}
               keyboardShouldPersistTaps="handled"
               scrollEventThrottle={16}
-              onScroll={(e) => { scrollYEditorRef.current = e.nativeEvent.contentOffset.y; }}
-              onLayout={(e) => { alturaAreaEditorRef.current = e.nativeEvent.layout.height; }}
+              onScroll={(e) => {
+                const y = e.nativeEvent.contentOffset.y;
+                scrollYEditorRef.current = y;
+                atualizarJanelaEditor(y, alturaAreaEditorRef.current, alturaLinhaEditor);
+              }}
+              onLayout={(e) => {
+                const altura = e.nativeEvent.layout.height;
+                alturaAreaEditorRef.current = altura;
+                atualizarJanelaEditor(scrollYEditorRef.current, altura, alturaLinhaEditor);
+              }}
             >
               <View style={studioStyles.editorRow}>
-                <View style={studioStyles.lineNumbers}>
-                  {Array.from({ length: numeroDeLinhas }).map((_, i) => (
-                    <Text key={i} style={studioStyles.lineNumberText}>{i + 1}</Text>
-                  ))}
+                {/* Coluna de números: só desenha as linhas da "janela" atual — o
+                    resto é só a altura certa em branco, então a barra de
+                    rolagem continua do tamanho certo mesmo sem desenhar tudo. */}
+                <View style={[studioStyles.lineNumbers, { width: larguraGutter, height: alturaTotalCodigo, paddingVertical: 0, paddingHorizontal: 0 }]}>
+                  {Array.from({ length: janelaFim - janelaInicio }).map((_, idx) => {
+                    const i = janelaInicio + idx;
+                    return (
+                      <Text
+                        key={i}
+                        style={[studioStyles.lineNumberText, { position: 'absolute', top: 14 + i * alturaLinhaEditor, right: 8, width: larguraGutter - 16 }]}
+                      >
+                        {i + 1}
+                      </Text>
+                    );
+                  })}
                 </View>
                 <ScrollView
                   horizontal
@@ -2833,18 +3032,44 @@ function CindraStudioScreen({ visible, onClose }) {
                   keyboardShouldPersistTaps="handled"
                   onLayout={(e) => setLarguraVisivelCodigo(Math.floor(e.nativeEvent.layout.width))}
                 >
-                  <TextInput
-                    style={[studioStyles.codeInput, { width: larguraCodigo }]}
-                    value={conteudoAtivo}
-                    onChangeText={alterarConteudo}
-                    onSelectionChange={(e) => setCaretPos(e.nativeEvent.selection.end)}
-                    selection={selecaoForcada || undefined}
-                    multiline
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    spellCheck={false}
-                    scrollEnabled={false}
-                  />
+                  <View style={{ width: larguraCodigo }}>
+                    {!!regexLinguagemAtiva && (
+                      // Destaque de sintaxe: um "papel de fundo" com o texto
+                      // colorido, desenhado só nas linhas da janela — fica por
+                      // baixo do TextInput (que fica com o texto invisível,
+                      // mas o cursor continua aparecendo normalmente).
+                      <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: alturaTotalCodigo }}>
+                        {linhasDestacadas.map(({ i, partes }) => (
+                          <Text
+                            key={i}
+                            style={[studioStyles.codeInput, { position: 'absolute', top: 14 + i * alturaLinhaEditor, left: 12, paddingVertical: 0, paddingHorizontal: 0 }]}
+                          >
+                            {partes.map((p, j) => (
+                              <Text key={j} style={p.c ? { color: p.c } : null}>{p.t}</Text>
+                            ))}
+                          </Text>
+                        ))}
+                      </View>
+                    )}
+                    <TextInput
+                      style={[
+                        studioStyles.codeInput,
+                        { width: larguraCodigo },
+                        !!regexLinguagemAtiva && { color: 'transparent' },
+                      ]}
+                      value={conteudoAtivo}
+                      onChangeText={alterarConteudo}
+                      onSelectionChange={(e) => setCaretPos(e.nativeEvent.selection.end)}
+                      selection={selecaoForcada || undefined}
+                      multiline
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      spellCheck={false}
+                      scrollEnabled={false}
+                      selectionColor={COLORS.ember}
+                      cursorColor={COLORS.ember}
+                    />
+                  </View>
                 </ScrollView>
               </View>
             </ScrollView>
