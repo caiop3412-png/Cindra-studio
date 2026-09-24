@@ -922,12 +922,17 @@ const studioStyles = StyleSheet.create({
   lineNumbers: { paddingVertical: 14, paddingHorizontal: 8, backgroundColor: '#0a0a0c', borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.05)' },
   lineNumberText: { color: 'rgba(255,255,255,0.28)', fontSize: 13, lineHeight: 20, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', textAlign: 'right' },
   codeInput: {
-    // Texto do próprio TextInput fica invisível de verdade (alpha 0). O
-    // resquício antialiasado que o Android deixa mesmo em texto transparente
-    // fica escondido pela camada colorida (codeHighlightOverlay), que agora
-    // é desenhada POR CIMA dele (ver ordem no JSX). O cursor (cursorColor) e
-    // a seleção (selectionColor) continuam normais.
-    color: 'transparent',
+    // Texto do próprio TextInput fica "invisível" igualando a cor dele à cor
+    // de fundo do editor (#0a0a0c) — NÃO usamos color:'transparent' aqui de
+    // propósito. 'transparent' é tratado como caso especial pelo Android: ao
+    // ativar a seleção nativa (bloco de seleção + menu Traduzir/Recortar/
+    // Copiar), o sistema às vezes ignora a transparência e desenha o glifo
+    // de verdade por baixo da camada colorida (codeHighlightOverlay),
+    // causando aquele efeito de "letra duplicada/fantasma" durante o
+    // select-to-copy. Com uma cor sólida igual ao fundo, mesmo esse
+    // "vazamento" se funde com o fundo e fica invisível. O cursor
+    // (cursorColor) e a seleção (selectionColor) continuam normais.
+    color: '#0a0a0c',
     fontSize: CODIGO_FONTE,
     lineHeight: 20,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
