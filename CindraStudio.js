@@ -107,6 +107,22 @@ const PALAVRAS_CHAVE_POR_LINGUAGEM = {
     'not', 'in', 'is', 'yield', 'global', 'nonlocal', 'async', 'await', 'self', 'del'],
 };
 
+// Extensões tratadas como texto ao ADICIONAR um arquivo existente pelo
+// seletor do celular (adicionarArquivo). Antes, qualquer arquivo importado
+// virava "binário" e nunca abria no editor — mesmo sendo um .java/.js/.txt
+// grande. Agora, se a extensão for reconhecida, o conteúdo é lido como
+// texto e cai em `conteudos` (abre e edita normal), não importa o tamanho.
+const EXTENSOES_TEXTO = new Set([
+  'js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs', 'java', 'kt', 'kts', 'py',
+  'xml', 'json', 'css', 'scss', 'html', 'htm', 'md', 'txt',
+  'gradle', 'properties', 'yml', 'yaml', 'ini', 'cfg', 'env',
+  'sh', 'c', 'h', 'cpp', 'go', 'rs', 'rb', 'php', 'sql', 'csv', 'pro',
+]);
+function ehExtensaoTexto(nome) {
+  const m = /\.([a-zA-Z0-9]+)$/.exec(String(nome || ''));
+  return !!m && EXTENSOES_TEXTO.has(m[1].toLowerCase());
+}
+
 // Extensão do arquivo → linguagem reconhecida (null = sem destaque, mostra
 // o texto normal como sempre mostrou).
 function detectarLinguagem(caminho) {
@@ -1717,6 +1733,8 @@ function CindraStudioScreen({ visible, onClose }) {
   const [estadoCarregado, setEstadoCarregado] = useState(false);
   const [confirmandoNovo, setConfirmandoNovo] = useState(false);
   const [cardNo, setCardNo] = useState(null); // pasta/arquivo segurado (card de ação)
+  const [pastaEmCriacao, setPastaEmCriacao] = useState(false); // dentro do card: mostrando o campo de nome da nova pasta
+  const [nomeNovaPasta, setNomeNovaPasta] = useState('');
   const estadoRef = useRef(null);
 
   // Lê as preferências da tela inicial (aviso de recuperação dispensado ou não).
@@ -1920,6 +1938,8 @@ function CindraStudioScreen({ visible, onClose }) {
 
   // Segurar o dedo numa pasta (ou num arquivo binário) abre o card de ação.
   const abrirCardArquivo = (no) => {
+    setPastaEmCriacao(false);
+    setNomeNovaPasta('');
     if (no.tipo === 'pasta') { setCardNo(no); return; }
     if (projeto && projeto.binarios && projeto.binarios[no.caminho]) setCardNo(no);
   };
@@ -1945,6 +1965,24 @@ function CindraStudioScreen({ visible, onClose }) {
       while (existe(`${pastaCaminho}/${nome}`)) { nome = `${raiz}_${n}${ext}`; n += 1; }
 
       const caminho = `${pastaCaminho}/${nome}`;
+
+      // Extensão de texto/código → lê o conteúdo direto (sem limite de
+      // tamanho) e guarda em `conteudos`, pra abrir editável no Studio.
+      // Qualquer outra extensão continua indo pra `binarios` como antes.
+      if (ehExtensaoTexto(nome)) {
+        const texto = await FileSystem.readAsStringAsync(arq.uri, { encoding: FileSystem.EncodingType.UTF8 });
+        FileSystem.deleteAsync(arq.uri, { idempotent: true }).catch(() => {}); // limpa o cache
+
+        setProjeto((atual) => ({
+          ...atual,
+          arvore: inserirNoNaArvore(atual.arvore, pastaCaminho, { nome, caminho, tipo: 'arquivo' }),
+          conteudos: { ...atual.conteudos, [caminho]: texto },
+        }));
+        setPastasAbertas((atual) => ({ ...atual, [pastaCaminho]: true }));
+        exibirAviso('Arquivo adicionado', `${nome} está em ${pastaCaminho}`, 'sucesso');
+        return;
+      }
+
       const destino = pastaBinariosStudio(projeto.pacote) + caminho;
       await FileSystem.makeDirectoryAsync(destino.split('/').slice(0, -1).join('/'), { intermediates: true });
       await FileSystem.copyAsync({ from: arq.uri, to: destino });
@@ -1961,6 +1999,35 @@ function CindraStudioScreen({ visible, onClose }) {
     } catch (e) {
       exibirAviso('Erro ao adicionar', String(e && e.message ? e.message : e), 'erro');
     }
+  };
+
+  // Cria uma pasta vazia dentro da pasta segurada. Pastas vazias só existem
+  // na árvore em memória (não tem arquivo, então não tem o que gravar em
+  // disco ainda) — assim que o usuário adicionar/criar um arquivo lá dentro,
+  // ela materializa normal (gravarProjetoStudio já cria o diretório junto).
+  const criarPasta = (pastaCaminhoPai, nomeDigitado) => {
+    if (!projeto) return;
+    const limpo = String(nomeDigitado || '').trim().replace(/[^A-Za-z0-9._-]/g, '_');
+    if (!limpo) return;
+
+    let nome = limpo;
+    let novoCaminho = `${pastaCaminhoPai}/${nome}`;
+    let n = 2;
+    while (arvoreTemCaminho(projeto.arvore, novoCaminho)) {
+      nome = `${limpo}_${n}`;
+      novoCaminho = `${pastaCaminhoPai}/${nome}`;
+      n += 1;
+    }
+
+    setProjeto((atual) => ({
+      ...atual,
+      arvore: inserirNoNaArvore(atual.arvore, pastaCaminhoPai, { nome, caminho: novoCaminho, tipo: 'pasta', filhos: [] }),
+    }));
+    setPastasAbertas((atual) => ({ ...atual, [pastaCaminhoPai]: true, [novoCaminho]: true }));
+    setPastaEmCriacao(false);
+    setNomeNovaPasta('');
+    setCardNo(null);
+    exibirAviso('Pasta criada', `${nome} está em ${pastaCaminhoPai}`, 'sucesso');
   };
 
   const excluirBinario = (caminho) => {
@@ -3203,15 +3270,60 @@ function CindraStudioScreen({ visible, onClose }) {
 
       {cardNo && (
         <View style={[StyleSheet.absoluteFill, studioStyles.overlayRaiz]}>
-          <Pressable style={studioStyles.sidebarBackdrop} onPress={() => setCardNo(null)} />
+          <Pressable
+            style={studioStyles.sidebarBackdrop}
+            onPress={() => { setCardNo(null); setPastaEmCriacao(false); setNomeNovaPasta(''); }}
+          />
           <View style={studioStyles.cardAcao}>
             <Text style={studioStyles.cardAcaoTitulo} numberOfLines={1}>{cardNo.nome}</Text>
             <Text style={studioStyles.cardAcaoCaminho} numberOfLines={2}>{cardNo.caminho}</Text>
             {cardNo.tipo === 'pasta' ? (
-              <TouchableOpacity style={studioStyles.cardAcaoBtn} onPress={() => adicionarArquivo(cardNo.caminho)} activeOpacity={0.8}>
-                <MaterialCommunityIcons name="file-plus-outline" size={18} color={COLORS.ember} />
-                <Text style={studioStyles.cardAcaoBtnText}>Adicionar arquivo</Text>
-              </TouchableOpacity>
+              pastaEmCriacao ? (
+                <>
+                  <View style={studioStyles.cfgCampo}>
+                    <MaterialCommunityIcons name="folder-outline" size={18} color={COLORS.ember} />
+                    <TextInput
+                      style={studioStyles.cfgCampoInput}
+                      value={nomeNovaPasta}
+                      onChangeText={setNomeNovaPasta}
+                      placeholder="Nome da pasta"
+                      placeholderTextColor={COLORS.dim}
+                      autoFocus
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      onSubmitEditing={() => criarPasta(cardNo.caminho, nomeNovaPasta)}
+                    />
+                  </View>
+                  <TouchableOpacity
+                    style={studioStyles.cardAcaoBtn}
+                    onPress={() => criarPasta(cardNo.caminho, nomeNovaPasta)}
+                    activeOpacity={0.8}
+                    disabled={!nomeNovaPasta.trim()}
+                  >
+                    <MaterialCommunityIcons name="check" size={18} color={COLORS.ember} />
+                    <Text style={studioStyles.cardAcaoBtnText}>Criar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={studioStyles.cardAcaoBtn}
+                    onPress={() => { setPastaEmCriacao(false); setNomeNovaPasta(''); }}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialCommunityIcons name="close" size={18} color={COLORS.dim} />
+                    <Text style={studioStyles.cardAcaoBtnText}>Cancelar</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity style={studioStyles.cardAcaoBtn} onPress={() => adicionarArquivo(cardNo.caminho)} activeOpacity={0.8}>
+                    <MaterialCommunityIcons name="file-plus-outline" size={18} color={COLORS.ember} />
+                    <Text style={studioStyles.cardAcaoBtnText}>Adicionar arquivo</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={studioStyles.cardAcaoBtn} onPress={() => setPastaEmCriacao(true)} activeOpacity={0.8}>
+                    <MaterialCommunityIcons name="folder-plus-outline" size={18} color={COLORS.ember} />
+                    <Text style={studioStyles.cardAcaoBtnText}>Criar pasta</Text>
+                  </TouchableOpacity>
+                </>
+              )
             ) : (
               <TouchableOpacity style={studioStyles.cardAcaoBtn} onPress={() => excluirBinario(cardNo.caminho)} activeOpacity={0.8}>
                 <MaterialCommunityIcons name="delete-outline" size={18} color="#ff8a80" />
