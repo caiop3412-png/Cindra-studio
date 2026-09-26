@@ -91,6 +91,23 @@ class ApkPipeline(private val ctx: Context, private val log: (String) -> Unit) {
       val base = File(trabalho, "base.apk")
       val alinhado = File(trabalho, "alinhado.apk")
 
+      // Pasta de convenção pra AARs mesclados manualmente (ex: Google
+      // Sign-In). Se não existir, o build segue 100% igual a antes.
+      //   app/src/main/libs-aar/classes/*.jar   -> entram no D8
+      //   app/src/main/libs-aar/res/            -> entram no aapt2 link
+      //   app/src/main/libs-aar/packages.txt    -> um pacote por linha,
+      //     usado em --extra-packages (gera o R.java de cada lib, senão
+      //     o código delas quebra em runtime procurando o R errado)
+      val libsAar = File(src, "libs-aar")
+      val libsAarJars = File(libsAar, "classes").let { p ->
+        if (p.isDirectory) p.listFiles { f -> f.extension == "jar" }?.toList() ?: emptyList() else emptyList()
+      }
+      val libsAarRes = File(libsAar, "res")
+      val libsAarPackages = File(libsAar, "packages.txt").let { p ->
+        if (p.isFile) p.readLines().map { it.trim() }.filter { it.isNotEmpty() } else emptyList()
+      }
+      val compiladoResExtra = File(trabalho, "res-extra.zip")
+
       // 1) aapt2 compile — recursos (res/) viram .flat
       log("1/6 aapt2 compile (recursos)")
       val res = File(src, "res")
@@ -101,6 +118,16 @@ class ApkPipeline(private val ctx: Context, private val log: (String) -> Unit) {
         if (codigo != 0) {
           erros += parseAapt(out, projeto)
           return falha("aapt2 compile")
+        }
+      }
+      if (libsAarRes.isDirectory) {
+        log("1b/6 aapt2 compile (recursos de libs-aar/res)")
+        val (codigo, out) = executar(
+          listOf(aapt2.path, "compile", "--dir", libsAarRes.path, "-o", compiladoResExtra.path)
+        )
+        if (codigo != 0) {
+          erros += parseAapt(out, projeto)
+          return falha("aapt2 compile (libs-aar)")
         }
       }
 
@@ -117,7 +144,14 @@ class ApkPipeline(private val ctx: Context, private val log: (String) -> Unit) {
       )
       val assets = File(src, "assets")
       if (assets.isDirectory) link += listOf("-A", assets.path)
+      if (libsAarPackages.isNotEmpty()) {
+        // Gera um R.java extra por pacote de lib (ex: com.google.android.gms.base),
+        // com os MESMOS ids finais do R principal — sem isso, o código
+        // compilado da lib procura um R que não existe e quebra em runtime.
+        link += listOf("--extra-packages", libsAarPackages.joinToString(":"))
+      }
       if (compiladoRes.exists()) link += compiladoRes.path
+      if (compiladoResExtra.exists()) link += compiladoResExtra.path
       val (codigoLink, saidaLink) = executar(link)
       if (codigoLink != 0) {
         erros += parseAapt(saidaLink, projeto)
@@ -167,6 +201,7 @@ class ApkPipeline(private val ctx: Context, private val log: (String) -> Unit) {
       try {
         val comando = D8Command.builder(handler)
           .addProgramFiles(arquivosClass)
+          .apply { libsAarJars.forEach { addProgramFiles(it.toPath()) } } // ex: google-signin-classes.jar
           .addLibraryFiles(androidJar.toPath())
           .setMinApiLevel(minSdk)
           .setMode(CompilationMode.DEBUG)
