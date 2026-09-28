@@ -201,6 +201,20 @@ function hexParaRgba(hex, alpha) {
 }
 
 // ─────────────────────────────────────────────────────────
+// Etapas fixas do build (usadas só pra desenhar o "stepper" bonito do
+// painel de compilação — o texto real de cada linha continua vindo do
+// apk-builder nativo, aqui a gente só casa "N/6" com o passo certo).
+// ─────────────────────────────────────────────────────────
+const STEPS_COMPILACAO = [
+  { icone: 'image-multiple-outline', titulo: 'Recursos', sub: 'aapt2 compile' },
+  { icone: 'link-variant', titulo: 'Link', sub: 'manifest · resources.arsc · R.java' },
+  { icone: 'language-java', titulo: 'Java', sub: 'ECJ → .class' },
+  { icone: 'file-cog-outline', titulo: 'Dex', sub: 'D8 → classes.dex' },
+  { icone: 'package-variant-closed', titulo: 'Empacotar', sub: 'gerar .apk' },
+  { icone: 'shield-check-outline', titulo: 'Assinar', sub: 'apksig' },
+];
+
+// ─────────────────────────────────────────────────────────
 // Aviso global (card no topo que some sozinho) — usado pelo Studio.
 // ─────────────────────────────────────────────────────────
 let noticeListener = null;
@@ -850,6 +864,120 @@ const studioStyles = StyleSheet.create({
     marginTop: 4,
   },
   instalarBtnText: { color: '#1a0806', fontSize: 14.5, fontWeight: '700' },
+  // ---- Painel de compilação (redesenho) ----
+  compileHeaderWrap: {
+    paddingTop: 18,
+    paddingBottom: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  compileHeaderGlow: {
+    position: 'absolute',
+    top: -70,
+    alignSelf: 'center',
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    opacity: 0.16,
+  },
+  compileIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    marginBottom: 10,
+  },
+  compileTitulo: { color: COLORS.ink, fontSize: 16.5, fontWeight: '800', letterSpacing: 0.2 },
+  compileSubtitulo: { color: COLORS.dim, fontSize: 12.5, marginTop: 3, textAlign: 'center' },
+  compileCloseBtn: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  progressTrackWrap: { paddingHorizontal: 18, marginTop: 4, marginBottom: 4 },
+  progressTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: COLORS.ember,
+  },
+  stepperWrap: {
+    flexDirection: 'row',
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 6,
+    gap: 4,
+  },
+  stepperItem: { flex: 1, alignItems: 'center', gap: 6 },
+  stepDot: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  stepDotFeita: { borderColor: 'rgba(139,214,255,0.0)', backgroundColor: COLORS.ember },
+  stepDotAtiva: { borderColor: COLORS.ember, backgroundColor: 'rgba(255,82,39,0.14)' },
+  stepDotErro: { borderColor: '#ff6b6b', backgroundColor: 'rgba(255,107,107,0.14)' },
+  stepLinha: {
+    position: 'absolute',
+    top: 15,
+    left: '50%',
+    width: '100%',
+    height: 2,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    zIndex: -1,
+  },
+  stepLinhaFeita: { backgroundColor: COLORS.ember },
+  stepLabel: { color: COLORS.dim, fontSize: 9, fontWeight: '600', textAlign: 'center' },
+  stepLabelAtiva: { color: COLORS.ink },
+  logCard: {
+    marginHorizontal: 14,
+    marginTop: 10,
+    marginBottom: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    padding: 12,
+  },
+  logCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  logCardHeaderText: { color: COLORS.dim, fontSize: 10.5, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' },
+  logLinhaWrap: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 5 },
+  logDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: COLORS.dim, marginTop: 6.5 },
+  successCard: {
+    marginHorizontal: 14,
+    marginTop: 6,
+    marginBottom: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(139,212,80,0.35)',
+    backgroundColor: 'rgba(139,212,80,0.08)',
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  successCardTextos: { flex: 1 },
+  successCardTitulo: { color: COLORS.ink, fontSize: 14, fontWeight: '700', marginBottom: 2 },
+  successCardCaminho: { color: COLORS.dim, fontSize: 11 },
   // ---- Workspace: barra superior ----
   workspaceTopWrap: {
     backgroundColor: '#0d0d0f',
@@ -1726,6 +1854,9 @@ function CindraStudioScreen({ visible, onClose }) {
   const [logCompilacao, setLogCompilacao] = useState([]);
   const [errosCompilacao, setErrosCompilacao] = useState([]);
   const [apkGerado, setApkGerado] = useState(null);
+  // Progresso animado do stepper (0 a 6) + pulso do ícone central do painel.
+  const progressoCompilacao = useRef(new Animated.Value(0)).current;
+  const pulsoCompilacao = useRef(new Animated.Value(1)).current;
 
   // Persistência: o projeto (arquivos, abas, nome, ícone) fica salvo em
   // disco e volta sozinho na próxima vez que abrir a tela — mesmo depois de
@@ -1808,6 +1939,41 @@ function CindraStudioScreen({ visible, onClose }) {
   useEffect(() => {
     if (!menuProjetoAberto) { setConfirmandoNovo(false); }
   }, [menuProjetoAberto]);
+
+  // Stepper do painel de compilação: acha a etapa mais avançada citada no
+  // log ("N/6 ...") e anima a barra até lá. Quando o APK sai pronto, força
+  // as 6 etapas preenchidas (o "6/6" às vezes nem aparece no log nativo).
+  const etapaCompilacaoAtual = useMemo(() => {
+    let max = 0;
+    for (let i = logCompilacao.length - 1; i >= 0; i -= 1) {
+      const m = /^(\d+)\/6/.exec(logCompilacao[i]);
+      if (m) { max = parseInt(m[1], 10); break; }
+    }
+    if (apkGerado) return STEPS_COMPILACAO.length;
+    return Math.min(max, STEPS_COMPILACAO.length);
+  }, [logCompilacao, apkGerado]);
+
+  useEffect(() => {
+    Animated.timing(progressoCompilacao, {
+      toValue: etapaCompilacaoAtual,
+      duration: 380,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false, // anima largura (%), não dá pra usar o driver nativo
+    }).start();
+  }, [etapaCompilacaoAtual]);
+
+  useEffect(() => {
+    if (!painelCompilacao) { pulsoCompilacao.setValue(1); return undefined; }
+    if (!compilando) { pulsoCompilacao.setValue(1); return undefined; }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulsoCompilacao, { toValue: 1.14, duration: 620, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulsoCompilacao, { toValue: 1, duration: 620, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [painelCompilacao, compilando]);
 
   // "Excluir projeto" (dentro do workspace): apaga o projeto atual de vez
   // e volta pra tela inicial (lista de projetos).
@@ -3334,40 +3500,161 @@ function CindraStudioScreen({ visible, onClose }) {
         </View>
       )}
 
-      {painelCompilacao && (
-        <View style={[StyleSheet.absoluteFill, studioStyles.overlayRaiz]}>
-          <Pressable style={studioStyles.sidebarBackdrop} onPress={() => !compilando && setPainelCompilacao(false)} />
-          <View style={[studioStyles.compilePanel, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-            <View style={studioStyles.sidebarHeader}>
-              <Text style={studioStyles.sidebarTitle}>
-                {compilando ? 'Compilando...' : apkGerado ? 'APK pronto' : errosCompilacao.length ? 'Erros na compilação' : 'Compilação'}
-              </Text>
-              <TouchableOpacity onPress={() => setPainelCompilacao(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <MaterialCommunityIcons name="close" size={18} color={COLORS.dim} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 10 }}>
-              {errosCompilacao.map((erro, i) => (
-                <TouchableOpacity key={`e${i}`} style={studioStyles.erroCard} activeOpacity={0.75} onPress={() => abrirErro(erro)}>
-                  <Text style={studioStyles.erroArquivo} numberOfLines={2}>
-                    {erro.arquivo}{erro.linha ? `  ·  linha ${erro.linha}` : ''}
-                  </Text>
-                  <Text style={studioStyles.erroMensagem}>{erro.mensagem}</Text>
+      {painelCompilacao && (() => {
+        const temErro = errosCompilacao.length > 0;
+        const corEstado = temErro ? COLORS.error : apkGerado ? '#8bd450' : COLORS.ember;
+        const iconeEstado = temErro ? 'alert-circle-outline' : apkGerado ? 'check-circle-outline' : 'cog-outline';
+        const tituloEstado = temErro ? 'Erros na compilação' : apkGerado ? 'APK pronto' : compilando ? 'Compilando...' : 'Compilação';
+        const subtituloEstado = temErro
+          ? `${errosCompilacao.length} ${errosCompilacao.length === 1 ? 'problema encontrado' : 'problemas encontrados'} — toque para abrir o arquivo`
+          : apkGerado
+            ? 'Assinado e pronto para instalar neste aparelho'
+            : compilando
+              ? `Etapa ${Math.max(etapaCompilacaoAtual, 1)} de ${STEPS_COMPILACAO.length}`
+              : 'Aguardando início';
+        return (
+          <View style={[StyleSheet.absoluteFill, studioStyles.overlayRaiz]}>
+            <Pressable style={studioStyles.sidebarBackdrop} onPress={() => !compilando && setPainelCompilacao(false)} />
+            <View style={[studioStyles.compilePanel, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+
+              {/* Cabeçalho: ícone de estado com brilho + título/subtítulo */}
+              <View style={studioStyles.compileHeaderWrap}>
+                <View style={[studioStyles.compileHeaderGlow, { backgroundColor: corEstado }]} pointerEvents="none" />
+                <TouchableOpacity
+                  style={studioStyles.compileCloseBtn}
+                  onPress={() => !compilando && setPainelCompilacao(false)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  activeOpacity={compilando ? 1 : 0.75}
+                >
+                  <MaterialCommunityIcons name="close" size={16} color={compilando ? 'rgba(255,255,255,0.25)' : COLORS.dim} />
                 </TouchableOpacity>
-              ))}
-              {logCompilacao.map((linha, i) => (
-                <Text key={`l${i}`} style={studioStyles.logLinha}>{linha}</Text>
-              ))}
-            </ScrollView>
-            {apkGerado && !compilando && (
-              <TouchableOpacity style={studioStyles.instalarBtn} onPress={instalarApk} activeOpacity={0.85}>
-                <MaterialCommunityIcons name="cellphone-arrow-down" size={18} color="#1a0806" />
-                <Text style={studioStyles.instalarBtnText}>Instalar APK</Text>
-              </TouchableOpacity>
-            )}
+                <Animated.View
+                  style={[
+                    studioStyles.compileIconCircle,
+                    { borderColor: corEstado, backgroundColor: hexParaRgba(corEstado, 0.14), transform: [{ scale: pulsoCompilacao }] },
+                  ]}
+                >
+                  {compilando ? (
+                    <ActivityIndicator size="small" color={corEstado} />
+                  ) : (
+                    <MaterialCommunityIcons name={iconeEstado} size={26} color={corEstado} />
+                  )}
+                </Animated.View>
+                <Text style={studioStyles.compileTitulo}>{tituloEstado}</Text>
+                <Text style={studioStyles.compileSubtitulo} numberOfLines={2}>{subtituloEstado}</Text>
+              </View>
+
+              {/* Barra de progresso das 6 etapas do build */}
+              <View style={studioStyles.progressTrackWrap}>
+                <View style={studioStyles.progressTrack}>
+                  <Animated.View
+                    style={[
+                      studioStyles.progressFill,
+                      {
+                        backgroundColor: temErro ? COLORS.error : corEstado,
+                        width: progressoCompilacao.interpolate({
+                          inputRange: [0, STEPS_COMPILACAO.length],
+                          outputRange: ['0%', '100%'],
+                          extrapolate: 'clamp',
+                        }),
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+
+              {/* Stepper com as 6 etapas nomeadas */}
+              <View style={studioStyles.stepperWrap}>
+                {STEPS_COMPILACAO.map((step, i) => {
+                  const numero = i + 1;
+                  const feita = numero < etapaCompilacaoAtual || (numero === etapaCompilacaoAtual && (apkGerado || (!compilando && !temErro)));
+                  const comErroAqui = temErro && numero === etapaCompilacaoAtual;
+                  const ativa = compilando && numero === etapaCompilacaoAtual;
+                  return (
+                    <View key={step.titulo} style={studioStyles.stepperItem}>
+                      {i > 0 && (
+                        <View
+                          style={[
+                            studioStyles.stepLinha,
+                            { width: '200%', left: '-100%' },
+                            numero <= etapaCompilacaoAtual && !comErroAqui && studioStyles.stepLinhaFeita,
+                          ]}
+                          pointerEvents="none"
+                        />
+                      )}
+                      <View
+                        style={[
+                          studioStyles.stepDot,
+                          feita && !comErroAqui && studioStyles.stepDotFeita,
+                          ativa && studioStyles.stepDotAtiva,
+                          comErroAqui && studioStyles.stepDotErro,
+                        ]}
+                      >
+                        {comErroAqui ? (
+                          <MaterialCommunityIcons name="close" size={14} color={COLORS.error} />
+                        ) : feita ? (
+                          <MaterialCommunityIcons name="check" size={14} color="#0d0d10" />
+                        ) : (
+                          <MaterialCommunityIcons name={step.icone} size={14} color={ativa ? COLORS.ember : COLORS.dim} />
+                        )}
+                      </View>
+                      <Text style={[studioStyles.stepLabel, (ativa || feita) && studioStyles.stepLabelAtiva]} numberOfLines={1}>
+                        {step.titulo}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 10 }}>
+                {apkGerado && !compilando && (
+                  <View style={studioStyles.successCard}>
+                    <MaterialCommunityIcons name="android" size={30} color="#8bd450" />
+                    <View style={studioStyles.successCardTextos}>
+                      <Text style={studioStyles.successCardTitulo}>{projeto ? projeto.pacote : 'app'}.apk</Text>
+                      <Text style={studioStyles.successCardCaminho} numberOfLines={1}>{apkGerado}</Text>
+                    </View>
+                  </View>
+                )}
+
+                {temErro && errosCompilacao.map((erro, i) => (
+                  <TouchableOpacity key={`e${i}`} style={[studioStyles.erroCard, { marginHorizontal: 14 }]} activeOpacity={0.75} onPress={() => abrirErro(erro)}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                      <MaterialCommunityIcons name="file-alert-outline" size={13} color="#ff8a80" />
+                      <Text style={studioStyles.erroArquivo} numberOfLines={2}>
+                        {erro.arquivo}{erro.linha ? `  ·  linha ${erro.linha}` : ''}
+                      </Text>
+                    </View>
+                    <Text style={studioStyles.erroMensagem}>{erro.mensagem}</Text>
+                  </TouchableOpacity>
+                ))}
+
+                {logCompilacao.length > 0 && (
+                  <View style={studioStyles.logCard}>
+                    <View style={studioStyles.logCardHeader}>
+                      <MaterialCommunityIcons name="console-line" size={12} color={COLORS.dim} />
+                      <Text style={studioStyles.logCardHeaderText}>Log do build</Text>
+                    </View>
+                    {logCompilacao.map((linha, i) => (
+                      <View key={`l${i}`} style={studioStyles.logLinhaWrap}>
+                        <View style={studioStyles.logDot} />
+                        <Text style={[studioStyles.logLinha, { flex: 1 }]}>{linha}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </ScrollView>
+
+              {apkGerado && !compilando && (
+                <TouchableOpacity style={[studioStyles.instalarBtn, { shadowColor: '#8bd450', shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 }]} onPress={instalarApk} activeOpacity={0.85}>
+                  <MaterialCommunityIcons name="cellphone-arrow-down" size={18} color="#1a0806" />
+                  <Text style={studioStyles.instalarBtnText}>Instalar APK</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
-        </View>
-      )}
+        );
+      })()}
     </>
   );
 
