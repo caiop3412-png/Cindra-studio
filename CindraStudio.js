@@ -668,8 +668,178 @@ function removerNoDaArvore(nos, caminho) {
     .map((no) => (no.tipo === 'pasta' ? { ...no, filhos: removerNoDaArvore(no.filhos, caminho) } : no));
 }
 
+// Devolve o nó (pasta ou arquivo) que está em `caminho`, ou null.
+function acharNoNaArvore(nos, caminho) {
+  for (const no of nos) {
+    if (no.caminho === caminho) return no;
+    if (no.tipo === 'pasta') {
+      const achado = acharNoNaArvore(no.filhos, caminho);
+      if (achado) return achado;
+    }
+  }
+  return null;
+}
+
 function arvoreTemCaminho(nos, caminho) {
   return nos.some((no) => no.caminho === caminho || (no.tipo === 'pasta' && arvoreTemCaminho(no.filhos, caminho)));
+}
+
+// ─────────────────────────────────────────────────────────
+// Exportar o projeto como .zip (sem módulo nativo): escritor de ZIP em JS
+// puro (método "stored", sem compressão — compatível com qualquer
+// descompactador), mais base64/UTF-8/CRC32 próprios pra não depender de
+// TextEncoder/btoa.
+// ─────────────────────────────────────────────────────────
+const BASE64_ALFABETO = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+const BASE64_INVERSO = (() => {
+  const t = new Uint8Array(256).fill(255);
+  for (let i = 0; i < BASE64_ALFABETO.length; i += 1) t[BASE64_ALFABETO.charCodeAt(i)] = i;
+  return t;
+})();
+
+function base64ParaBytes(b64) {
+  const limpo = String(b64 || '').replace(/[^A-Za-z0-9+/]/g, '');
+  const saida = new Uint8Array(Math.floor((limpo.length * 3) / 4));
+  let o = 0;
+  for (let i = 0; i < limpo.length; i += 4) {
+    const a = BASE64_INVERSO[limpo.charCodeAt(i)];
+    const b = BASE64_INVERSO[limpo.charCodeAt(i + 1)];
+    const c = i + 2 < limpo.length ? BASE64_INVERSO[limpo.charCodeAt(i + 2)] : 0;
+    const d = i + 3 < limpo.length ? BASE64_INVERSO[limpo.charCodeAt(i + 3)] : 0;
+    const n = (a << 18) | (b << 12) | (c << 6) | d;
+    if (o < saida.length) saida[o++] = (n >> 16) & 255;
+    if (o < saida.length) saida[o++] = (n >> 8) & 255;
+    if (o < saida.length) saida[o++] = n & 255;
+  }
+  return saida;
+}
+
+function bytesParaBase64(bytes) {
+  const partes = [];
+  let atual = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const n = (bytes[i] << 16) | ((i + 1 < bytes.length ? bytes[i + 1] : 0) << 8) | (i + 2 < bytes.length ? bytes[i + 2] : 0);
+    atual += BASE64_ALFABETO[(n >> 18) & 63] + BASE64_ALFABETO[(n >> 12) & 63]
+      + (i + 1 < bytes.length ? BASE64_ALFABETO[(n >> 6) & 63] : '=')
+      + (i + 2 < bytes.length ? BASE64_ALFABETO[n & 63] : '=');
+    if (atual.length >= 24000) { partes.push(atual); atual = ''; }
+  }
+  partes.push(atual);
+  return partes.join('');
+}
+
+function textoParaBytes(str) {
+  const out = [];
+  const t = String(str);
+  for (let i = 0; i < t.length; i += 1) {
+    let c = t.charCodeAt(i);
+    if (c >= 0xd800 && c <= 0xdbff && i + 1 < t.length) {
+      const d = t.charCodeAt(i + 1);
+      if (d >= 0xdc00 && d <= 0xdfff) { c = 0x10000 + ((c - 0xd800) << 10) + (d - 0xdc00); i += 1; }
+    }
+    if (c < 0x80) out.push(c);
+    else if (c < 0x800) out.push(0xc0 | (c >> 6), 0x80 | (c & 63));
+    else if (c < 0x10000) out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+    else out.push(0xf0 | (c >> 18), 0x80 | ((c >> 12) & 63), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+  }
+  return Uint8Array.from(out);
+}
+
+const TABELA_CRC32 = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32Bytes(bytes) {
+  let c = 0xffffffff;
+  for (let i = 0; i < bytes.length; i += 1) c = TABELA_CRC32[(c ^ bytes[i]) & 255] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+// entradas: [{ nome: 'pasta/arquivo.txt' (termina em "/" = pasta), bytes: Uint8Array }]
+function montarZipStudio(entradas) {
+  if (entradas.length > 65000) throw new Error('Arquivos demais pra um .zip simples.');
+  const agora = new Date();
+  const dosHora = (agora.getHours() << 11) | (agora.getMinutes() << 5) | (agora.getSeconds() >> 1);
+  const dosData = ((agora.getFullYear() - 1980) << 9) | ((agora.getMonth() + 1) << 5) | agora.getDate();
+  const locais = [];
+  const centrais = [];
+  let deslocamento = 0;
+  let tamLocais = 0;
+  let tamCentrais = 0;
+  for (const e of entradas) {
+    const nome = textoParaBytes(e.nome);
+    const dados = e.bytes;
+    const crc = crc32Bytes(dados);
+    const ehPasta = e.nome.endsWith('/');
+
+    const lh = new Uint8Array(30 + nome.length);
+    const dl = new DataView(lh.buffer);
+    dl.setUint32(0, 0x04034b50, true);
+    dl.setUint16(4, 20, true);
+    dl.setUint16(6, 0x0800, true); // nomes em UTF-8
+    dl.setUint16(8, 0, true); // stored
+    dl.setUint16(10, dosHora, true);
+    dl.setUint16(12, dosData, true);
+    dl.setUint32(14, crc, true);
+    dl.setUint32(18, dados.length, true);
+    dl.setUint32(22, dados.length, true);
+    dl.setUint16(26, nome.length, true);
+    dl.setUint16(28, 0, true);
+    lh.set(nome, 30);
+
+    const ch = new Uint8Array(46 + nome.length);
+    const dc = new DataView(ch.buffer);
+    dc.setUint32(0, 0x02014b50, true);
+    dc.setUint16(4, 20, true);
+    dc.setUint16(6, 20, true);
+    dc.setUint16(8, 0x0800, true);
+    dc.setUint16(10, 0, true);
+    dc.setUint16(12, dosHora, true);
+    dc.setUint16(14, dosData, true);
+    dc.setUint32(16, crc, true);
+    dc.setUint32(20, dados.length, true);
+    dc.setUint32(24, dados.length, true);
+    dc.setUint16(28, nome.length, true);
+    dc.setUint32(38, ehPasta ? 0x10 : 0, true);
+    dc.setUint32(42, deslocamento, true);
+    ch.set(nome, 46);
+
+    locais.push(lh, dados);
+    centrais.push(ch);
+    deslocamento += lh.length + dados.length;
+    tamLocais += lh.length + dados.length;
+    tamCentrais += ch.length;
+  }
+  const fim = new Uint8Array(22);
+  const df = new DataView(fim.buffer);
+  df.setUint32(0, 0x06054b50, true);
+  df.setUint16(8, entradas.length, true);
+  df.setUint16(10, entradas.length, true);
+  df.setUint32(12, tamCentrais, true);
+  df.setUint32(16, tamLocais, true);
+
+  const zip = new Uint8Array(tamLocais + tamCentrais + 22);
+  let pos = 0;
+  for (const parte of locais) { zip.set(parte, pos); pos += parte.length; }
+  for (const parte of centrais) { zip.set(parte, pos); pos += parte.length; }
+  zip.set(fim, pos);
+  return zip;
+}
+
+// Pastas vazias da árvore (pra irem no .zip também).
+function pastasVaziasDaArvore(nos, acc = []) {
+  for (const no of nos) {
+    if (no.tipo !== 'pasta') continue;
+    if (no.filhos.length === 0) acc.push(no.caminho);
+    else pastasVaziasDaArvore(no.filhos, acc);
+  }
+  return acc;
 }
 
 // Estado do CindraStudio salvo em disco. Agora dá pra ter VÁRIOS projetos:
@@ -1850,6 +2020,7 @@ function CindraStudioScreen({ visible, onClose }) {
 
   // Compilação (▶)
   const [compilando, setCompilando] = useState(false);
+  const [gerandoZip, setGerandoZip] = useState(false);
   const [painelCompilacao, setPainelCompilacao] = useState(false);
   const [logCompilacao, setLogCompilacao] = useState([]);
   const [errosCompilacao, setErrosCompilacao] = useState([]);
@@ -1864,6 +2035,7 @@ function CindraStudioScreen({ visible, onClose }) {
   const [estadoCarregado, setEstadoCarregado] = useState(false);
   const [confirmandoNovo, setConfirmandoNovo] = useState(false);
   const [cardNo, setCardNo] = useState(null); // pasta/arquivo segurado (card de ação)
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(null); // caminho do arquivo aguardando o 2º toque pra excluir
   const [pastaEmCriacao, setPastaEmCriacao] = useState(false); // dentro do card: mostrando o campo de nome da nova pasta
   const [nomeNovaPasta, setNomeNovaPasta] = useState('');
   const estadoRef = useRef(null);
@@ -2106,8 +2278,9 @@ function CindraStudioScreen({ visible, onClose }) {
   const abrirCardArquivo = (no) => {
     setPastaEmCriacao(false);
     setNomeNovaPasta('');
-    if (no.tipo === 'pasta') { setCardNo(no); return; }
-    if (projeto && projeto.binarios && projeto.binarios[no.caminho]) setCardNo(no);
+    setConfirmandoExclusao(null);
+    // Pasta OU qualquer arquivo (código, texto, binário) abre o card de ação.
+    setCardNo(no);
   };
 
   // "Adicionar arquivo": abre o seletor do celular, copia o arquivo escolhido
@@ -2120,17 +2293,32 @@ function CindraStudioScreen({ visible, onClose }) {
       if (r.canceled || !r.assets || !r.assets.length) return;
       const arq = r.assets[0];
 
-      // nome seguro pro Android (sem espaço/acento) e sem sobrescrever outro
+      // nome seguro pro Android (sem espaço/acento). Se já existe um arquivo
+      // com esse MESMO nome na pasta, ele é SUBSTITUÍDO (sem criar cópia
+      // tipo npc_2.fxb) — vale pra qualquer tipo de arquivo.
       const limpo = String(arq.name || 'arquivo').replace(/[^A-Za-z0-9._-]/g, '_');
       const ponto = limpo.lastIndexOf('.');
       const raiz = ponto > 0 ? limpo.slice(0, ponto) : limpo;
       const ext = ponto > 0 ? limpo.slice(ponto) : '';
-      const existe = (c) => projeto.conteudos[c] !== undefined || !!(projeto.binarios && projeto.binarios[c]);
       let nome = limpo;
       let n = 2;
-      while (existe(`${pastaCaminho}/${nome}`)) { nome = `${raiz}_${n}${ext}`; n += 1; }
+      // Único caso em que o nome muda: já existe uma PASTA com esse nome.
+      let noExistente = acharNoNaArvore(projeto.arvore, `${pastaCaminho}/${nome}`);
+      while (noExistente && noExistente.tipo === 'pasta') {
+        nome = `${raiz}_${n}${ext}`; n += 1;
+        noExistente = acharNoNaArvore(projeto.arvore, `${pastaCaminho}/${nome}`);
+      }
 
       const caminho = `${pastaCaminho}/${nome}`;
+      const eraTexto = projeto.conteudos[caminho] !== undefined;
+      const eraBinario = !!(projeto.binarios && projeto.binarios[caminho]);
+      const substituindo = !!noExistente || eraTexto || eraBinario;
+      const arvoreComNo = (arvore) => (arvoreTemCaminho(arvore, caminho)
+        ? arvore
+        : inserirNoNaArvore(arvore, pastaCaminho, { nome, caminho, tipo: 'arquivo' }));
+
+      // O histórico de desfazer do arquivo antigo não vale mais pro novo.
+      delete historicoRef.current[caminho];
 
       // Extensão de texto/código → lê o conteúdo direto (sem limite de
       // tamanho) e guarda em `conteudos`, pra abrir editável no Studio.
@@ -2138,30 +2326,43 @@ function CindraStudioScreen({ visible, onClose }) {
       if (ehExtensaoTexto(nome)) {
         const texto = await FileSystem.readAsStringAsync(arq.uri, { encoding: FileSystem.EncodingType.UTF8 });
         FileSystem.deleteAsync(arq.uri, { idempotent: true }).catch(() => {}); // limpa o cache
+        // Se antes era binário nesse caminho, apaga o binário velho do disco.
+        if (eraBinario) FileSystem.deleteAsync(pastaBinariosStudio(projeto.pacote) + caminho, { idempotent: true }).catch(() => {});
 
-        setProjeto((atual) => ({
-          ...atual,
-          arvore: inserirNoNaArvore(atual.arvore, pastaCaminho, { nome, caminho, tipo: 'arquivo' }),
-          conteudos: { ...atual.conteudos, [caminho]: texto },
-        }));
-        setPastasAbertas((atual) => ({ ...atual, [pastaCaminho]: true }));
-        exibirAviso('Arquivo adicionado', `${nome} está em ${pastaCaminho}`, 'sucesso');
-        return;
+        setProjeto((atual) => {
+          const bin = { ...(atual.binarios || {}) };
+          delete bin[caminho];
+          return {
+            ...atual,
+            arvore: arvoreComNo(atual.arvore),
+            conteudos: { ...atual.conteudos, [caminho]: texto },
+            binarios: bin,
+          };
+        });
+      } else {
+        const destino = pastaBinariosStudio(projeto.pacote) + caminho;
+        await FileSystem.makeDirectoryAsync(destino.split('/').slice(0, -1).join('/'), { intermediates: true });
+        // Apaga o arquivo antigo antes de copiar (copyAsync não sobrescreve).
+        await FileSystem.deleteAsync(destino, { idempotent: true });
+        await FileSystem.copyAsync({ from: arq.uri, to: destino });
+        FileSystem.deleteAsync(arq.uri, { idempotent: true }).catch(() => {}); // limpa o cache
+        const info = await FileSystem.getInfoAsync(destino);
+        // Se antes era texto aberto numa aba, fecha a aba (agora é binário).
+        if (eraTexto && abasAbertas.includes(caminho)) fecharAba(caminho);
+
+        setProjeto((atual) => {
+          const conteudos = { ...atual.conteudos };
+          delete conteudos[caminho];
+          return {
+            ...atual,
+            arvore: arvoreComNo(atual.arvore),
+            conteudos,
+            binarios: { ...(atual.binarios || {}), [caminho]: { tamanho: info.size || 0 } },
+          };
+        });
       }
-
-      const destino = pastaBinariosStudio(projeto.pacote) + caminho;
-      await FileSystem.makeDirectoryAsync(destino.split('/').slice(0, -1).join('/'), { intermediates: true });
-      await FileSystem.copyAsync({ from: arq.uri, to: destino });
-      FileSystem.deleteAsync(arq.uri, { idempotent: true }).catch(() => {}); // limpa o cache
-      const info = await FileSystem.getInfoAsync(destino);
-
-      setProjeto((atual) => ({
-        ...atual,
-        arvore: inserirNoNaArvore(atual.arvore, pastaCaminho, { nome, caminho, tipo: 'arquivo' }),
-        binarios: { ...(atual.binarios || {}), [caminho]: { tamanho: info.size || 0 } },
-      }));
       setPastasAbertas((atual) => ({ ...atual, [pastaCaminho]: true }));
-      exibirAviso('Arquivo adicionado', `${nome} está em ${pastaCaminho}`, 'sucesso');
+      exibirAviso(substituindo ? 'Arquivo substituído' : 'Arquivo adicionado', `${nome} está em ${pastaCaminho}`, 'sucesso');
     } catch (e) {
       exibirAviso('Erro ao adicionar', String(e && e.message ? e.message : e), 'erro');
     }
@@ -2196,16 +2397,26 @@ function CindraStudioScreen({ visible, onClose }) {
     exibirAviso('Pasta criada', `${nome} está em ${pastaCaminhoPai}`, 'sucesso');
   };
 
-  const excluirBinario = (caminho) => {
+  // Exclui QUALQUER arquivo do projeto (código como MainActivity.java,
+  // texto ou binário): tira da árvore, do conteúdo, do disco e das abas.
+  const excluirArquivo = (caminho) => {
     setCardNo(null);
-    if (projeto) {
+    setConfirmandoExclusao(null);
+    if (!projeto) return;
+    if (projeto.binarios && projeto.binarios[caminho]) {
       FileSystem.deleteAsync(pastaBinariosStudio(projeto.pacote) + caminho, { idempotent: true }).catch(() => {});
     }
+    if (abasAbertas.includes(caminho)) fecharAba(caminho);
+    else if (arquivoAtivo === caminho) setArquivoAtivo(null);
+    delete historicoRef.current[caminho];
     setProjeto((atual) => {
       const bin = { ...(atual.binarios || {}) };
       delete bin[caminho];
-      return { ...atual, arvore: removerNoDaArvore(atual.arvore, caminho), binarios: bin };
+      const conteudos = { ...atual.conteudos };
+      delete conteudos[caminho];
+      return { ...atual, arvore: removerNoDaArvore(atual.arvore, caminho), conteudos, binarios: bin };
     });
+    exibirAviso('Arquivo excluído', caminho.split('/').pop(), 'sucesso');
   };
 
   // Galeria → recorte quadrado (editor do próprio seletor) → PNG 512×512.
@@ -2323,7 +2534,7 @@ function CindraStudioScreen({ visible, onClose }) {
   const abrirArquivo = (caminho) => {
     if (projeto && projeto.binarios && projeto.binarios[caminho]) {
       const kb = Math.max(1, Math.round((projeto.binarios[caminho].tamanho || 0) / 1024));
-      exibirAviso(caminho.split('/').pop(), `Arquivo binário (${kb} KB): não abre no editor de texto. Segure o dedo nele pra excluir.`, 'aviso');
+      exibirAviso(caminho.split('/').pop(), `Arquivo binário (${kb} KB): não abre no editor de texto. Segure o dedo nele pra excluir ou substituir.`, 'aviso');
       return;
     }
     setAbasAbertas((atual) => (atual.includes(caminho) ? atual : [...atual, caminho]));
@@ -2413,6 +2624,64 @@ function CindraStudioScreen({ visible, onClose }) {
     } catch (e) {
       exibirAviso('Erro ao salvar', String(e && e.message ? e.message : e), 'erro');
       return null;
+    }
+  };
+
+  // ⬇ ZIP — empacota o projeto inteiro (código + binários) num .zip e
+  // salva na pasta que a pessoa escolher (ex.: Downloads) pelo seletor de
+  // pastas do Android. Se já existir um .zip com o mesmo nome lá, substitui.
+  const baixarZip = async () => {
+    if (gerandoZip || !projeto) return;
+    if (Platform.OS !== 'android') {
+      exibirAviso('Só no Android', 'Exportar .zip usa o seletor de pastas do Android.', 'aviso');
+      return;
+    }
+    setGerandoZip(true);
+    try {
+      const SAF = FileSystem.StorageAccessFramework;
+      const perm = await SAF.requestDirectoryPermissionsAsync();
+      if (!perm.granted) return;
+
+      const base = String(nomeApp || 'projeto').trim().replace(/[^A-Za-z0-9._-]/g, '_') || 'projeto';
+      const entradas = [];
+      const cedeVez = () => new Promise((r) => setTimeout(r, 0));
+
+      for (const caminho of Object.keys(projeto.conteudos)) {
+        entradas.push({ nome: `${base}/${caminho}`, bytes: textoParaBytes(projeto.conteudos[caminho]) });
+      }
+      const binarios = projeto.binarios || {};
+      for (const caminho of Object.keys(binarios)) {
+        await cedeVez();
+        const b64 = await FileSystem.readAsStringAsync(pastaBinariosStudio(projeto.pacote) + caminho, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        entradas.push({ nome: `${base}/${caminho}`, bytes: base64ParaBytes(b64) });
+      }
+      for (const caminho of pastasVaziasDaArvore(projeto.arvore)) {
+        entradas.push({ nome: `${base}/${caminho}/`, bytes: new Uint8Array(0) });
+      }
+      await cedeVez();
+      const zipB64 = bytesParaBase64(montarZipStudio(entradas));
+
+      // Já tem um zip com esse nome na pasta? Apaga pra não virar "nome (1).zip".
+      try {
+        const itens = await SAF.readDirectoryAsync(perm.directoryUri);
+        for (const u of itens) {
+          let dec = '';
+          try { dec = decodeURIComponent(u); } catch (e) { dec = u; }
+          if (dec.endsWith(`/${base}.zip`) || dec.endsWith(`:${base}.zip`)) {
+            await FileSystem.deleteAsync(u, { idempotent: true });
+          }
+        }
+      } catch (e) { /* segue: no pior caso o Android numera o arquivo */ }
+
+      const destino = await SAF.createFileAsync(perm.directoryUri, base, 'application/zip');
+      await FileSystem.writeAsStringAsync(destino, zipB64, { encoding: FileSystem.EncodingType.Base64 });
+      exibirAviso('ZIP salvo', `${base}.zip com ${Object.keys(projeto.conteudos).length + Object.keys(binarios).length} arquivos.`, 'sucesso');
+    } catch (e) {
+      exibirAviso('Erro ao gerar o ZIP', String(e && e.message ? e.message : e), 'erro');
+    } finally {
+      setGerandoZip(false);
     }
   };
 
@@ -3210,6 +3479,17 @@ function CindraStudioScreen({ visible, onClose }) {
             >
               <MaterialCommunityIcons name="content-save-outline" size={17} color={COLORS.dim} />
             </TouchableOpacity>
+            <TouchableOpacity
+              style={studioStyles.topBarIconBtn}
+              onPress={baixarZip}
+              disabled={gerandoZip}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.75}
+            >
+              {gerandoZip
+                ? <ActivityIndicator size="small" color={COLORS.ember} />
+                : <MaterialCommunityIcons name="folder-zip-outline" size={17} color={COLORS.dim} />}
+            </TouchableOpacity>
             <View style={studioStyles.topBarDivider} />
             <TouchableOpacity
               style={studioStyles.topBarIconBtn}
@@ -3491,9 +3771,17 @@ function CindraStudioScreen({ visible, onClose }) {
                 </>
               )
             ) : (
-              <TouchableOpacity style={studioStyles.cardAcaoBtn} onPress={() => excluirBinario(cardNo.caminho)} activeOpacity={0.8}>
+              <TouchableOpacity
+                style={studioStyles.cardAcaoBtn}
+                onPress={() => (confirmandoExclusao === cardNo.caminho
+                  ? excluirArquivo(cardNo.caminho)
+                  : setConfirmandoExclusao(cardNo.caminho))}
+                activeOpacity={0.8}
+              >
                 <MaterialCommunityIcons name="delete-outline" size={18} color="#ff8a80" />
-                <Text style={[studioStyles.cardAcaoBtnText, { color: '#ff8a80' }]}>Excluir arquivo</Text>
+                <Text style={[studioStyles.cardAcaoBtnText, { color: '#ff8a80' }]}>
+                  {confirmandoExclusao === cardNo.caminho ? 'Toque de novo: apaga este arquivo' : 'Excluir arquivo'}
+                </Text>
               </TouchableOpacity>
             )}
           </View>
