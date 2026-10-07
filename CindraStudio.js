@@ -26,6 +26,9 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 // Módulo nativo local (modules/apk-builder): aapt2 + ECJ + D8 + apksig.
 import * as ApkBuilder from './modules/apk-builder';
+// Engine 3D nativa (expo-gl + three): abre em tela cheia, deitada.
+import Engine3D from './Engine3D';
+
 // Foto do ícone do app (galeria → recorte quadrado → PNG 512×512). Precisa
 // de: npx expo install expo-image-picker expo-image-manipulator (e um build
 // novo). Carregados de forma opcional: se algum faltar, o resto do Studio
@@ -2021,7 +2024,6 @@ function CindraStudioScreen({ visible, onClose }) {
   // Compilação (▶)
   const [compilando, setCompilando] = useState(false);
   const [gerandoZip, setGerandoZip] = useState(false);
-  const [baixandoPasta, setBaixandoPasta] = useState(null); // caminho da pasta sendo baixada, ou null
   const [painelCompilacao, setPainelCompilacao] = useState(false);
   const [logCompilacao, setLogCompilacao] = useState([]);
   const [errosCompilacao, setErrosCompilacao] = useState([]);
@@ -2683,73 +2685,6 @@ function CindraStudioScreen({ visible, onClose }) {
       exibirAviso('Erro ao gerar o ZIP', String(e && e.message ? e.message : e), 'erro');
     } finally {
       setGerandoZip(false);
-    }
-  };
-
-  // ⬇ BAIXAR PASTA — segure uma pasta do projeto → "Baixar pasta" → escolha
-  // onde salvar no celular (ex.: Downloads). Copia os arquivos dela (modelos,
-  // skins, texturas, código…) mantendo as subpastas, pra você pegar depois
-  // pelo "Importar modelo" da Engine 3D ou em qualquer outro app.
-  const baixarPasta = async (pastaCaminho, pastaNome) => {
-    if (baixandoPasta || !projeto) return;
-    if (Platform.OS !== 'android') {
-      exibirAviso('Só no Android', 'Baixar pasta usa o seletor de pastas do Android.', 'aviso');
-      return;
-    }
-    const prefixo = `${pastaCaminho}/`;
-    const textos = Object.keys(projeto.conteudos).filter((c) => c.startsWith(prefixo));
-    const binarios = Object.keys(projeto.binarios || {}).filter((c) => c.startsWith(prefixo));
-    if (!textos.length && !binarios.length) {
-      exibirAviso('Pasta vazia', 'Não há arquivos dentro dessa pasta.', 'aviso');
-      return;
-    }
-    setBaixandoPasta(pastaCaminho);
-    try {
-      const SAF = FileSystem.StorageAccessFramework;
-      const perm = await SAF.requestDirectoryPermissionsAsync();
-      if (!perm.granted) return;
-
-      const cedeVez = () => new Promise((r) => setTimeout(r, 0));
-      const nomeBase = String(pastaNome || 'pasta').replace(/[^A-Za-z0-9._-]/g, '_') || 'pasta';
-      const raizUri = await SAF.makeDirectoryAsync(perm.directoryUri, nomeBase);
-
-      // subpastas são criadas sob demanda e guardadas pra não repetir
-      const dirs = { '': raizUri };
-      const garantirDir = async (rel) => {
-        if (dirs[rel] !== undefined) return dirs[rel];
-        const partes = rel.split('/');
-        const nome = partes.pop();
-        const pai = await garantirDir(partes.join('/'));
-        const uri = await SAF.makeDirectoryAsync(pai, nome);
-        dirs[rel] = uri;
-        return uri;
-      };
-      const salvar = async (caminho, conteudo, encoding) => {
-        const partes = caminho.slice(prefixo.length).split('/');
-        const arq = partes.pop();
-        const dirUri = await garantirDir(partes.join('/'));
-        // octet-stream: o Android não troca/aumenta a extensão do nome
-        const destino = await SAF.createFileAsync(dirUri, arq, 'application/octet-stream');
-        await FileSystem.writeAsStringAsync(destino, conteudo, { encoding });
-      };
-
-      for (const caminho of textos) {
-        await cedeVez();
-        await salvar(caminho, projeto.conteudos[caminho], FileSystem.EncodingType.UTF8);
-      }
-      for (const caminho of binarios) {
-        await cedeVez();
-        const b64 = await FileSystem.readAsStringAsync(pastaBinariosStudio(projeto.pacote) + caminho, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        await salvar(caminho, b64, FileSystem.EncodingType.Base64);
-      }
-      setCardNo(null);
-      exibirAviso('Pasta baixada', `${nomeBase}: ${textos.length + binarios.length} arquivo(s) salvos.`, 'sucesso');
-    } catch (e) {
-      exibirAviso('Erro ao baixar a pasta', String(e && e.message ? e.message : e), 'erro');
-    } finally {
-      setBaixandoPasta(null);
     }
   };
 
@@ -3835,17 +3770,6 @@ function CindraStudioScreen({ visible, onClose }) {
                   <TouchableOpacity style={studioStyles.cardAcaoBtn} onPress={() => setPastaEmCriacao(true)} activeOpacity={0.8}>
                     <MaterialCommunityIcons name="folder-plus-outline" size={18} color={COLORS.ember} />
                     <Text style={studioStyles.cardAcaoBtnText}>Criar pasta</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={studioStyles.cardAcaoBtn}
-                    onPress={() => baixarPasta(cardNo.caminho, cardNo.nome)}
-                    disabled={!!baixandoPasta}
-                    activeOpacity={0.8}
-                  >
-                    <MaterialCommunityIcons name="download-outline" size={18} color={COLORS.ember} />
-                    <Text style={studioStyles.cardAcaoBtnText}>
-                      {baixandoPasta === cardNo.caminho ? 'Baixando…' : 'Baixar pasta'}
-                    </Text>
                   </TouchableOpacity>
                 </>
               )
