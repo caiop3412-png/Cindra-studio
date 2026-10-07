@@ -26,9 +26,6 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 // Módulo nativo local (modules/apk-builder): aapt2 + ECJ + D8 + apksig.
 import * as ApkBuilder from './modules/apk-builder';
-// Engine 3D nativa (expo-gl + three): abre em tela cheia, deitada.
-import Engine3D from './Engine3D';
-
 // Foto do ícone do app (galeria → recorte quadrado → PNG 512×512). Precisa
 // de: npx expo install expo-image-picker expo-image-manipulator (e um build
 // novo). Carregados de forma opcional: se algum faltar, o resto do Studio
