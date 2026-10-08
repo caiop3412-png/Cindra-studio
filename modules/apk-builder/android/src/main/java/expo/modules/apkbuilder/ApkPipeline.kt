@@ -139,7 +139,7 @@ class ApkPipeline(private val ctx: Context, private val log: (String) -> Unit) {
       val saidaEcj = StringWriter()
       val escritor = PrintWriter(saidaEcj)
       val argsEcj = mutableListOf(
-        "-1.8", "-nowarn", "-proc:none", "-encoding", "UTF-8",
+        "-1.8", "-g:none", "-nowarn", "-proc:none", "-encoding", "UTF-8",
         "-bootclasspath", androidJar.path,
         "-d", classes.path
       )
@@ -169,7 +169,7 @@ class ApkPipeline(private val ctx: Context, private val log: (String) -> Unit) {
           .addProgramFiles(arquivosClass)
           .addLibraryFiles(androidJar.toPath())
           .setMinApiLevel(minSdk)
-          .setMode(CompilationMode.DEBUG)
+          .setMode(CompilationMode.RELEASE)
           .setOutput(dex.toPath(), OutputMode.DexIndexed)
           .build()
         D8.run(comando)
