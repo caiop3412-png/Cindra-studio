@@ -1654,29 +1654,46 @@ const studioStyles = StyleSheet.create({
   // Barra de baixo
   navHome: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingHorizontal: 18,
+    paddingTop: 12,
     backgroundColor: '#211210',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(255,255,255,0.10)',
-    paddingTop: 12,
   },
-  navItem: { flex: 1, alignItems: 'center', gap: 4 },
-  navPilula: { width: 56, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  navPilulaAtiva: { backgroundColor: 'rgba(255,82,39,0.22)' },
-  navRotulo: { color: COLORS.dim, fontSize: 11.5, fontWeight: '600' },
-  navRotuloAtivo: { color: COLORS.ink, fontWeight: '700' },
-  navCriar: {
-    width: 60,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.ember,
+  navAba: {
+    flex: 1,
+    height: 50,
+    borderRadius: 25,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  navAbaAtiva: { backgroundColor: 'rgba(255,82,39,0.20)', borderColor: 'rgba(255,82,39,0.45)' },
+  navAbaTexto: { color: COLORS.dim, fontSize: 14, fontWeight: '600' },
+  navAbaTextoAtivo: { color: COLORS.ink, fontWeight: '700' },
+  navBotaoCriar: {
+    flex: 1,
+    height: 50,
+    borderRadius: 25,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: COLORS.ember,
     shadowColor: COLORS.ember,
     shadowOpacity: 0.5,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 3 },
     elevation: 6,
   },
+  navBotaoCriarTexto: { color: '#1a0806', fontSize: 14.5, fontWeight: '800' },
   // Folha que sobe do rodapé
   folha: {
     position: 'absolute',
@@ -1793,13 +1810,10 @@ function NoArvoreArquivo({ no, pastasAbertas, alternarPasta, arquivoAtivo, onAbr
 // aviso "em breve" ao tocar; coloque a URL (site, Instagram, Pix...) pra abrir.
 const STUDIO_LINK_APOIO = '';
 
-// Barra de baixo da tela inicial: 2 abas, botão "Criar" no meio, 2 abas.
-// Só "apps" tem conteúdo por enquanto — as outras mostram "em breve".
+// Barra de baixo da tela inicial: aba "Meus apps" + botão "Criar".
 const ABAS_HOME_STUDIO = [
   { id: 'apps', rotulo: 'Meus apps', icone: 'view-dashboard-outline', iconeAtivo: 'view-dashboard' },
-  { id: 'modelos', rotulo: 'Modelos', icone: 'shape-outline', iconeAtivo: 'shape' },
   { id: 'criar', rotulo: 'Criar', especial: true },
-  { id: 'aulas', rotulo: 'Aulas', icone: 'school-outline', iconeAtivo: 'school' },
 ];
 
 const ROTULOS_ORDEM_STUDIO = {
@@ -3249,56 +3263,27 @@ function CindraStudioScreen({ visible, onClose }) {
     );
   };
 
-  // Abas ainda sem conteúdo (Modelos / Aulas / Desafios).
-  const renderAbaEmBreve = () => {
-    const aba = ABAS_HOME_STUDIO.find((a) => a.id === abaHome) || ABAS_HOME_STUDIO[0];
-    return (
-      <>
-        <View style={studioStyles.homeHeader}>
-          <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ marginRight: 4 }}>
-            <MaterialCommunityIcons name="arrow-left" size={24} color={COLORS.ink} />
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={studioStyles.homeOverline}>CINDRASTUDIO</Text>
-            <Text style={studioStyles.homeTitulo} numberOfLines={1}>{aba.rotulo}</Text>
-          </View>
-        </View>
-        <View style={studioStyles.homeVazio}>
-          <View style={studioStyles.homeVazioIcone}>
-            <MaterialCommunityIcons name={aba.iconeAtivo} size={38} color={COLORS.ember} />
-          </View>
-          <Text style={studioStyles.homeVazioTitulo}>Em breve</Text>
-          <Text style={studioStyles.homeVazioTexto}>A aba "{aba.rotulo}" ainda está em construção.</Text>
-        </View>
-      </>
-    );
-  };
-
-  // Barra de baixo: 2 abas, botão "Criar" no meio, 2 abas.
+  // Barra de baixo: "Meus apps" e o botão "Criar".
   const renderNavHome = () => (
-    <View style={[studioStyles.navHome, { paddingBottom: Math.max(insets.bottom, 8) + 4 }]}>
+    <View style={[studioStyles.navHome, { paddingBottom: Math.max(insets.bottom, 8) + 6 }]}>
       {ABAS_HOME_STUDIO.map((a) => {
         if (a.especial) {
           return (
-            <TouchableOpacity key={a.id} style={studioStyles.navItem} onPress={abrirTelaConfigNova} activeOpacity={0.85}>
-              <View style={studioStyles.navCriar}>
-                <MaterialCommunityIcons name="plus" size={26} color="#1a0806" />
-              </View>
-              <Text style={[studioStyles.navRotulo, { color: '#ff8a68' }]}>{a.rotulo}</Text>
+            <TouchableOpacity key={a.id} style={studioStyles.navBotaoCriar} onPress={abrirTelaConfigNova} activeOpacity={0.85}>
+              <MaterialCommunityIcons name="plus" size={22} color="#1a0806" />
+              <Text style={studioStyles.navBotaoCriarTexto} numberOfLines={1}>{a.rotulo}</Text>
             </TouchableOpacity>
           );
         }
         const ativo = abaHome === a.id;
         return (
-          <TouchableOpacity key={a.id} style={studioStyles.navItem} onPress={() => setAbaHome(a.id)} activeOpacity={0.8}>
-            <View style={[studioStyles.navPilula, ativo && studioStyles.navPilulaAtiva]}>
-              <MaterialCommunityIcons
-                name={ativo ? a.iconeAtivo : a.icone}
-                size={24}
-                color={ativo ? '#ff8a68' : COLORS.dim}
-              />
-            </View>
-            <Text style={[studioStyles.navRotulo, ativo && studioStyles.navRotuloAtivo]} numberOfLines={1}>{a.rotulo}</Text>
+          <TouchableOpacity key={a.id} style={[studioStyles.navAba, ativo && studioStyles.navAbaAtiva]} onPress={() => setAbaHome(a.id)} activeOpacity={0.8}>
+            <MaterialCommunityIcons
+              name={ativo ? a.iconeAtivo : a.icone}
+              size={22}
+              color={ativo ? '#ff8a68' : COLORS.dim}
+            />
+            <Text style={[studioStyles.navAbaTexto, ativo && studioStyles.navAbaTextoAtivo]} numberOfLines={1}>{a.rotulo}</Text>
           </TouchableOpacity>
         );
       })}
@@ -3310,7 +3295,7 @@ function CindraStudioScreen({ visible, onClose }) {
       <View pointerEvents="none" style={studioStyles.homeGlowTop} />
       <View pointerEvents="none" style={studioStyles.homeGlowBottom} />
 
-      {abaHome === 'apps' ? renderAbaApps() : renderAbaEmBreve()}
+      {renderAbaApps()}
 
       {renderNavHome()}
 
