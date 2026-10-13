@@ -26,8 +26,6 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 // Módulo nativo local (modules/apk-builder): aapt2 + ECJ + D8 + apksig.
 import * as ApkBuilder from './modules/apk-builder';
-// Engine 3D nativa (expo-gl + three): abre em tela cheia, deitada.
-import Engine3D from './Engine3D';
 
 // Foto do ícone do app (galeria → recorte quadrado → PNG 512×512). Precisa
 // de: npx expo install expo-image-picker expo-image-manipulator (e um build
@@ -208,13 +206,64 @@ function hexParaRgba(hex, alpha) {
 // apk-builder nativo, aqui a gente só casa "N/6" com o passo certo).
 // ─────────────────────────────────────────────────────────
 const STEPS_COMPILACAO = [
-  { icone: 'image-multiple-outline', titulo: 'Recursos', sub: 'aapt2 compile' },
-  { icone: 'link-variant', titulo: 'Link', sub: 'manifest · resources.arsc · R.java' },
-  { icone: 'language-java', titulo: 'Java', sub: 'ECJ → .class' },
-  { icone: 'file-cog-outline', titulo: 'Dex', sub: 'D8 → classes.dex' },
-  { icone: 'package-variant-closed', titulo: 'Empacotar', sub: 'gerar .apk' },
-  { icone: 'shield-check-outline', titulo: 'Assinar', sub: 'apksig' },
+  { icone: 'image-multiple-outline', titulo: 'Recursos', sub: 'Preparando imagens e textos' },
+  { icone: 'link-variant', titulo: 'Link', sub: 'Conectando o app' },
+  { icone: 'language-java', titulo: 'Java', sub: 'Compilando o código' },
+  { icone: 'file-cog-outline', titulo: 'Dex', sub: 'Otimizando o código' },
+  { icone: 'package-variant-closed', titulo: 'Empacotar', sub: 'Montando o app' },
+  { icone: 'shield-check-outline', titulo: 'Assinar', sub: 'Assinando o app' },
 ];
+
+// Textos amigáveis do log do build (o log cru do módulo nativo tem nomes
+// técnicos — aapt2, android.jar, ECJ, D8... — que o painel não mostra).
+const TEXTOS_ETAPAS_LOG = [
+  'Preparando imagens e textos',
+  'Conectando o app',
+  'Compilando o código',
+  'Otimizando o código',
+  'Montando o app',
+  'Assinando o app',
+];
+const REGEX_LINHA_TECNICA = /aapt2|android\.jar|\bECJ\b|\bD8\b|apksig|\.class\b|\.dex\b|resources\.arsc|R\.java|libaapt|zipalign/i;
+
+// Converte o log cru em itens bonitos: { tipo: 'etapa'|'info'|'erro', texto, numero }.
+function montarLogAmigavel(logCru) {
+  const itens = [];
+  let ultimoDownload = -1;
+  logCru.forEach((linha) => {
+    const bruta = String(linha || '').trim();
+    if (!bruta) return;
+    const etapa = /^(\d+)\/6/.exec(bruta);
+    if (etapa) {
+      const n = parseInt(etapa[1], 10);
+      if (n >= 1 && n <= 6) itens.push({ tipo: 'etapa', numero: n, texto: TEXTOS_ETAPAS_LOG[n - 1] });
+      return;
+    }
+    if (/^baixando/i.test(bruta)) {
+      const pct = /(\d+)\s*%/.exec(bruta);
+      const item = { tipo: 'info', texto: pct ? `Baixando ferramentas… ${pct[1]}%` : 'Baixando ferramentas…' };
+      if (ultimoDownload >= 0) itens[ultimoDownload] = item; else { ultimoDownload = itens.length; itens.push(item); }
+      return;
+    }
+    if (/^preparando/i.test(bruta)) {
+      itens.push({ tipo: 'info', texto: 'Preparando ferramentas…' });
+      return;
+    }
+    const falhou = /^falhou na etapa:\s*(.*)$/i.exec(bruta);
+    if (falhou) {
+      itens.push({ tipo: 'erro', texto: 'Algo deu errado na compilação' });
+      return;
+    }
+    if (/^erro:/i.test(bruta)) {
+      const msg = bruta.replace(/^erro:\s*/i, '');
+      itens.push({ tipo: 'erro', texto: REGEX_LINHA_TECNICA.test(msg) ? 'Não foi possível compilar o app' : msg });
+      return;
+    }
+    if (REGEX_LINHA_TECNICA.test(bruta)) return; // linha técnica: esconde
+    itens.push({ tipo: 'info', texto: bruta });
+  });
+  return itens;
+}
 
 // ─────────────────────────────────────────────────────────
 // Aviso global (card no topo que some sozinho) — usado pelo Studio.
@@ -1134,6 +1183,9 @@ const studioStyles = StyleSheet.create({
   logCardHeaderText: { color: COLORS.dim, fontSize: 10.5, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' },
   logLinhaWrap: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 5 },
   logDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: COLORS.dim, marginTop: 6.5 },
+  logItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
+  logItemIcone: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  logItemTexto: { flex: 1, color: COLORS.dim, fontSize: 13, lineHeight: 18, fontWeight: '500' },
   successCard: {
     marginHorizontal: 14,
     marginTop: 6,
@@ -1748,7 +1800,6 @@ const ABAS_HOME_STUDIO = [
   { id: 'modelos', rotulo: 'Modelos', icone: 'shape-outline', iconeAtivo: 'shape' },
   { id: 'criar', rotulo: 'Criar', especial: true },
   { id: 'aulas', rotulo: 'Aulas', icone: 'school-outline', iconeAtivo: 'school' },
-  { id: 'engine', rotulo: 'Engine 3D', icone: 'cube-outline', iconeAtivo: 'cube' },
 ];
 
 const ROTULOS_ORDEM_STUDIO = {
@@ -1993,7 +2044,6 @@ function CindraStudioScreen({ visible, onClose }) {
   const [modoLista, setModoLista] = useState('lista'); // 'lista' | 'grade'
   const [menuOrdenarAberto, setMenuOrdenarAberto] = useState(false); // folha "Ordenar por"
   const [abaHome, setAbaHome] = useState('apps'); // barra de baixo da tela inicial
-  const [engineAberta, setEngineAberta] = useState(false); // Engine 3D em tela cheia (deitada)
   const [avisoRecuperarVisivel, setAvisoRecuperarVisivel] = useState(false); // só depois de ler as prefs
   const prefsRef = useRef({});
 
@@ -2127,6 +2177,8 @@ function CindraStudioScreen({ visible, onClose }) {
     if (apkGerado) return STEPS_COMPILACAO.length;
     return Math.min(max, STEPS_COMPILACAO.length);
   }, [logCompilacao, apkGerado]);
+
+  const logAmigavel = useMemo(() => montarLogAmigavel(logCompilacao), [logCompilacao]);
 
   useEffect(() => {
     Animated.timing(progressoCompilacao, {
@@ -3238,7 +3290,7 @@ function CindraStudioScreen({ visible, onClose }) {
         }
         const ativo = abaHome === a.id;
         return (
-          <TouchableOpacity key={a.id} style={studioStyles.navItem} onPress={() => (a.id === 'engine' ? setEngineAberta(true) : setAbaHome(a.id))} activeOpacity={0.8}>
+          <TouchableOpacity key={a.id} style={studioStyles.navItem} onPress={() => setAbaHome(a.id)} activeOpacity={0.8}>
             <View style={[studioStyles.navPilula, ativo && studioStyles.navPilulaAtiva]}>
               <MaterialCommunityIcons
                 name={ativo ? a.iconeAtivo : a.icone}
@@ -3920,18 +3972,38 @@ function CindraStudioScreen({ visible, onClose }) {
                   </TouchableOpacity>
                 ))}
 
-                {logCompilacao.length > 0 && (
+                {(logAmigavel.length > 0 || apkGerado) && (
                   <View style={studioStyles.logCard}>
                     <View style={studioStyles.logCardHeader}>
-                      <MaterialCommunityIcons name="console-line" size={12} color={COLORS.dim} />
-                      <Text style={studioStyles.logCardHeaderText}>Log do build</Text>
+                      <MaterialCommunityIcons name="timeline-check-outline" size={13} color={COLORS.dim} />
+                      <Text style={studioStyles.logCardHeaderText}>Progresso</Text>
                     </View>
-                    {logCompilacao.map((linha, i) => (
-                      <View key={`l${i}`} style={studioStyles.logLinhaWrap}>
-                        <View style={studioStyles.logDot} />
-                        <Text style={[studioStyles.logLinha, { flex: 1 }]}>{linha}</Text>
+                    {logAmigavel.map((item, i) => {
+                      const ehUltimo = i === logAmigavel.length - 1 && !apkGerado;
+                      const emAndamento = compilando && ehUltimo && item.tipo !== 'erro';
+                      const erro = item.tipo === 'erro';
+                      const cor = erro ? COLORS.error : emAndamento ? COLORS.ember : '#8bd450';
+                      return (
+                        <View key={`l${i}`} style={studioStyles.logItem}>
+                          <View style={[studioStyles.logItemIcone, { borderColor: hexParaRgba(cor, 0.5), backgroundColor: hexParaRgba(cor, 0.14) }]}>
+                            {emAndamento ? (
+                              <ActivityIndicator size={10} color={cor} />
+                            ) : (
+                              <MaterialCommunityIcons name={erro ? 'close' : 'check'} size={11} color={cor} />
+                            )}
+                          </View>
+                          <Text style={[studioStyles.logItemTexto, emAndamento && { color: COLORS.ink }, erro && { color: '#ff8a80' }]}>{item.texto}</Text>
+                        </View>
+                      );
+                    })}
+                    {apkGerado && !compilando && (
+                      <View style={studioStyles.logItem}>
+                        <View style={[studioStyles.logItemIcone, { borderColor: hexParaRgba('#8bd450', 0.5), backgroundColor: hexParaRgba('#8bd450', 0.14) }]}>
+                          <MaterialCommunityIcons name="check-all" size={11} color="#8bd450" />
+                        </View>
+                        <Text style={[studioStyles.logItemTexto, { color: COLORS.ink, fontWeight: '700' }]}>App pronto para instalar</Text>
                       </View>
-                    ))}
+                    )}
                   </View>
                 )}
               </ScrollView>
@@ -3952,11 +4024,6 @@ function CindraStudioScreen({ visible, onClose }) {
   return (
     <View style={{ flex: 1, backgroundColor: etapa === 'workspace' ? '#000000' : COLORS.sheet, paddingTop: insets.top }}>
       {etapa === 'home' ? renderHome() : etapa === 'config' ? renderConfig() : renderWorkspace()}
-      {engineAberta && (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#170c0b' }]}>
-          <Engine3D onClose={() => setEngineAberta(false)} />
-        </View>
-      )}
     </View>
   );
 }
