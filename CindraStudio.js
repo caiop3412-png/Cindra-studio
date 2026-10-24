@@ -1608,8 +1608,8 @@ const studioStyles = StyleSheet.create({
     paddingBottom: 6,
     minHeight: 68,
   },
-  homeOverline: { color: COLORS.ember, fontSize: 11, fontWeight: '800', letterSpacing: 1.6 },
-  homeTitulo: { color: COLORS.ink, fontSize: 28, fontWeight: '800', letterSpacing: -0.5, marginTop: 1 },
+  homeOverline: { color: COLORS.ember, fontSize: 11, fontWeight: '800', letterSpacing: 1.6, marginBottom: 4 },
+  homeTitulo: { color: COLORS.ink, fontSize: 28, fontWeight: '800', letterSpacing: -0.5, marginTop: 4 },
   homeIconBtn: {
     width: 42,
     height: 42,
@@ -2878,9 +2878,6 @@ function CindraStudioScreen({ visible, onClose }) {
       exibirAviso('Precisa de rebuild', 'O módulo nativo apk-builder ainda não está neste app. Faça o eas build uma vez (veja o LEIAME do módulo).', 'aviso');
       return;
     }
-    const pasta = await salvarNoDisco();
-    if (!pasta) return;
-
     setCompilando(true);
     setApkGerado(null);
     setErrosCompilacao([]);
@@ -2889,6 +2886,14 @@ function CindraStudioScreen({ visible, onClose }) {
     const add = (linha) => setLogCompilacao((atual) => atual.concat(linha).slice(-200));
     const assinatura = ApkBuilder.aoLogar(add);
     try {
+      add("Aplicando marca d'água do CindraStudio...");
+      const pasta = await salvarNoDisco();
+      if (!pasta) {
+        add('Não foi possível gravar o projeto em disco.');
+        return;
+      }
+      add("Marca d'água aplicada.");
+
       const amb = await ApkBuilder.ambiente();
       if (amb && amb.sdk < 26) throw new Error('O compilador precisa de Android 8 (API 26) ou mais novo.');
       if (amb && !amb.aapt2) throw new Error('aapt2 não encontrado no app (libaapt2.so). Veja o LEIAME do módulo.');
@@ -3269,7 +3274,7 @@ function CindraStudioScreen({ visible, onClose }) {
                 <MaterialCommunityIcons name="arrow-left" size={24} color={COLORS.ink} />
               </TouchableOpacity>
               <View style={{ flex: 1 }}>
-                <Text style={studioStyles.homeOverline}>CINDRASTUDIO</Text>
+                <Text style={studioStyles.homeOverline}>CINDRA-STUDIO</Text>
                 <Text style={studioStyles.homeTitulo} numberOfLines={1}>Meus apps</Text>
               </View>
               <TouchableOpacity
