@@ -577,6 +577,8 @@ import android.widget.TextView;
 
 // Projeto novo, em branco. Edite este arquivo pra criar seu app:
 // a tela é montada aqui mesmo em código (sem XML e sem HTML).
+// A marca d'água "Cindra Studio" NÃO fica aqui — ela é aplicada
+// automaticamente em todo app gerado (veja CindraWatermarkApp.java).
 public class MainActivity extends Activity {
 
     @Override
@@ -670,9 +672,124 @@ function pastaProjetoStudio(pacote) {
   return `${FileSystem.documentDirectory}cindrastudio/${pacote}/`;
 }
 
+// Nome da classe Application injetada em todo projeto — fixo, pra o
+// manifest sempre poder apontar pra ela.
+const MARCA_DAGUA_CLASSE = 'CindraWatermarkApp';
+
+// Gera o Application.java que desenha a marca d'água "Cindra Studio"
+// por cima de QUALQUER Activity do app, sem depender de nada que o
+// MainActivity faça. Usa registerActivityLifecycleCallbacks: funciona
+// mesmo que a pessoa reescreva o MainActivity inteiro.
+function gerarFonteMarcaDagua(nomePacote) {
+  return `package ${nomePacote};
+
+import android.app.Activity;
+import android.app.Application;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+import android.widget.TextView;
+
+// Gerado automaticamente pelo CindraStudio — não remova nem desligue:
+// é reescrito a cada compilação. Desenha "Cindra Studio" transparente
+// no topo de toda tela do app, registrando um callback de ciclo de
+// vida que roda pra qualquer Activity, não só a MainActivity.
+public class ${MARCA_DAGUA_CLASSE} extends Application {
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
+            @Override
+            public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
+                View decor = activity.getWindow().getDecorView();
+                FrameLayout camada = new FrameLayout(activity);
+
+                TextView marca = new TextView(activity);
+                marca.setText("Cindra Studio");
+                marca.setTextColor(Color.WHITE);
+                marca.setAlpha(0.35f);
+                marca.setTextSize(12);
+                marca.setGravity(Gravity.CENTER);
+                marca.setClickable(false);
+                marca.setFocusable(false);
+                marca.setFocusableInTouchMode(false);
+                FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                lp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+                lp.topMargin = 24;
+                camada.addView(marca, lp);
+                camada.setClickable(false);
+
+                ((ViewGroup) decor).addView(camada, new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            }
+
+            @Override public void onActivityStarted(Activity activity) {}
+            @Override public void onActivityResumed(Activity activity) {}
+            @Override public void onActivityPaused(Activity activity) {}
+            @Override public void onActivityStopped(Activity activity) {}
+            @Override public void onActivitySaveInstanceState(Activity activity, Bundle outState) {}
+            @Override public void onActivityDestroyed(Activity activity) {}
+        });
+    }
+}
+`;
+}
+
+// Garante que o manifest aponte pra android:name=".CindraWatermarkApp"
+// na tag <application>, trocando o que já estiver lá (se a pessoa
+// apagar esse atributo ou colocar outro valor, volta sempre pro nosso).
+function forcarAppNaManifest(xmlManifest) {
+  if (/<application\b[^>]*\sandroid:name="[^"]*"/.test(xmlManifest)) {
+    return xmlManifest.replace(
+      /(<application\b[^>]*\sandroid:name=")[^"]*(")/,
+      `$1.${MARCA_DAGUA_CLASSE}$2`
+    );
+  }
+  return xmlManifest.replace(
+    /<application\b/,
+    `<application\n        android:name=".${MARCA_DAGUA_CLASSE}"`
+  );
+}
+
+// Reaplica a marca d'água obrigatória num conjunto de conteúdos de
+// projeto: reescreve/recria o Application.java e força o manifest a
+// usá-lo. Roda sempre em gravarProjetoStudio, então vale tanto pra
+// projeto novo quanto pra qualquer projeto já existente que for
+// salvo/compilado — e sobrescreve qualquer tentativa de remover,
+// desde que o editor rode esse save antes de compilar.
+function aplicarMarcaDaguaObrigatoria(projeto) {
+  const pkgPath = pacotePraCaminho(projeto.pacote);
+  const manifestPath = 'app/src/main/AndroidManifest.xml';
+  const marcaPath = `app/src/main/java/${pkgPath}/${MARCA_DAGUA_CLASSE}.java`;
+
+  const conteudos = { ...projeto.conteudos };
+  conteudos[marcaPath] = gerarFonteMarcaDagua(projeto.pacote);
+  if (conteudos[manifestPath]) {
+    conteudos[manifestPath] = forcarAppNaManifest(conteudos[manifestPath]);
+  }
+
+  let arvore = projeto.arvore;
+  if (!arvoreTemCaminho(arvore, marcaPath)) {
+    const pastaJava = marcaPath.split('/').slice(0, -1).join('/');
+    arvore = inserirNoNaArvore(arvore, pastaJava, {
+      nome: `${MARCA_DAGUA_CLASSE}.java`,
+      caminho: marcaPath,
+      tipo: 'arquivo',
+    });
+  }
+
+  return { ...projeto, conteudos, arvore };
+}
+
 // Grava o projeto inteiro em disco, um arquivo por caminho. Apaga a
 // pasta antes pra arquivo removido/renomeado não ficar sobrando lá.
-async function gravarProjetoStudio(projeto) {
+async function gravarProjetoStudio(projetoOriginal) {
+  const projeto = aplicarMarcaDaguaObrigatoria(projetoOriginal);
   const base = pastaProjetoStudio(projeto.pacote);
   await FileSystem.deleteAsync(base, { idempotent: true });
   const caminhos = Object.keys(projeto.conteudos);
