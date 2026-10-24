@@ -686,6 +686,8 @@ function gerarFonteMarcaDagua(nomePacote) {
 import android.app.Activity;
 import android.app.Application;
 import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -694,10 +696,13 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 
 // Gerado automaticamente pelo CindraStudio — não remova nem desligue:
-// é reescrito a cada compilação. Desenha "Cindra Studio" transparente
-// no topo de toda tela do app, registrando um callback de ciclo de
-// vida que roda pra qualquer Activity, não só a MainActivity.
+// é reescrito a cada compilação. Desenha "Cindra Studio" num cantinho
+// inferior de toda tela do app, registrando um callback de ciclo de
+// vida que roda pra qualquer Activity, não só a MainActivity — então
+// funciona em retrato ou paisagem, do mesmo jeito.
 public class ${MARCA_DAGUA_CLASSE} extends Application {
+
+    private static final String MARCA_TAG = "cindrastudio_marca_dagua";
 
     @Override
     public void onCreate() {
@@ -705,35 +710,66 @@ public class ${MARCA_DAGUA_CLASSE} extends Application {
         registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
             @Override
             public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
-                View decor = activity.getWindow().getDecorView();
-                FrameLayout camada = new FrameLayout(activity);
+                inserirMarca(activity);
+            }
 
-                TextView marca = new TextView(activity);
-                marca.setText("Cindra Studio");
-                marca.setTextColor(Color.WHITE);
-                marca.setAlpha(0.35f);
-                marca.setTextSize(12);
-                marca.setGravity(Gravity.CENTER);
-                marca.setClickable(false);
-                marca.setFocusable(false);
-                marca.setFocusableInTouchMode(false);
-                FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                lp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-                lp.topMargin = 24;
-                camada.addView(marca, lp);
-                camada.setClickable(false);
-
-                ((ViewGroup) decor).addView(camada, new FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            // Reforço: cobre casos em que a tela ainda não tinha layout
+            // pronto na criação (ex.: Activity recriada numa rotação).
+            @Override
+            public void onActivityResumed(Activity activity) {
+                inserirMarca(activity);
             }
 
             @Override public void onActivityStarted(Activity activity) {}
-            @Override public void onActivityResumed(Activity activity) {}
             @Override public void onActivityPaused(Activity activity) {}
             @Override public void onActivityStopped(Activity activity) {}
             @Override public void onActivitySaveInstanceState(Activity activity, Bundle outState) {}
             @Override public void onActivityDestroyed(Activity activity) {}
+        });
+    }
+
+    private static int dp(Activity activity, float valor) {
+        return Math.round(valor * activity.getResources().getDisplayMetrics().density);
+    }
+
+    private static void inserirMarca(final Activity activity) {
+        final View decorView = activity.getWindow().getDecorView();
+        decorView.post(new Runnable() {
+            @Override
+            public void run() {
+                if (!(decorView instanceof ViewGroup)) return;
+                ViewGroup decor = (ViewGroup) decorView;
+                if (decor.findViewWithTag(MARCA_TAG) != null) return;
+
+                TextView marca = new TextView(activity);
+                marca.setTag(MARCA_TAG);
+                marca.setText("Cindra Studio");
+                marca.setTextColor(Color.WHITE);
+                marca.setTypeface(Typeface.DEFAULT_BOLD);
+                marca.setTextSize(11);
+                marca.setLetterSpacing(0.08f);
+                marca.setGravity(Gravity.CENTER);
+                marca.setAlpha(0.7f);
+                marca.setClickable(false);
+                marca.setFocusable(false);
+                marca.setFocusableInTouchMode(false);
+                int padH = dp(activity, 10);
+                int padV = dp(activity, 5);
+                marca.setPadding(padH, padV, padH, padV);
+
+                GradientDrawable fundo = new GradientDrawable();
+                fundo.setColor(Color.parseColor("#33000000"));
+                fundo.setCornerRadius(dp(activity, 14));
+                marca.setBackground(fundo);
+
+                FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                lp.gravity = Gravity.BOTTOM | Gravity.END;
+                lp.bottomMargin = dp(activity, 16);
+                lp.setMarginEnd(dp(activity, 16));
+
+                decor.addView(marca, lp);
+            }
         });
     }
 }
