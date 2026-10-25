@@ -4133,6 +4133,43 @@ const PERMISSOES_STUDIO = [
   P('SET_WALLPAPER', 'Papel de parede', 'Trocar o papel de parede', 'wallpaper', 'Sistema'),
   P('WRITE_SETTINGS', 'Ajustes do sistema', 'Mudar brilho e outros ajustes', 'tune-variant', 'Sistema'),
   P('QUERY_ALL_PACKAGES', 'Ver todos os apps', 'Listar os apps instalados', 'apps', 'Sistema'),
+  // ── mais permissões ──
+  P('CHANGE_NETWORK_STATE', 'Alterar rede', 'Mudar o estado da conexão de rede', 'lan-pending', 'Rede'),
+  P('NEARBY_WIFI_DEVICES', 'Wi-Fi por perto', 'Achar aparelhos Wi-Fi perto (Android 13 ou mais)', 'wifi-marker', 'Rede', true),
+  P('ACCESS_NOTIFICATION_POLICY', 'Não perturbe', 'Mudar o modo Não perturbe', 'bell-off-outline', 'Notificações'),
+  P('READ_MEDIA_VISUAL_USER_SELECTED', 'Fotos escolhidas', 'Acessar só as fotos que a pessoa escolher (Android 14 ou mais)', 'image-check-outline', 'Fotos e arquivos', true),
+  P('ACCESS_MEDIA_LOCATION', 'Local das fotos', 'Ler onde cada foto foi tirada', 'image-marker-outline', 'Fotos e arquivos', true),
+  P('ANSWER_PHONE_CALLS', 'Atender ligações', 'Atender chamadas recebidas', 'phone-incoming-outline', 'Contatos e telefone', true),
+  P('READ_PHONE_NUMBERS', 'Número do telefone', 'Ler o número da linha', 'phone-classic', 'Contatos e telefone', true),
+  P('WRITE_CALL_LOG', 'Editar histórico de ligações', 'Criar e apagar chamadas do histórico', 'phone-log', 'Contatos e telefone', true),
+  P('GET_ACCOUNTS', 'Contas do aparelho', 'Ver as contas (Google e outras)', 'account-multiple-outline', 'Contatos e telefone', true),
+  P('ADD_VOICEMAIL', 'Correio de voz', 'Adicionar mensagens ao correio de voz', 'voicemail', 'Contatos e telefone', true),
+  P('USE_SIP', 'Chamadas pela internet', 'Fazer e receber chamadas SIP', 'phone-voip', 'Contatos e telefone', true),
+  P('MANAGE_OWN_CALLS', 'Gerenciar suas chamadas', 'App de chamada próprio', 'phone-settings-outline', 'Contatos e telefone'),
+  P('RECEIVE_MMS', 'Receber MMS', 'Ser avisado quando chega MMS', 'message-image-outline', 'Mensagens', true),
+  P('RECEIVE_WAP_PUSH', 'Receber WAP push', 'Receber mensagens WAP', 'message-processing-outline', 'Mensagens', true),
+  P('BLUETOOTH_ADVERTISE', 'Ficar visível no Bluetooth', 'Ser achado por outros aparelhos (Android 12 ou mais)', 'bluetooth-transfer', 'Bluetooth e conexão', true),
+  P('UWB_RANGING', 'Ultra banda larga', 'Medir distância até aparelhos UWB', 'radar', 'Bluetooth e conexão', true),
+  P('TRANSMIT_IR', 'Infravermelho', 'Usar o emissor de infravermelho', 'remote', 'Bluetooth e conexão'),
+  P('BODY_SENSORS_BACKGROUND', 'Sensores do corpo em segundo plano', 'Ler sensores de saúde com o app fechado', 'heart-flash', 'Sensores', true),
+  P('HIGH_SAMPLING_RATE_SENSORS', 'Sensores rápidos', 'Ler sensores em alta frequência', 'speedometer', 'Sensores'),
+  P('USE_FINGERPRINT', 'Digital (antigo)', 'Leitor de digital das versões antigas', 'fingerprint', 'Sensores'),
+  P('USE_EXACT_ALARM', 'Alarmes exatos (alarme/agenda)', 'Para apps de alarme e calendário', 'alarm-check', 'Sistema'),
+  P('REQUEST_IGNORE_BATTERY_OPTIMIZATIONS', 'Ignorar economia de bateria', 'Pedir pra não ser limitado em segundo plano', 'battery-heart-variant', 'Sistema'),
+  P('EXPAND_STATUS_BAR', 'Barra de status', 'Abrir e fechar a barra de notificações', 'arrow-expand-vertical', 'Sistema'),
+  P('DISABLE_KEYGUARD', 'Bloqueio de tela', 'Desativar o bloqueio de tela', 'lock-open-outline', 'Sistema'),
+  P('KILL_BACKGROUND_PROCESSES', 'Fechar apps em segundo plano', 'Encerrar processos de outros apps', 'close-circle-multiple-outline', 'Sistema'),
+  P('PACKAGE_USAGE_STATS', 'Uso dos apps', 'Ver quanto tempo cada app foi usado', 'chart-timeline-variant', 'Sistema'),
+  P('INSTALL_SHORTCUT', 'Criar atalhos', 'Colocar atalhos na tela inicial', 'link-variant-plus', 'Sistema'),
+  P('BROADCAST_STICKY', 'Broadcast fixo', 'Enviar avisos que ficam guardados', 'broadcast', 'Sistema'),
+  P('FOREGROUND_SERVICE_LOCATION', 'Serviço: localização', 'Serviço contínuo usando GPS (Android 14 ou mais)', 'map-marker-path', 'Sistema'),
+  P('FOREGROUND_SERVICE_CAMERA', 'Serviço: câmera', 'Serviço contínuo usando a câmera (Android 14 ou mais)', 'camera-wireless-outline', 'Sistema'),
+  P('FOREGROUND_SERVICE_MICROPHONE', 'Serviço: microfone', 'Serviço contínuo gravando áudio (Android 14 ou mais)', 'microphone-message', 'Sistema'),
+  P('FOREGROUND_SERVICE_MEDIA_PLAYBACK', 'Serviço: tocar mídia', 'Tocar música ou vídeo em segundo plano (Android 14 ou mais)', 'play-circle-outline', 'Sistema'),
+  P('FOREGROUND_SERVICE_DATA_SYNC', 'Serviço: sincronizar dados', 'Enviar e baixar dados em segundo plano (Android 14 ou mais)', 'sync', 'Sistema'),
+  P('FOREGROUND_SERVICE_CONNECTED_DEVICE', 'Serviço: aparelho conectado', 'Falar com aparelhos conectados (Android 14 ou mais)', 'usb-port', 'Sistema'),
+  P('FOREGROUND_SERVICE_SPECIAL_USE', 'Serviço: uso especial', 'Outros usos em primeiro plano (Android 14 ou mais)', 'star-cog-outline', 'Sistema'),
+  { id: 'com.google.android.gms.permission.AD_ID', nome: 'ID de publicidade', desc: 'Usar o ID de anúncios do Google (Android 13 ou mais)', icone: 'advertisements', grupo: 'Sistema', perigosa: false },
 ];
 const GRUPOS_PERMISSOES_STUDIO = ['Rede', 'Localização', 'Notificações', 'Câmera e áudio', 'Fotos e arquivos', 'Contatos e telefone', 'Mensagens', 'Bluetooth e conexão', 'Sensores', 'Sistema'];
 
@@ -6190,6 +6227,14 @@ function CindraStudioScreen({ visible, onClose }) {
             </View>
           );
         };
+        // Qualquer permissão que não está na lista: digite o nome na busca
+        // (ex.: READ_LOGS ou com.empresa.permission.X) e ela aparece pra adicionar.
+        const bruto = buscaPermissao.trim();
+        let candidato = null;
+        if (bruto && /^[A-Za-z][A-Za-z0-9_.]*$/.test(bruto)) {
+          const idCand = bruto.includes('.') ? bruto : `android.permission.${bruto.toUpperCase()}`;
+          if (!ativas.has(idCand) && !conhecidas.has(idCand)) candidato = idCand;
+        }
         let algumaCoisa = false;
         return (
           <FolhaInferiorStudio
@@ -6220,7 +6265,7 @@ function CindraStudioScreen({ visible, onClose }) {
                         style={studioStyles.cfgCampoInput}
                         value={buscaPermissao}
                         onChangeText={setBuscaPermissao}
-                        placeholder="Buscar permissão"
+                        placeholder="Buscar ou digitar o nome da permissão"
                         placeholderTextColor={COLORS.dim}
                         autoCapitalize="none"
                         autoCorrect={false}
@@ -6232,6 +6277,24 @@ function CindraStudioScreen({ visible, onClose }) {
                       keyboardShouldPersistTaps="handled"
                       showsVerticalScrollIndicator={false}
                     >
+                      {candidato && (() => {
+                        algumaCoisa = true;
+                        return (
+                          <TouchableOpacity
+                            style={studioStyles.nodoOpcao}
+                            onPress={() => { alternarPermissao(candidato, true); setBuscaPermissao(''); }}
+                            activeOpacity={0.8}
+                          >
+                            <View style={studioStyles.nodoOpcaoIcone}>
+                              <MaterialCommunityIcons name="plus" size={20} color={COLORS.ember} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={studioStyles.permNome}>Adicionar esta permissão</Text>
+                              <Text style={studioStyles.nodoOpcaoDesc} numberOfLines={2}>{candidato}</Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })()}
                       {GRUPOS_PERMISSOES_STUDIO.map((grupo) => {
                         const itens = PERMISSOES_STUDIO.filter((pm) => pm.grupo === grupo && casa(pm));
                         if (!itens.length) return null;
