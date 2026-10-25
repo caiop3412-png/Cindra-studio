@@ -556,7 +556,7 @@ function montarProjetoNovo(nomeApp, nomePacoteBruto, corIcone, comFoto = false) 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:screenOrientation="landscape"
+            android:screenOrientation="portrait"
             android:configChanges="orientation|screenSize|keyboardHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
