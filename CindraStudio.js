@@ -631,7 +631,7 @@ function montarProjetoNovo(nomeApp, nomePacoteBruto, corIcone, comFoto = false) 
     -->
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
@@ -1393,139 +1393,6 @@ async function completarIconesBuildsStudio(builds, projetos) {
 const PASTA_PUBLICA_STUDIO = 'file:///storage/emulated/0/cindra-studio/';
 const PASTA_PUBLICA_TEXTO = '/storage/emulated/0/cindra-studio';
 
-// Nome limpo do app (sem acento/espaço) — vira o nome da subpasta e o prefixo do APK.
-function nomeBasePublicoStudio(b) {
-  const limpo = (t) => {
-    let x = String(t || '');
-    try { if (x.normalize) x = x.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) { /* segue sem tirar acento */ }
-    return x.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '');
-  };
-  return limpo(b.nomeApp) || limpo(String(b.pacote || '').split('.').pop()) || 'app';
-}
-
-// Subpasta com o projeto (MainActivity, res, assets...) dentro da pasta do app.
-const NOME_SUBPASTA_ARQUIVOS = 'arquivos';
-
-// Escolhe o nome da pasta do app em cindra-studio. Um marcador (.cindra_pacote)
-// dentro de "arquivos" diz de qual pacote é a pasta; se for de outro app com o
-// mesmo nome, usa NomeDoApp_2, _3... Depois de escolhido, o nome fica gravado.
-async function resolverPastaPublicaStudio(pacote, nomeApp, jaEscolhida) {
-  if (jaEscolhida) return jaEscolhida;
-  const base = nomeBasePublicoStudio({ nomeApp, pacote });
-  if (!ApkBuilder.temEspelhoNativo) return base;
-  for (let i = 1; i < 50; i += 1) {
-    const nome = i === 1 ? base : `${base}_${i}`;
-    try {
-      const r = await ApkBuilder.lerTextos(`${PASTA_PUBLICA_TEXTO}/${nome}/${NOME_SUBPASTA_ARQUIVOS}`, ['.cindra_pacote']);
-      const dono = r && typeof r['.cindra_pacote'] === 'string' ? r['.cindra_pacote'].trim() : '';
-      if (!dono || dono === pacote) return nome;
-    } catch (e) {
-      return nome;
-    }
-  }
-  return base;
-}
-
-// Olha a pasta "arquivos" e junta o que foi mexido por fora desde a última
-// sincronia: texto que mudou, arquivo novo (inclusive renomeado), foto/modelo
-// trocado e arquivo apagado. `espelhados` = caminhos que o app tinha gravado
-// na pasta da última vez (só esses contam como "apagado por fora").
-async function lerMudancasDaPastaStudio(proj, raiz, ultimaSync, espelhados) {
-  const res = { temMudanca: false, textos: {}, binarios: {}, apagar: [], nomes: [] };
-  if (!(ultimaSync > 0)) return res; // primeira vez: só espelha, não importa
-  const lista = (await ApkBuilder.listarPasta(raiz)) || [];
-  const limite = ultimaSync + 1000;
-  const marcaDagua = `app/src/main/java/${pacotePraCaminho(proj.pacote)}/${MARCA_DAGUA_CLASSE}.java`;
-  const conj = Array.isArray(espelhados) ? new Set(espelhados) : null;
-  const naPasta = new Set(lista.map((f) => f.caminho));
-  const visivel = (c) => c.split('/').every((p) => p && !p.startsWith('.'));
-  const conhecido = (c) => proj.conteudos[c] !== undefined || !!(proj.binarios && proj.binarios[c]);
-  const nomeDe = (c) => c.split('/').pop();
-
-  // 1) Apagados por fora. Só vale se a pasta está de pé (marcador presente) e
-  //    não foi esvaziada de uma vez (aí o espelho restaura em vez de apagar tudo).
-  if (conj && naPasta.has('.cindra_pacote')) {
-    const rastreados = Object.keys(proj.conteudos).concat(Object.keys(proj.binarios || {}))
-      .filter((c) => c !== marcaDagua && conj.has(c));
-    const sumiram = rastreados.filter((c) => !naPasta.has(c));
-    const esvaziou = rastreados.length > 3 && sumiram.length === rastreados.length;
-    if (sumiram.length && !esvaziou) {
-      res.apagar = sumiram;
-      sumiram.forEach((c) => res.nomes.push(c));
-    }
-  }
-
-  // 2) Mexidos ou novos: modificado depois da última sincronia, ou caminho que
-  //    o app nunca gravou (renomear mantém a data, então só o caminho entrega).
-  const candidatos = lista.filter((f) => (
-    visivel(f.caminho)
-    && f.caminho !== marcaDagua
-    && (f.modificado > limite || (conj && !conj.has(f.caminho) && !conhecido(f.caminho)))
-  ));
-  const caminhosTexto = candidatos
-    .filter((f) => ehExtensaoTexto(nomeDe(f.caminho)) && f.tamanho <= 2 * 1024 * 1024)
-    .map((f) => f.caminho);
-  const lidos = caminhosTexto.length ? await ApkBuilder.lerTextos(raiz, caminhosTexto) : {};
-  for (const c of caminhosTexto) {
-    const t = lidos ? lidos[c] : undefined;
-    if (typeof t !== 'string' || proj.conteudos[c] === t) continue;
-    res.textos[c] = t;
-    res.nomes.push(c);
-  }
-  for (const f of candidatos) {
-    if (caminhosTexto.includes(f.caminho) || ehExtensaoTexto(nomeDe(f.caminho))) continue;
-    const atual = proj.binarios && proj.binarios[f.caminho];
-    if (atual && atual.tamanho === f.tamanho) continue;
-    const destino = pastaBinariosStudio(proj.pacote) + f.caminho;
-    await FileSystem.makeDirectoryAsync(destino.split('/').slice(0, -1).join('/'), { intermediates: true });
-    await ApkBuilder.copiarSobrescrevendo(`${raiz}/${f.caminho}`, destino.replace(/^file:\/\//, ''));
-    res.binarios[f.caminho] = { tamanho: f.tamanho };
-    res.nomes.push(f.caminho);
-  }
-  res.temMudanca = res.nomes.length > 0;
-  return res;
-}
-
-// Tira da árvore as pastas que ficaram vazias depois de apagar arquivos
-// (a pasta assets fica sempre).
-function podarPastasVaziasStudio(arvore, caminhos) {
-  let nova = arvore;
-  const pais = new Set();
-  caminhos.forEach((c) => {
-    const p = c.split('/');
-    for (let i = p.length - 1; i >= 1; i -= 1) pais.add(p.slice(0, i).join('/'));
-  });
-  Array.from(pais).sort((a, b) => b.length - a.length).forEach((pasta) => {
-    if (pasta === ASSETS_STUDIO) return;
-    const no = acharNoNaArvore(nova, pasta);
-    if (no && no.tipo === 'pasta' && no.filhos.length === 0) nova = removerNoDaArvore(nova, pasta);
-  });
-  return nova;
-}
-
-function aplicarMudancasDaPastaStudio(proj, mud) {
-  let arvore = proj.arvore;
-  const conteudos = { ...proj.conteudos };
-  const binarios = { ...(proj.binarios || {}) };
-  (mud.apagar || []).forEach((c) => {
-    delete conteudos[c];
-    delete binarios[c];
-    arvore = removerNoDaArvore(arvore, c);
-  });
-  if ((mud.apagar || []).length) arvore = podarPastasVaziasStudio(arvore, mud.apagar);
-  Object.keys(mud.textos).forEach((c) => {
-    conteudos[c] = mud.textos[c];
-    delete binarios[c];
-    arvore = garantirArquivoNaArvore(arvore, c);
-  });
-  Object.keys(mud.binarios).forEach((c) => {
-    binarios[c] = mud.binarios[c];
-    delete conteudos[c];
-    arvore = garantirArquivoNaArvore(arvore, c);
-  });
-  return { ...proj, arvore, conteudos, binarios };
-}
-
 function nomeArquivoPublicoStudio(b) {
   const limpo = (t) => {
     let x = String(t || '');
@@ -1543,16 +1410,6 @@ function nomeArquivoPublicoStudio(b) {
 // Testa se o app consegue mesmo escrever em /storage/emulated/0/cindra-studio
 // (cria a pasta e grava/apaga um arquivinho de teste).
 async function testarAcessoPastaPublicaStudio() {
-  // Caminho novo (módulo nativo): mkdirs de verdade, sem a checagem do expo.
-  if (ApkBuilder.temPastaNativa) {
-    try {
-      const tem = await ApkBuilder.temAcessoTodosArquivos();
-      if (tem === false) return false;
-      return !!(await ApkBuilder.criarPasta(PASTA_PUBLICA_TEXTO));
-    } catch (e) {
-      return false;
-    }
-  }
   try {
     try {
       await FileSystem.makeDirectoryAsync(PASTA_PUBLICA_STUDIO, { intermediates: true });
@@ -1567,22 +1424,6 @@ async function testarAcessoPastaPublicaStudio() {
 }
 
 async function copiarParaPastaPublicaStudio(b) {
-  if (ApkBuilder.temPastaNativa) {
-    try {
-      // cindra-studio/NomeDoApp/NomeDoApp-1.apk, -2.apk, -3.apk...
-      const base = b.pastaPublica || nomeBasePublicoStudio(b);
-      const pastaApp = PASTA_PUBLICA_TEXTO + '/' + base;
-      await ApkBuilder.criarPasta(pastaApp);
-      const destino = await ApkBuilder.copiarSequencial(
-        String(b.apk).replace(/^file:\/\//, ''),
-        pastaApp,
-        base
-      );
-      return { ok: true, destino };
-    } catch (e) {
-      return { ok: false, motivo: String(e && e.message ? e.message : e) };
-    }
-  }
   try {
     try {
       await FileSystem.makeDirectoryAsync(PASTA_PUBLICA_STUDIO, { intermediates: true });
@@ -1613,9 +1454,7 @@ async function copiarPendentesPastaPublicaStudio(lista) {
   let copiados = 0;
   let falhou = false;
   let motivo = '';
-  // do mais antigo pro mais novo: o primeiro build criado vira -1, o segundo -2...
-  const ordenados = lista.slice().sort((x, y) => (x.criadoEm || 0) - (y.criadoEm || 0));
-  for (const b of ordenados) {
+  for (const b of lista) {
     if (b.apkPublico) continue;
     try {
       const i = await FileSystem.getInfoAsync(b.apk);
@@ -4361,7 +4200,6 @@ public class MainActivity extends Activity {
         blocos: [{
           rotulo: 'MainActivity.java',
           codigo: JAVA`import android.app.Activity;
-import android.content.res.AssetFileDescriptor;
 import android.graphics.Color;
 import android.media.MediaPlayer;
 import android.os.Bundle;
@@ -4370,6 +4208,8 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.Toast;
+
+import java.io.File;
 
 public class MainActivity extends Activity {
 
@@ -4388,10 +4228,11 @@ public class MainActivity extends Activity {
                     if (player != null) {
                         player.release();
                     }
-                    AssetFileDescriptor afd = getAssets().openFd("musica.mp3");
+                    // o arquivo fica cifrado dentro do app; AssetCripto decifra
+                    // pra um arquivo temporário antes de tocar.
+                    File arquivo = AssetCripto.paraArquivoTemporario(MainActivity.this, "musica.mp3");
                     player = new MediaPlayer();
-                    player.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
-                    afd.close();
+                    player.setDataSource(arquivo.getAbsolutePath());
                     player.setLooping(true);
                     player.prepare();
                     player.start();
@@ -4461,7 +4302,8 @@ public class MainActivity extends Activity {
         imagem.setScaleType(ImageView.ScaleType.FIT_CENTER);
 
         try {
-            InputStream entrada = getAssets().open("foto.png");
+            // o arquivo fica cifrado dentro do app; AssetCripto decifra em memória.
+            InputStream entrada = AssetCripto.abrir(this, "foto.png");
             Bitmap bmp = BitmapFactory.decodeStream(entrada);
             entrada.close();
             imagem.setImageBitmap(bmp);
@@ -5130,13 +4972,6 @@ function CindraStudioScreen({ visible, onClose }) {
   const [pastaEmCriacao, setPastaEmCriacao] = useState(false); // dentro do card: mostrando o campo de nome da nova pasta
   const [nomeNovaPasta, setNomeNovaPasta] = useState('');
   const estadoRef = useRef(null);
-  // Pasta "arquivos" do app (espelho do projeto em cindra-studio/NomeDoApp/arquivos)
-  const projetoVivoRef = useRef(null);
-  const nomeAppVivoRef = useRef('');
-  const pastaPublicaRef = useRef(null); // nome da pasta do app dentro de cindra-studio
-  const ultimaSincPastaRef = useRef(0); // quando o app e a pasta ficaram iguais pela última vez
-  const sincPastaOcupadaRef = useRef(false);
-  const espelhadosRef = useRef(null); // caminhos que o app gravou na pasta da última vez
 
   // Lê as preferências da tela inicial (aviso de recuperação dispensado ou não).
   useEffect(() => {
@@ -5193,10 +5028,8 @@ function CindraStudioScreen({ visible, onClose }) {
   }, []);
 
   // Foto do estado atual (só existe depois de carregar e com projeto criado).
-  projetoVivoRef.current = projeto;
-  nomeAppVivoRef.current = nomeApp;
   estadoRef.current = estadoCarregado && projeto
-    ? { versao: 1, nomeApp, nomePacote, iconeEscolhido, corIcone, fotoIcone, projeto, pastasAbertas, abasAbertas, arquivoAtivo, nomePastaPublica: pastaPublicaRef.current, ultimaSincPasta: ultimaSincPastaRef.current, arquivosEspelhados: espelhadosRef.current }
+    ? { versao: 1, nomeApp, nomePacote, iconeEscolhido, corIcone, fotoIcone, projeto, pastasAbertas, abasAbertas, arquivoAtivo }
     : null;
 
   // Salva sozinho, meio segundo depois da última mudança (digitar, abrir
@@ -5362,11 +5195,6 @@ function CindraStudioScreen({ visible, onClose }) {
         arvore: inserirNoNaArvore(proj.arvore, 'app/src/main', { nome: 'assets', caminho: ASSETS_STUDIO, tipo: 'pasta', filhos: [] }),
       };
     }
-    pastaPublicaRef.current = e.nomePastaPublica || null;
-    ultimaSincPastaRef.current = e.ultimaSincPasta || 0;
-    espelhadosRef.current = Array.isArray(e.arquivosEspelhados) ? e.arquivosEspelhados : null;
-    projetoVivoRef.current = proj;
-    nomeAppVivoRef.current = e.nomeApp || 'Meu App';
     setProjeto(proj);
     setPastasAbertas(e.pastasAbertas || {});
     setAbasAbertas(Array.isArray(e.abasAbertas) ? e.abasAbertas.filter(existe) : []);
@@ -5376,8 +5204,6 @@ function CindraStudioScreen({ visible, onClose }) {
     setErrosCompilacao([]);
     setLogCompilacao([]);
     setEtapa('workspace');
-    // o que você mexeu na pasta "arquivos" desde a última vez entra agora
-    sincronizarPastaArquivos({ importar: true }).catch(() => {});
   };
 
   // Tela inicial: toque na estrela do card — marca/desmarca favorito sem
@@ -5680,15 +5506,8 @@ function CindraStudioScreen({ visible, onClose }) {
     }
 
     setFotoIcone(fotoFinal);
-    pastaPublicaRef.current = null;
-    ultimaSincPastaRef.current = 0;
-    espelhadosRef.current = null;
-    projetoVivoRef.current = novo;
-    nomeAppVivoRef.current = app;
     setProjeto(novo);
     setNomePacote(novo.pacote);
-    // já cria cindra-studio/NomeDoApp/arquivos com as pastas certas
-    sincronizarPastaArquivos({ importar: false }).catch(() => {});
     // Já deixa o projeto gravado em disco desde o começo, e cadastrado na
     // lista de projetos (pra aparecer na tela inicial do CindraStudio).
     gravarProjetoStudio(novo).catch(() => {});
@@ -5984,7 +5803,6 @@ function CindraStudioScreen({ visible, onClose }) {
         id,
         pacote: projeto.pacote,
         nomeApp,
-        pastaPublica: pastaPublicaRef.current || undefined,
         tipo: release ? 'release' : 'debug',
         versaoNome: versao.nome,
         versaoCodigo: versao.codigo,
@@ -6030,94 +5848,8 @@ function CindraStudioScreen({ visible, onClose }) {
     );
   };
 
-  // Sincroniza o projeto com cindra-studio/NomeDoApp/arquivos:
-  //  - importar: o que você mexeu na pasta (por fora do app) entra no projeto;
-  //  - sempre: o projeto é espelhado na pasta (pastas certas: app/src/main/java/...,
-  //    res, assets...). Falha em silêncio se não tiver acesso ou módulo antigo.
-  const sincronizarPastaArquivos = async (opcoes = {}) => {
-    const proj = projetoVivoRef.current;
-    if (!proj || !ApkBuilder.temEspelhoNativo || sincPastaOcupadaRef.current) return;
-    sincPastaOcupadaRef.current = true;
-    try {
-      const pacote = proj.pacote;
-      const nomePasta = await resolverPastaPublicaStudio(pacote, nomeAppVivoRef.current, pastaPublicaRef.current);
-      pastaPublicaRef.current = nomePasta;
-      const raiz = `${PASTA_PUBLICA_TEXTO}/${nomePasta}/${NOME_SUBPASTA_ARQUIVOS}`;
-
-      if (opcoes.importar) {
-        const mud = await lerMudancasDaPastaStudio(proj, raiz, ultimaSincPastaRef.current, espelhadosRef.current);
-        if (mud.temMudanca) {
-          mud.nomes.forEach((c) => { delete historicoRef.current[c]; });
-          mud.apagar.forEach((c) => {
-            FileSystem.deleteAsync(pastaBinariosStudio(pacote) + c, { idempotent: true }).catch(() => {});
-          });
-          if (mud.apagar.length) {
-            setAbasAbertas((a) => a.filter((c) => !mud.apagar.includes(c)));
-            setArquivoAtivo((a) => (a && mud.apagar.includes(a) ? null : a));
-          }
-          setProjeto((atual) => (atual && atual.pacote === pacote ? aplicarMudancasDaPastaStudio(atual, mud) : atual));
-          exibirAviso(
-            'Projeto atualizado',
-            `${mud.nomes.length} ${mud.nomes.length === 1 ? 'alteração veio' : 'alterações vieram'} da pasta ${NOME_SUBPASTA_ARQUIVOS}`,
-            'sucesso'
-          );
-          // o espelho roda sozinho logo depois (o projeto mudou)
-          return;
-        }
-      }
-
-      const r = await ApkBuilder.espelharProjeto(
-        raiz,
-        { ...proj.conteudos, '.cindra_pacote': pacote },
-        pastaBinariosStudio(pacote).replace(/^file:\/\//, ''),
-        Object.keys(proj.binarios || {}),
-        ultimaSincPastaRef.current
-      );
-      ultimaSincPastaRef.current = r && r.agora ? r.agora : Date.now();
-      // guarda o que de fato está na pasta agora (só isso conta como "apagado por fora" depois)
-      try {
-        const naPasta = new Set(((await ApkBuilder.listarPasta(raiz)) || []).map((f) => f.caminho));
-        espelhadosRef.current = Object.keys(proj.conteudos).concat(Object.keys(proj.binarios || {}))
-          .filter((c) => naPasta.has(c));
-      } catch (e) { /* mantém o que tinha */ }
-      if (estadoRef.current) {
-        gravarEstadoStudio({
-          ...estadoRef.current,
-          nomePastaPublica: nomePasta,
-          ultimaSincPasta: ultimaSincPastaRef.current,
-          arquivosEspelhados: espelhadosRef.current,
-        }).catch(() => {});
-      }
-    } catch (e) {
-      /* sem acesso à pasta ou módulo antigo: o app segue normal */
-    } finally {
-      sincPastaOcupadaRef.current = false;
-    }
-  };
-
-  // Mexeu no projeto? 2,5 s depois espelha na pasta (não trava a digitação).
-  useEffect(() => {
-    if (!projeto || !estadoCarregado) return undefined;
-    const t = setTimeout(() => { sincronizarPastaArquivos({ importar: true }).catch(() => {}); }, 2500);
-    return () => clearTimeout(t);
-  }, [projeto, estadoCarregado]);
-
-  // Voltou pro app (depois de mexer nos arquivos na pasta)? Puxa as mudanças.
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (estadoApp) => {
-      if (estadoApp === 'active' && projetoVivoRef.current) {
-        sincronizarPastaArquivos({ importar: true }).catch(() => {});
-      }
-    });
-    return () => sub.remove();
-  }, []);
-
   // Abre a tela do Android onde se libera "Acesso a todos os arquivos".
   const abrirConfigAcessoArquivos = () => {
-    if (ApkBuilder.temPastaNativa) {
-      ApkBuilder.abrirAcessoTodosArquivos().catch(() => Linking.openSettings()).catch(() => {});
-      return;
-    }
     Linking.sendIntent('android.settings.MANAGE_ALL_FILES_ACCESS_PERMISSION')
       .catch(() => Linking.openSettings())
       .catch(() => {});
@@ -7231,7 +6963,7 @@ function CindraStudioScreen({ visible, onClose }) {
                 <Text style={[studioStyles.folhaTitulo, { flex: 1 }]}>Liberar acesso aos arquivos</Text>
               </View>
               <Text style={{ color: COLORS.dim, fontSize: 13, lineHeight: 19, marginBottom: 16 }}>
-                Pra salvar seus APKs em {PASTA_PUBLICA_TEXTO} (uma subpasta por app, criada sozinha), ative "Permitir acesso para gerenciar todos os arquivos" pro Cindra Studio na tela que vai abrir.
+                Pra salvar seus APKs em {PASTA_PUBLICA_TEXTO} (a pasta é criada sozinha), ative "Permitir acesso para gerenciar todos os arquivos" pro Cindra Studio na tela que vai abrir.
               </Text>
               <View style={studioStyles.folhaConfirmaBotoes}>
                 <TouchableOpacity style={studioStyles.folhaBtn} onPress={fechar} activeOpacity={0.8}>
