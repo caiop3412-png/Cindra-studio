@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.content.FileProvider
@@ -110,6 +111,59 @@ class ApkBuilderModule : Module() {
       ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       ctx.startActivity(pedido)
       "aberto"
+    }
+
+    // Android 11+: o app tem "Acesso a todos os arquivos" liberado?
+    // Antes do 11 devolve true e quem decide é o mkdirs de criarPasta.
+    AsyncFunction("temAcessoTodosArquivos") {
+      if (Build.VERSION.SDK_INT >= 30) Environment.isExternalStorageManager() else true
+    }
+
+    // Abre direto a tela "Acesso a todos os arquivos" DESTE app.
+    AsyncFunction("abrirAcessoTodosArquivos") {
+      val ctx = context
+      if (Build.VERSION.SDK_INT >= 30) {
+        try {
+          ctx.startActivity(
+            Intent(
+              Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+              Uri.parse("package:${ctx.packageName}")
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+          )
+        } catch (e: Exception) {
+          ctx.startActivity(
+            Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+              .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+          )
+        }
+      }
+      true
+    }
+
+    // Cria a pasta (com as pais) e confirma que dá pra gravar nela.
+    AsyncFunction("criarPasta") { caminho: String ->
+      val pasta = File(caminho.removePrefix("file://"))
+      pasta.mkdirs()
+      pasta.isDirectory && pasta.canWrite()
+    }
+
+    // Copia um arquivo. Se o destino já existir, cria "nome-2.ext", "nome-3.ext"...
+    // Devolve o caminho final (file://...).
+    AsyncFunction("copiarArquivo") { origem: String, destino: String ->
+      val de = File(origem.removePrefix("file://"))
+      var para = File(destino.removePrefix("file://"))
+      para.parentFile?.mkdirs()
+      var n = 2
+      while (para.exists() && n < 200) {
+        val base = para.nameWithoutExtension.replace(Regex("-\\d+$"), "")
+        val ext = if (para.extension.isNotEmpty()) "." + para.extension else ""
+        para = File(para.parentFile, "$base-$n$ext")
+        n += 1
+      }
+      de.inputStream().use { entrada ->
+        FileOutputStream(para).use { saida -> entrada.copyTo(saida) }
+      }
+      "file://" + para.absolutePath
     }
 
     // Abre o instalador do Android com o APK gerado.

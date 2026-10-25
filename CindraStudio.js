@@ -1410,6 +1410,16 @@ function nomeArquivoPublicoStudio(b) {
 // Testa se o app consegue mesmo escrever em /storage/emulated/0/cindra-studio
 // (cria a pasta e grava/apaga um arquivinho de teste).
 async function testarAcessoPastaPublicaStudio() {
+  // Caminho novo (módulo nativo): mkdirs de verdade, sem a checagem do expo.
+  if (ApkBuilder.temPastaNativa) {
+    try {
+      const tem = await ApkBuilder.temAcessoTodosArquivos();
+      if (tem === false) return false;
+      return !!(await ApkBuilder.criarPasta(PASTA_PUBLICA_TEXTO));
+    } catch (e) {
+      return false;
+    }
+  }
   try {
     try {
       await FileSystem.makeDirectoryAsync(PASTA_PUBLICA_STUDIO, { intermediates: true });
@@ -1424,6 +1434,18 @@ async function testarAcessoPastaPublicaStudio() {
 }
 
 async function copiarParaPastaPublicaStudio(b) {
+  if (ApkBuilder.temPastaNativa) {
+    try {
+      await ApkBuilder.criarPasta(PASTA_PUBLICA_TEXTO);
+      const destino = await ApkBuilder.copiarArquivo(
+        String(b.apk).replace(/^file:\/\//, ''),
+        PASTA_PUBLICA_TEXTO + '/' + nomeArquivoPublicoStudio(b)
+      );
+      return { ok: true, destino };
+    } catch (e) {
+      return { ok: false, motivo: String(e && e.message ? e.message : e) };
+    }
+  }
   try {
     try {
       await FileSystem.makeDirectoryAsync(PASTA_PUBLICA_STUDIO, { intermediates: true });
@@ -5847,6 +5869,10 @@ function CindraStudioScreen({ visible, onClose }) {
 
   // Abre a tela do Android onde se libera "Acesso a todos os arquivos".
   const abrirConfigAcessoArquivos = () => {
+    if (ApkBuilder.temPastaNativa) {
+      ApkBuilder.abrirAcessoTodosArquivos().catch(() => Linking.openSettings()).catch(() => {});
+      return;
+    }
     Linking.sendIntent('android.settings.MANAGE_ALL_FILES_ACCESS_PERMISSION')
       .catch(() => Linking.openSettings())
       .catch(() => {});

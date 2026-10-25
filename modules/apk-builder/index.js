@@ -52,3 +52,28 @@ export function aoLogar(callback) {
   if (!Nativo) return { remove() {} };
   return Nativo.addListener('onLog', (e) => callback(e.linha));
 }
+
+// ── Pasta pública (/storage/emulated/0/cindra-studio) ──────────────────
+// true só se o módulo nativo instalado já tem essas funções (precisa de
+// build novo). Com módulo antigo, o JS cai no caminho antigo.
+export const temPastaNativa = !!(Nativo && Nativo.criarPasta && Nativo.copiarArquivo && Nativo.temAcessoTodosArquivos);
+
+// true/false: "Acesso a todos os arquivos" liberado? (Android 11+)
+export function temAcessoTodosArquivos() {
+  return temPastaNativa ? Nativo.temAcessoTodosArquivos() : Promise.resolve(null);
+}
+
+// Abre a tela de acesso a todos os arquivos deste app.
+export function abrirAcessoTodosArquivos() {
+  return temPastaNativa ? Nativo.abrirAcessoTodosArquivos() : Promise.resolve(false);
+}
+
+// Cria a pasta (caminho sem file://). Devolve true se existe e é gravável.
+export function criarPasta(caminho) {
+  return Nativo.criarPasta(caminho);
+}
+
+// Copia origem -> destino. Devolve o caminho final (file://...).
+export function copiarArquivo(origem, destino) {
+  return Nativo.copiarArquivo(origem, destino);
+}
