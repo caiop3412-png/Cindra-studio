@@ -42,6 +42,10 @@ try { ImageManipulator = require('expo-image-manipulator'); } catch (e) { ImageM
 // cai pro menu de compartilhar do Android.
 let Clipboard = null;
 try { Clipboard = require('expo-clipboard'); } catch (e) { Clipboard = null; }
+// Compartilhar o APK (WhatsApp, Drive, Bluetooth...): opcional também. Sem o
+// expo-sharing o botão só avisa o que instalar.
+let Sharing = null;
+try { Sharing = require('expo-sharing'); } catch (e) { Sharing = null; }
 
 const CODIGO_FONTE = 13; // fonte do editor (também usada pra calcular a largura do código)
 
@@ -1376,6 +1380,92 @@ async function completarIconesBuildsStudio(builds, projetos) {
     return novo;
   });
   return { lista, mudou };
+}
+
+// ─────────────────────────────────────────────────────────
+// Pasta pública: toda APK gerada também é copiada pra
+// /storage/emulated/0/cindra-studio (a pasta é criada sozinha, sem seletor).
+// No Android 11+ isso exige "Acesso a todos os arquivos" liberado pro app
+// (permissão MANAGE_EXTERNAL_STORAGE no app.json + liberar uma vez nas
+// configurações). Sem a permissão a cópia só falha — o APK interno e a aba
+// Gerados continuam funcionando normal.
+// ─────────────────────────────────────────────────────────
+const PASTA_PUBLICA_STUDIO = 'file:///storage/emulated/0/cindra-studio/';
+const PASTA_PUBLICA_TEXTO = '/storage/emulated/0/cindra-studio';
+
+function nomeArquivoPublicoStudio(b) {
+  const limpo = (t) => {
+    let x = String(t || '');
+    try { if (x.normalize) x = x.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) { /* segue sem tirar acento */ }
+    return x.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '');
+  };
+  const d = new Date(b.criadoEm || Date.now());
+  const dois = (n) => String(n).padStart(2, '0');
+  const data = `${d.getFullYear()}${dois(d.getMonth() + 1)}${dois(d.getDate())}-${dois(d.getHours())}${dois(d.getMinutes())}`;
+  const base = limpo(b.nomeApp) || limpo(String(b.pacote || '').split('.').pop()) || 'app';
+  const ver = b.versaoNome ? `-v${limpo(b.versaoNome)}` : '';
+  return `${base}${ver}-${b.tipo === 'release' ? 'release' : 'debug'}-${data}.apk`;
+}
+
+// Testa se o app consegue mesmo escrever em /storage/emulated/0/cindra-studio
+// (cria a pasta e grava/apaga um arquivinho de teste).
+async function testarAcessoPastaPublicaStudio() {
+  try {
+    try {
+      await FileSystem.makeDirectoryAsync(PASTA_PUBLICA_STUDIO, { intermediates: true });
+    } catch (e) { /* o teste de escrita abaixo é quem decide */ }
+    const teste = `${PASTA_PUBLICA_STUDIO}.cindra_teste`;
+    await FileSystem.writeAsStringAsync(teste, 'ok', { encoding: FileSystem.EncodingType.UTF8 });
+    await FileSystem.deleteAsync(teste, { idempotent: true }).catch(() => {});
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function copiarParaPastaPublicaStudio(b) {
+  try {
+    try {
+      await FileSystem.makeDirectoryAsync(PASTA_PUBLICA_STUDIO, { intermediates: true });
+    } catch (e) { /* já existe, ou sem permissão — o copyAsync abaixo diz qual */ }
+    const nome = nomeArquivoPublicoStudio(b);
+    let destino = PASTA_PUBLICA_STUDIO + nome;
+    for (let n = 2; n < 60; n += 1) {
+      let existe = false;
+      try {
+        const i = await FileSystem.getInfoAsync(destino);
+        existe = !!(i && i.exists);
+      } catch (e) { existe = false; }
+      if (!existe) break;
+      destino = PASTA_PUBLICA_STUDIO + nome.replace(/\.apk$/i, `-${n}.apk`);
+    }
+    await FileSystem.copyAsync({ from: b.apk, to: destino });
+    return { ok: true, destino };
+  } catch (e) {
+    return { ok: false, motivo: String(e && e.message ? e.message : e) };
+  }
+}
+
+// Copia todos os builds que ainda não estão na pasta pública. Para na
+// primeira falha de destino (provável falta de permissão); pula os que
+// perderam o arquivo de origem.
+async function copiarPendentesPastaPublicaStudio(lista) {
+  let atual = lista;
+  let copiados = 0;
+  let falhou = false;
+  let motivo = '';
+  for (const b of lista) {
+    if (b.apkPublico) continue;
+    try {
+      const i = await FileSystem.getInfoAsync(b.apk);
+      if (!i || !i.exists) continue;
+    } catch (e) { continue; }
+    const r = await copiarParaPastaPublicaStudio(b);
+    if (!r.ok) { falhou = true; motivo = r.motivo; break; }
+    copiados += 1;
+    atual = atual.map((x) => (x.id === b.id ? { ...x, apkPublico: r.destino } : x));
+  }
+  return { lista: atual, copiados, falhou, motivo };
 }
 
 // Agrupa os builds por app (pacote). Grupos e builds ficam do mais novo pro
@@ -4805,6 +4895,13 @@ function CindraStudioScreen({ visible, onClose }) {
   const [modoSelecaoBuilds, setModoSelecaoBuilds] = useState(false); // seleção múltipla na aba Gerados
   const [selecionadosBuilds, setSelecionadosBuilds] = useState({}); // { [idBuild]: true }
   const [confirmarApagarLote, setConfirmarApagarLote] = useState(false);
+  const [copiandoPublica, setCopiandoPublica] = useState(false); // copiando APKs pra /storage/emulated/0/cindra-studio
+  const avisoPastaPublicaRef = useRef(false); // avisa da permissão só 1 vez por sessão
+  const [pedirAcessoArquivos, setPedirAcessoArquivos] = useState(false); // folha "Liberar acesso aos arquivos" ao abrir o app
+  const semAcessoPublicoRef = useRef(false); // última checagem: sem permissão pra cindra-studio
+  const pedidoRecusadoRef = useRef(false); // "Agora não" (vale até fechar o app)
+  const buildsRef = useRef([]);
+  buildsRef.current = builds;
   const [abaHome, setAbaHome] = useState('apps'); // barra de baixo da tela inicial: 'apps' | 'gerados' | 'aprender'
   const [exemploAberto, setExemploAberto] = useState(null); // id do exemplo aberto na aba Aprender
   const [copiadoChave, setCopiadoChave] = useState(null); // bloco que acabou de ser copiado (mostra "Copiado!")
@@ -4916,6 +5013,13 @@ function CindraStudioScreen({ visible, onClose }) {
       const { lista: completo, mudou } = await completarIconesBuildsStudio(importados, projetos);
       if (mudou || importados.length !== registrados.length) gravarBuildsStudio(completo).catch(() => {});
       if (vivo) setBuilds(completo);
+      // Se a permissão já está liberada, manda pra pasta cindra-studio o que
+      // ainda não foi (em silêncio; sem permissão simplesmente não faz nada).
+      const sync = await copiarPendentesPastaPublicaStudio(completo);
+      if (sync.copiados > 0) {
+        gravarBuildsStudio(sync.lista).catch(() => {});
+        if (vivo) setBuilds(sync.lista);
+      }
     })().catch(() => {});
     return () => { vivo = false; };
   }, []);
@@ -4942,6 +5046,21 @@ function CindraStudioScreen({ visible, onClose }) {
       if (estadoApp !== 'active' && estadoRef.current) {
         gravarEstadoStudio(estadoRef.current).catch(() => {});
       }
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Ao abrir o app: confere o acesso à pasta cindra-studio. Sem acesso,
+  // sobe a folha pedindo pra liberar.
+  useEffect(() => {
+    if (visible && estadoCarregado) verificarAcessoPastaPublica(true);
+  }, [visible, estadoCarregado]);
+
+  // Voltou das configurações do Android? Confere de novo; se liberou, já
+  // manda os APKs que faltam pra pasta.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (estadoApp) => {
+      if (estadoApp === 'active' && semAcessoPublicoRef.current) liberouAcessoPastaPublica();
     });
     return () => sub.remove();
   }, []);
@@ -5695,8 +5814,114 @@ function CindraStudioScreen({ visible, onClose }) {
       const nova = [registro, ...atual];
       await gravarBuildsStudio(nova);
       setBuilds(nova);
+      copiarBuildNovoParaPublica(registro);
     } catch (e) {
       // sem histórico desta vez, mas o APK existe.
+    }
+  };
+
+  const verificarAcessoPastaPublica = async (abrirPedido) => {
+    const ok = await testarAcessoPastaPublicaStudio();
+    semAcessoPublicoRef.current = !ok;
+    if (!ok && abrirPedido && !pedidoRecusadoRef.current) setPedirAcessoArquivos(true);
+    if (ok) setPedirAcessoArquivos(false);
+    return ok;
+  };
+
+  const liberouAcessoPastaPublica = async () => {
+    const ok = await verificarAcessoPastaPublica(false);
+    if (!ok) return;
+    const r = await copiarPendentesPastaPublicaStudio(buildsRef.current);
+    if (r.copiados > 0) {
+      setBuilds(r.lista);
+      gravarBuildsStudio(r.lista).catch(() => {});
+    }
+    exibirAviso(
+      'Pasta cindra-studio liberada',
+      r.copiados > 0
+        ? `${r.copiados} ${r.copiados === 1 ? 'APK copiado' : 'APKs copiados'} pra ${PASTA_PUBLICA_TEXTO}`
+        : `Os próximos APKs vão direto pra ${PASTA_PUBLICA_TEXTO}`,
+      'sucesso'
+    );
+  };
+
+  // Abre a tela do Android onde se libera "Acesso a todos os arquivos".
+  const abrirConfigAcessoArquivos = () => {
+    Linking.sendIntent('android.settings.MANAGE_ALL_FILES_ACCESS_PERMISSION')
+      .catch(() => Linking.openSettings())
+      .catch(() => {});
+  };
+
+  // Build recém-compilado: copia pra /storage/emulated/0/cindra-studio.
+  // Se falhar (sem permissão), avisa uma vez só por sessão.
+  const copiarBuildNovoParaPublica = async (registro) => {
+    const r = await copiarParaPastaPublicaStudio(registro);
+    if (r.ok) {
+      setBuilds((atual) => {
+        const nova = atual.map((x) => (x.id === registro.id ? { ...x, apkPublico: r.destino } : x));
+        gravarBuildsStudio(nova).catch(() => {});
+        return nova;
+      });
+    } else if (!avisoPastaPublicaRef.current) {
+      avisoPastaPublicaRef.current = true;
+      exibirAviso(
+        'APK não foi pra cindra-studio',
+        `Libere "Acesso a todos os arquivos" pro Cindra (toque na pasta no topo da aba Gerados). Detalhe: ${r.motivo}`,
+        'aviso'
+      );
+    }
+  };
+
+  // Botão da pasta na aba Gerados: manda tudo que falta pra cindra-studio.
+  const copiarTodosParaPublica = async () => {
+    if (copiandoPublica) return;
+    setCopiandoPublica(true);
+    try {
+      const r = await copiarPendentesPastaPublicaStudio(builds);
+      if (r.copiados > 0) {
+        setBuilds(r.lista);
+        gravarBuildsStudio(r.lista).catch(() => {});
+      }
+      if (r.falhou) {
+        exibirAviso(
+          'Sem permissão pra criar a pasta',
+          `Ative "Acesso a todos os arquivos" pro Cindra na tela que vai abrir e toque na pasta de novo. Detalhe: ${r.motivo}`,
+          'aviso'
+        );
+        abrirConfigAcessoArquivos();
+      } else if (r.copiados > 0) {
+        exibirAviso('Copiado', `${r.copiados} ${r.copiados === 1 ? 'APK' : 'APKs'} em ${PASTA_PUBLICA_TEXTO}`, 'sucesso');
+      } else {
+        exibirAviso('Tudo certo', `Todos os APKs já estão em ${PASTA_PUBLICA_TEXTO}`, 'sucesso');
+      }
+    } finally {
+      setCopiandoPublica(false);
+    }
+  };
+
+  // Abre o menu de compartilhar do Android com o arquivo .apk.
+  const compartilharApk = async (caminho, nome) => {
+    if (!Sharing) {
+      exibirAviso('Falta o expo-sharing', 'Rode "npx expo install expo-sharing" e faça um build novo pra liberar o compartilhamento.', 'aviso');
+      return;
+    }
+    try {
+      const uri = String(caminho).indexOf('file://') === 0 ? caminho : `file://${caminho}`;
+      const info = await FileSystem.getInfoAsync(uri);
+      if (!info.exists) {
+        exibirAviso('APK não encontrado', 'Esse arquivo foi apagado do celular. Compile de novo pra gerar outro.', 'aviso');
+        return;
+      }
+      if (!(await Sharing.isAvailableAsync())) {
+        exibirAviso('Compartilhar indisponível', 'Esse aparelho não oferece o menu de compartilhar.', 'erro');
+        return;
+      }
+      await Sharing.shareAsync(uri, {
+        mimeType: 'application/vnd.android.package-archive',
+        dialogTitle: `Compartilhar ${nome || 'APK'}`,
+      });
+    } catch (e) {
+      exibirAviso('Erro ao compartilhar', String(e && e.message ? e.message : e), 'erro');
     }
   };
 
@@ -5720,6 +5945,7 @@ function CindraStudioScreen({ visible, onClose }) {
     const alvo = builds.filter((b) => ids.includes(b.id));
     alvo.forEach((b) => {
       FileSystem.deleteAsync(b.apk, { idempotent: true }).catch(() => {});
+      if (b.apkPublico) FileSystem.deleteAsync(b.apkPublico, { idempotent: true }).catch(() => {});
       if (b.fotoIcone) FileSystem.deleteAsync(b.fotoIcone, { idempotent: true }).catch(() => {});
     });
     const nova = builds.filter((b) => !ids.includes(b.id));
@@ -6002,6 +6228,7 @@ function CindraStudioScreen({ visible, onClose }) {
   // jogar a pessoa pra fora do app. Na tela inicial, pergunta se quer sair.
   const voltarCelularRef = useRef(null);
   voltarCelularRef.current = () => {
+    if (pedirAcessoArquivos) { pedidoRecusadoRef.current = true; setPedirAcessoArquivos(false); return; }
     if (confirmarSaida) { setConfirmarSaida(false); return; }
     if (cardProjeto) { setCardProjeto(null); return; }
     if (menuOrdenarAberto) { setMenuOrdenarAberto(false); return; }
@@ -6389,6 +6616,15 @@ function CindraStudioScreen({ visible, onClose }) {
               </Text>
             )}
           </View>
+          {grupos.length > 0 && !modoSelecaoBuilds && (
+            <TouchableOpacity style={studioStyles.homeIconBtn} onPress={copiarTodosParaPublica} activeOpacity={0.8}>
+              {copiandoPublica ? (
+                <ActivityIndicator size="small" color={COLORS.ink} />
+              ) : (
+                <MaterialCommunityIcons name="folder-download-outline" size={22} color={COLORS.ink} />
+              )}
+            </TouchableOpacity>
+          )}
           {grupos.length > 0 && (
             <TouchableOpacity
               style={studioStyles.homeIconBtn}
@@ -6497,13 +6733,16 @@ function CindraStudioScreen({ visible, onClose }) {
                                   </Text>
                                 </Text>
                                 <Text style={geradosStyles.buildData} numberOfLines={1}>
-                                  {formatarDataBuildStudio(b.criadoEm)}{b.tamanho ? `  ·  ${formatarTamanhoStudio(b.tamanho)}` : ''}
+                                  {formatarDataBuildStudio(b.criadoEm)}{b.tamanho ? `  ·  ${formatarTamanhoStudio(b.tamanho)}` : ''}{b.apkPublico ? '  ·  cindra-studio' : ''}
                                 </Text>
                               </View>
                               {!modoSelecaoBuilds && (
                                 <>
                                   <TouchableOpacity style={geradosStyles.buildAcao} onPress={() => instalarBuild(b)} activeOpacity={0.8}>
                                     <MaterialCommunityIcons name="cellphone-arrow-down" size={17} color="#8bd450" />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity style={geradosStyles.buildAcao} onPress={() => compartilharApk(b.apk, b.nomeApp)} activeOpacity={0.8}>
+                                    <MaterialCommunityIcons name="share-variant-outline" size={17} color={COLORS.ink} />
                                   </TouchableOpacity>
                                   <TouchableOpacity
                                     style={[geradosStyles.buildAcao, armado && { backgroundColor: COLORS.error }]}
@@ -6642,8 +6881,6 @@ function CindraStudioScreen({ visible, onClose }) {
 
   const renderHome = () => (
     <>
-      <View pointerEvents="none" style={studioStyles.homeGlowTop} />
-      <View pointerEvents="none" style={studioStyles.homeGlowBottom} />
 
       {abaHome === 'aprender' ? renderAbaAprender() : abaHome === 'gerados' ? renderAbaGerados() : renderAbaApps()}
 
@@ -6709,6 +6946,39 @@ function CindraStudioScreen({ visible, onClose }) {
         </FolhaInferiorStudio>
       )}
 
+      {pedirAcessoArquivos && (
+        <FolhaInferiorStudio
+          onFechar={() => { pedidoRecusadoRef.current = true; setPedirAcessoArquivos(false); }}
+          insetBottom={insets.bottom}
+        >
+          {(fechar) => (
+            <>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                <View style={geradosStyles.vazioIcone}>
+                  <MaterialCommunityIcons name="folder-key-outline" size={34} color={COLORS.ember} />
+                </View>
+                <Text style={[studioStyles.folhaTitulo, { flex: 1 }]}>Liberar acesso aos arquivos</Text>
+              </View>
+              <Text style={{ color: COLORS.dim, fontSize: 13, lineHeight: 19, marginBottom: 16 }}>
+                Pra salvar seus APKs em {PASTA_PUBLICA_TEXTO} (a pasta é criada sozinha), ative "Permitir acesso para gerenciar todos os arquivos" pro Cindra Studio na tela que vai abrir.
+              </Text>
+              <View style={studioStyles.folhaConfirmaBotoes}>
+                <TouchableOpacity style={studioStyles.folhaBtn} onPress={fechar} activeOpacity={0.8}>
+                  <Text style={studioStyles.folhaBtnTexto}>Agora não</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[studioStyles.folhaBtn, { backgroundColor: COLORS.ember }]}
+                  onPress={() => { abrirConfigAcessoArquivos(); }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[studioStyles.folhaBtnTexto, { color: '#1a0806' }]}>Liberar</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </FolhaInferiorStudio>
+      )}
+
       {cardProjeto && (
         <FolhaInferiorStudio onFechar={() => setCardProjeto(null)} insetBottom={alturaTeclado > 0 ? alturaTeclado + 12 : insets.bottom}>
           {(fechar) => (
@@ -6746,7 +7016,6 @@ function CindraStudioScreen({ visible, onClose }) {
       >
         {/* Ícone grande: toque pra escolher a foto da galeria */}
         <View style={studioStyles.cfgHero}>
-          <View pointerEvents="none" style={[studioStyles.cfgHeroGlow, { backgroundColor: fotoIcone ? COLORS.emberGlow : hexParaRgba(corIcone, 0.55) }]} />
           <TouchableOpacity activeOpacity={0.85} onPress={escolherFotoIcone} style={studioStyles.cfgIconeWrap}>
             {fotoIcone ? (
               <Image source={{ uri: fotoIcone }} style={studioStyles.cfgIconeFoto} />
@@ -6894,7 +7163,6 @@ function CindraStudioScreen({ visible, onClose }) {
   const renderWorkspace = () => (
     <>
       <View style={studioStyles.workspaceTopWrap}>
-        <View pointerEvents="none" style={studioStyles.workspaceGlow} />
 
         <View style={studioStyles.topBar}>
           <TouchableOpacity style={studioStyles.topBarIconBtn} onPress={voltarParaHome} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.75}>
@@ -7118,7 +7386,6 @@ function CindraStudioScreen({ visible, onClose }) {
         <PainelLateralStudio onFechar={() => setSidebarAberta(false)}>
           {(fechar) => (
             <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 12) }}>
-              <View pointerEvents="none" style={studioStyles.sidebarGlow} />
               <View style={studioStyles.sidebarHeader}>
                 <View style={studioStyles.sidebarHeaderIcone}>
                   <MaterialCommunityIcons name="folder-outline" size={16} color={COLORS.ember} />
@@ -7573,7 +7840,6 @@ function CindraStudioScreen({ visible, onClose }) {
 
               {/* Cabeçalho: ícone de estado com brilho + título/subtítulo */}
               <View style={studioStyles.compileHeaderWrap}>
-                <View style={[studioStyles.compileHeaderGlow, { backgroundColor: corEstado }]} pointerEvents="none" />
                 <TouchableOpacity
                   style={studioStyles.compileCloseBtn}
                   onPress={() => !compilando && setPainelCompilacao(false)}
@@ -7723,6 +7989,16 @@ function CindraStudioScreen({ visible, onClose }) {
                 <TouchableOpacity style={[studioStyles.instalarBtn, { shadowColor: '#8bd450', shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 }]} onPress={instalarApk} activeOpacity={0.85}>
                   <MaterialCommunityIcons name="cellphone-arrow-down" size={18} color="#1a0806" />
                   <Text style={studioStyles.instalarBtnText}>Instalar APK</Text>
+                </TouchableOpacity>
+              )}
+              {apkGerado && !compilando && (
+                <TouchableOpacity
+                  style={[studioStyles.instalarBtn, { backgroundColor: 'rgba(255,255,255,0.09)', marginTop: 8 }]}
+                  onPress={() => compartilharApk(apkGerado, nomeApp)}
+                  activeOpacity={0.85}
+                >
+                  <MaterialCommunityIcons name="share-variant-outline" size={18} color={COLORS.ink} />
+                  <Text style={[studioStyles.instalarBtnText, { color: COLORS.ink }]}>Compartilhar APK</Text>
                 </TouchableOpacity>
               )}
             </View>
