@@ -17,6 +17,8 @@ import {
   PixelRatio,
   Keyboard,
   Image,
+  Modal,
+  PanResponder,
   Share,
   BackHandler,
   useWindowDimensions,
@@ -768,16 +770,25 @@ function gerarFonteMarcaDagua(nomePacote) {
   return `package ${nomePacote};
 
 import android.app.Activity;
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.AnimatorSet;
+import android.animation.ObjectAnimator;
 import android.app.Application;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.AccelerateDecelerateInterpolator;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.FrameLayout;
 import android.widget.TextView;
+import android.window.SplashScreen;
+import android.window.SplashScreenView;
 
 // Gerado automaticamente pelo CindraStudio — não remova nem desligue:
 // é reescrito a cada compilação. Desenha "Cindra Studio" num cantinho
@@ -794,6 +805,7 @@ public class ${MARCA_DAGUA_CLASSE} extends Application {
         registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
             @Override
             public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
+                prepararSaidaDaSplash(activity, savedInstanceState);
                 inserirMarca(activity);
             }
 
@@ -855,6 +867,61 @@ public class ${MARCA_DAGUA_CLASSE} extends Application {
                 decor.addView(marca, lp);
             }
         });
+    }
+
+    // Tela de abertura (Android 12 ou mais): troca a saída padrão (some de
+    // uma vez) por um fade suave, com a duração escolhida na engrenagem do
+    // Studio (res/values/cindra_splash_anim.xml). Sem esse arquivo, não mexe.
+    private static void prepararSaidaDaSplash(Activity activity, Bundle savedInstanceState) {
+        if (Build.VERSION.SDK_INT < 31 || savedInstanceState != null) return;
+        try {
+            int id = activity.getResources().getIdentifier("cindra_splash_saida_ms", "integer", activity.getPackageName());
+            if (id == 0) return;
+            SaidaSplash.ligar(activity, activity.getResources().getInteger(id));
+        } catch (Throwable ignorado) {
+        }
+    }
+
+    // Isolada numa classe própria pra o Android antigo nunca carregar
+    // as classes de splash (que só existem a partir do Android 12).
+    private static final class SaidaSplash {
+        static void ligar(Activity activity, int ms) {
+            final int duracao = Math.max(150, Math.min(3000, ms));
+            activity.getSplashScreen().setOnExitAnimationListener(new SplashScreen.OnExitAnimationListener() {
+                @Override
+                public void onSplashScreenExit(SplashScreenView splash) {
+                    animar(splash, duracao);
+                }
+            });
+        }
+
+        static void animar(final SplashScreenView splash, int duracao) {
+            try {
+                ObjectAnimator fade = ObjectAnimator.ofFloat(splash, View.ALPHA, 1f, 0f);
+                fade.setInterpolator(new AccelerateDecelerateInterpolator());
+                AnimatorSet conjunto = new AnimatorSet();
+                View icone = splash.getIconView();
+                if (icone != null) {
+                    ObjectAnimator ex = ObjectAnimator.ofFloat(icone, View.SCALE_X, 1f, 1.15f);
+                    ObjectAnimator ey = ObjectAnimator.ofFloat(icone, View.SCALE_Y, 1f, 1.15f);
+                    ex.setInterpolator(new DecelerateInterpolator());
+                    ey.setInterpolator(new DecelerateInterpolator());
+                    conjunto.playTogether(fade, ex, ey);
+                } else {
+                    conjunto.play(fade);
+                }
+                conjunto.setDuration(duracao);
+                conjunto.addListener(new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        splash.remove();
+                    }
+                });
+                conjunto.start();
+            } catch (Throwable erro) {
+                splash.remove();
+            }
+        }
     }
 }
 `;
@@ -4270,12 +4337,22 @@ const SPLASH_REDONDO_XML = 'app/src/main/res/drawable/splash_icon_redondo.xml';
 const SPLASH_MASCARA_XML = 'app/src/main/res/drawable/splash_mask.xml';
 const SPLASH_ICONE_IMG = 'app/src/main/res/drawable-nodpi/splash_icon_img.png';
 const SPLASH_MARCA_IMG = 'app/src/main/res/drawable-nodpi/splash_brand.png';
+// Velocidade da animação de saída (ms). O Application do app lê esse número.
+const SPLASH_ANIM_XML = 'app/src/main/res/values/cindra_splash_anim.xml';
+const SPLASH_VEL_PADRAO = 900;
+const SPLASH_VEL_MIN = 300;
+const SPLASH_VEL_MAX = 2500;
+const SPLASH_VEL_PRESETS = [
+  { rotulo: 'Rápida', ms: 450 },
+  { rotulo: 'Leve', ms: 900 },
+  { rotulo: 'Lenta', ms: 1600 },
+];
 const SPLASH_COR_PADRAO = '#03050a';
 const SPLASH_CORES = ['#03050a', '#ffffff', '#ff5227', '#c81e50', '#2563eb', '#16a34a', '#f5b301', '#7c3aed'];
 const SPLASH_MARCA_MAX = 24;
 const SPLASH_TODOS_ARQUIVOS = [
   SPLASH_STYLES_PATH, SPLASH_FUNDO_XML, SPLASH_ICONE_XML, SPLASH_REDONDO_XML,
-  SPLASH_MASCARA_XML, SPLASH_ICONE_IMG, SPLASH_MARCA_IMG,
+  SPLASH_MASCARA_XML, SPLASH_ICONE_IMG, SPLASH_MARCA_IMG, SPLASH_ANIM_XML,
 ];
 
 // Cor do texto da marca: clara em fundo escuro, escura em fundo claro.
@@ -4502,6 +4579,29 @@ ${temIcone ? `    <item
 `;
 }
 
+function limitarVelocidadeSplash(ms) {
+  const n = Math.round(Number(ms));
+  if (!Number.isFinite(n)) return SPLASH_VEL_PADRAO;
+  return Math.max(SPLASH_VEL_MIN, Math.min(SPLASH_VEL_MAX, n));
+}
+
+function xmlAnimSplash(ms) {
+  return `<?xml version="1.0" encoding="utf-8"?>
+<!-- Duração (em ms) da animação da tela de abertura sumindo e mostrando o app.
+     Editada pela engrenagem do Studio (Android 12 ou mais). -->
+<resources>
+    <integer name="cindra_splash_saida_ms">${limitarVelocidadeSplash(ms)}</integer>
+</resources>
+`;
+}
+
+function lerVelocidadeSplash(projeto) {
+  const xml = projeto && projeto.conteudos ? projeto.conteudos[SPLASH_ANIM_XML] : undefined;
+  if (!xml) return SPLASH_VEL_PADRAO;
+  const m = /cindra_splash_saida_ms"\s*>\s*(\d+)/.exec(xml);
+  return m ? limitarVelocidadeSplash(m[1]) : SPLASH_VEL_PADRAO;
+}
+
 // Liga/desliga o windowBackground no Theme.App do values/styles.xml (todas as versões).
 function ajustarTemaFundoSplash(xml, ligar) {
   if (xml === undefined) return xml;
@@ -4529,7 +4629,8 @@ function lerSplash(projeto) {
     const mm = /<!--\s*marca:\s*([\s\S]*?)\s*-->/.exec(xml);
     if (mm) marca = mm[1];
   }
-  return { ativa: xml !== undefined, cor, marca, temIcone: !!bins[SPLASH_ICONE_IMG] };
+  const temAnim = !!(projeto && projeto.conteudos && projeto.conteudos[SPLASH_ANIM_XML] !== undefined);
+  return { ativa: xml !== undefined, cor, marca, temIcone: !!bins[SPLASH_ICONE_IMG], temAnim, velocidade: lerVelocidadeSplash(projeto) };
 }
 
 // Monta o values-v31/styles.xml herdando o pai (e os itens) do Theme.App
@@ -4561,7 +4662,7 @@ ${temIcone ? '        <item name="android:windowSplashScreenAnimatedIcon">@drawa
 
 // Função pura: devolve o projeto com a splash aplicada.
 //  ops: [{ caminho, tamanho }] = imagem nova/regravada · [{ caminho, remover: true }]
-function aplicarSplashNoProjeto(atual, { cor, marca, ops = [], desativar = false }) {
+function aplicarSplashNoProjeto(atual, { cor, marca, velocidade, ops = [], desativar = false }) {
   let arvore = atual.arvore;
   const conteudos = { ...atual.conteudos };
   const binarios = { ...(atual.binarios || {}) };
@@ -4594,6 +4695,7 @@ function aplicarSplashNoProjeto(atual, { cor, marca, ops = [], desativar = false
   conteudos[SPLASH_BASE_STYLES_PATH] = ajustarTemaFundoSplash(conteudos[SPLASH_BASE_STYLES_PATH], true);
   por(SPLASH_STYLES_PATH, gerarStylesSplash(conteudos[SPLASH_BASE_STYLES_PATH], corAtual, temIcone, temMarca, marcaAtual));
   por(SPLASH_FUNDO_XML, xmlFundoSplash(corAtual, temIcone, temMarca));
+  por(SPLASH_ANIM_XML, xmlAnimSplash(velocidade !== undefined ? velocidade : anterior.velocidade));
   if (temIcone) {
     por(SPLASH_MASCARA_XML, xmlMascaraSplash(corAtual));
     por(SPLASH_REDONDO_XML, SPLASH_REDONDO_XML_CONTEUDO);
@@ -4697,6 +4799,254 @@ function diffTexto(antes, depois) {
   return { p, removido: antes.slice(p, antes.length - q), inserido: depois.slice(p, depois.length - q) };
 }
 
+// ─────────────────────────────────────────────────────────
+// Slider de arrastar (zoom do recorte e velocidade da splash) e o editor
+// de recorte da foto: a foto anda por baixo de um círculo fixo, com
+// arrastar + pinça (dois dedos) + slider de zoom.
+// ─────────────────────────────────────────────────────────
+const recorteStyles = StyleSheet.create({
+  tela: { flex: 1, backgroundColor: '#0b0505' },
+  topo: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 10 },
+  btnIcone: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.08)' },
+  titulo: { color: COLORS.ink, fontSize: 17, fontWeight: '800' },
+  sub: { color: COLORS.dim, fontSize: 12.5, marginTop: 2 },
+  palco: { overflow: 'hidden', backgroundColor: '#000', alignSelf: 'center' },
+  zoomLinha: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 22, marginTop: 14 },
+  zoomValor: { width: 44, textAlign: 'right', color: COLORS.dim, fontSize: 12.5, fontWeight: '700' },
+  botoes: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginTop: 'auto' },
+  btnSec: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.08)' },
+  btnSecTexto: { color: COLORS.ink, fontSize: 15, fontWeight: '700' },
+  btnPrim: { flex: 1.4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, borderRadius: 16, backgroundColor: COLORS.ember },
+  btnPrimTexto: { color: '#1a0806', fontSize: 15, fontWeight: '800' },
+  sliderArea: { flex: 1, height: 36, justifyContent: 'center' },
+  sliderTrilho: { position: 'absolute', left: 0, right: 0, top: 16, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.16)' },
+  sliderPreench: { position: 'absolute', left: 0, top: 16, height: 4, borderRadius: 2, backgroundColor: COLORS.ember },
+  sliderBola: { position: 'absolute', top: 7, width: 22, height: 22, borderRadius: 11, backgroundColor: '#ffffff', borderWidth: 3, borderColor: COLORS.ember },
+  chips: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  chip: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  chipSel: { backgroundColor: COLORS.ember, borderColor: COLORS.ember },
+  chipTexto: { color: COLORS.ink, fontSize: 13, fontWeight: '700' },
+  chipTextoSel: { color: '#1a0806' },
+  velLinha: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8, paddingHorizontal: 6 },
+  velValor: { width: 52, textAlign: 'right', color: COLORS.ink, fontSize: 13, fontWeight: '800' },
+  mockApp: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#1b1112', paddingTop: 30, paddingHorizontal: 10, gap: 8 },
+  mockBarra: { height: 10, width: '55%', borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.25)' },
+  mockCard: { height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.09)' },
+});
+
+function SliderStudio({ valor, min, max, passo = 1, onChange, onFim }) {
+  const [larg, setLarg] = useState(0);
+  const r = useRef({});
+  r.current = { larg, min, max, passo, onChange, onFim };
+  const toque = useRef({ x0: 0, ultimo: null }).current;
+  const valorEm = (x) => {
+    const { larg: L, min: mn, max: mx, passo: ps } = r.current;
+    if (!L) return mn;
+    const f = Math.max(0, Math.min(1, x / L));
+    const v = Math.round((mn + f * (mx - mn)) / ps) * ps;
+    return Math.max(mn, Math.min(mx, Math.round(v * 1000) / 1000));
+  };
+  const pan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderGrant: (e) => {
+      toque.x0 = e.nativeEvent.locationX;
+      const v = valorEm(toque.x0);
+      toque.ultimo = v;
+      if (r.current.onChange) r.current.onChange(v);
+    },
+    onPanResponderMove: (e, g) => {
+      const v = valorEm(toque.x0 + g.dx);
+      if (v !== toque.ultimo) {
+        toque.ultimo = v;
+        if (r.current.onChange) r.current.onChange(v);
+      }
+    },
+    onPanResponderRelease: () => { if (r.current.onFim && toque.ultimo !== null) r.current.onFim(toque.ultimo); },
+    onPanResponderTerminate: () => { if (r.current.onFim && toque.ultimo !== null) r.current.onFim(toque.ultimo); },
+  })).current;
+  const f = max > min ? Math.max(0, Math.min(1, (valor - min) / (max - min))) : 0;
+  const x = f * larg;
+  return (
+    <View style={recorteStyles.sliderArea} onLayout={(e) => setLarg(e.nativeEvent.layout.width)} {...pan.panHandlers}>
+      <View pointerEvents="none" style={recorteStyles.sliderTrilho} />
+      <View pointerEvents="none" style={[recorteStyles.sliderPreench, { width: x }]} />
+      <View pointerEvents="none" style={[recorteStyles.sliderBola, { left: x - 11 }]} />
+    </View>
+  );
+}
+
+const RECORTE_ZOOM_MAX = 5;
+
+// Centro e distância dos dedos na tela (1 dedo: só a posição).
+function pontoDosToques(t) {
+  if (t.length >= 2) {
+    const a = t[0]; const b = t[1];
+    return {
+      x: (a.pageX + b.pageX) / 2,
+      y: (a.pageY + b.pageY) / 2,
+      d: Math.max(10, Math.hypot(a.pageX - b.pageX, a.pageY - b.pageY)),
+    };
+  }
+  return { x: t[0].pageX, y: t[0].pageY, d: 1 };
+}
+
+// foto: { uri, w, h } (já com a rotação certa). onConfirmar recebe o
+// quadrado a cortar, em pixels da foto: { originX, originY, width, height }.
+function EditorRecorteFoto({ foto, onCancelar, onConfirmar }) {
+  const { width: largTela, height: altTela } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const D = Math.max(160, Math.min(Math.round(largTela - 56), 340, Math.round(altTela * 0.45)));
+  const palcoH = Math.max(D + 24, Math.min(D + 110, altTela - insets.top - insets.bottom - 260));
+  const cx = largTela / 2;
+  const cy = palcoH / 2;
+  const k = D / Math.min(foto.w, foto.h);
+  const dispW = foto.w * k;
+  const dispH = foto.h * k;
+  const geo = useRef({});
+  geo.current = { D, dispW, dispH, k };
+
+  const est = useRef({ s: 1, tx: 0, ty: 0 });
+  const animTx = useRef(new Animated.Value(0)).current;
+  const animTy = useRef(new Animated.Value(0)).current;
+  const animS = useRef(new Animated.Value(1)).current;
+  const [zoomUi, setZoomUi] = useState(1);
+  const g = useRef({ n: 0, base: null, ref: null }).current;
+
+  const limitar = (s, tx, ty) => {
+    const { D: dd, dispW: w, dispH: h } = geo.current;
+    const sc = Math.max(1, Math.min(RECORTE_ZOOM_MAX, s));
+    const mx = Math.max(0, (w * sc - dd) / 2);
+    const my = Math.max(0, (h * sc - dd) / 2);
+    return { s: sc, tx: Math.max(-mx, Math.min(mx, tx)), ty: Math.max(-my, Math.min(my, ty)) };
+  };
+  const aplicar = (n) => {
+    est.current = n;
+    animTx.setValue(n.tx);
+    animTy.setValue(n.ty);
+    animS.setValue(n.s);
+    setZoomUi((antes) => (Math.abs(antes - n.s) > 0.004 ? n.s : antes));
+  };
+
+  const pan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderGrant: () => { g.n = 0; },
+    onPanResponderMove: (e) => {
+      const t = e.nativeEvent.touches;
+      if (!t || !t.length) return;
+      const p = pontoDosToques(t);
+      // mudou o número de dedos: recomeça a medir daqui (sem pular)
+      if (t.length !== g.n) {
+        g.n = t.length;
+        g.base = { ...est.current };
+        g.ref = p;
+        return;
+      }
+      const b = g.base;
+      const sc = t.length >= 2 ? b.s * (p.d / g.ref.d) : b.s;
+      aplicar(limitar(sc, b.tx + (p.x - g.ref.x), b.ty + (p.y - g.ref.y)));
+    },
+  })).current;
+
+  const mudarZoom = (v) => aplicar(limitar(v, est.current.tx, est.current.ty));
+  const centralizar = () => aplicar({ s: 1, tx: 0, ty: 0 });
+
+  const confirmar = () => {
+    const { s, tx, ty } = est.current;
+    const kk = geo.current.k;
+    const lado = Math.max(8, Math.floor(Math.min(foto.w, foto.h) / s));
+    const ox = foto.w / 2 - tx / (kk * s) - lado / 2;
+    const oy = foto.h / 2 - ty / (kk * s) - lado / 2;
+    onConfirmar({
+      originX: Math.max(0, Math.min(foto.w - lado, Math.round(ox))),
+      originY: Math.max(0, Math.min(foto.h - lado, Math.round(oy))),
+      width: lado,
+      height: lado,
+    });
+  };
+
+  // Escurece tudo fora do círculo: um quadrado enorme com borda grossa e
+  // cantos redondos — o miolo (raio D/2) fica vazio.
+  const B = Math.max(largTela, palcoH);
+
+  return (
+    <Modal visible animationType="fade" statusBarTranslucent onRequestClose={onCancelar}>
+      <View style={[recorteStyles.tela, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 12 }]}>
+        <View style={recorteStyles.topo}>
+          <TouchableOpacity style={recorteStyles.btnIcone} onPress={onCancelar} activeOpacity={0.8}>
+            <MaterialCommunityIcons name="close" size={22} color={COLORS.ink} />
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <Text style={recorteStyles.titulo}>Ajustar foto</Text>
+            <Text style={recorteStyles.sub}>Arraste a foto · dois dedos pra dar zoom</Text>
+          </View>
+        </View>
+
+        <View style={[recorteStyles.palco, { width: largTela, height: palcoH }]} {...pan.panHandlers}>
+          <Animated.Image
+            source={{ uri: foto.uri }}
+            style={{
+              position: 'absolute',
+              left: cx - dispW / 2,
+              top: cy - dispH / 2,
+              width: dispW,
+              height: dispH,
+              transform: [{ translateX: animTx }, { translateY: animTy }, { scale: animS }],
+            }}
+          />
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: cx - D / 2 - B,
+              top: cy - D / 2 - B,
+              width: D + 2 * B,
+              height: D + 2 * B,
+              borderRadius: (D + 2 * B) / 2,
+              borderWidth: B,
+              borderColor: 'rgba(8,3,3,0.74)',
+            }}
+          />
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: cx - D / 2,
+              top: cy - D / 2,
+              width: D,
+              height: D,
+              borderRadius: D / 2,
+              borderWidth: 2,
+              borderColor: COLORS.ember,
+            }}
+          />
+        </View>
+
+        <View style={recorteStyles.zoomLinha}>
+          <MaterialCommunityIcons name="image-size-select-small" size={20} color={COLORS.dim} />
+          <SliderStudio valor={zoomUi} min={1} max={RECORTE_ZOOM_MAX} passo={0.01} onChange={mudarZoom} />
+          <MaterialCommunityIcons name="image-size-select-large" size={22} color={COLORS.dim} />
+          <Text style={recorteStyles.zoomValor}>{zoomUi.toFixed(1)}x</Text>
+        </View>
+
+        <View style={recorteStyles.botoes}>
+          <TouchableOpacity style={recorteStyles.btnSec} onPress={centralizar} activeOpacity={0.85}>
+            <MaterialCommunityIcons name="image-filter-center-focus" size={18} color={COLORS.ink} />
+            <Text style={recorteStyles.btnSecTexto}>Centralizar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={recorteStyles.btnPrim} onPress={confirmar} activeOpacity={0.85}>
+            <MaterialCommunityIcons name="check" size={19} color="#1a0806" />
+            <Text style={recorteStyles.btnPrimTexto}>Usar foto</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 function CindraStudioScreen({ visible, onClose }) {
   const insets = useSafeAreaInsets();
 
@@ -4778,6 +5128,8 @@ function CindraStudioScreen({ visible, onClose }) {
   const [abaConfig, setAbaConfig] = useState('permissoes'); // 'permissoes' | 'splash' (folha da engrenagem)
   const [processandoSplash, setProcessandoSplash] = useState(null); // 'icone' | null
   const [splashPrev, setSplashPrev] = useState({ icone: null }); // prévia da foto (arquivo novo a cada troca)
+  const [recorteFoto, setRecorteFoto] = useState(null); // foto aberta no editor de recorte: { uri, w, h, pacote }
+  const [splashVel, setSplashVel] = useState(null); // velocidade (ms) enquanto o slider anda (null = a do projeto)
   const [splashHex, setSplashHex] = useState(null); // texto digitado no campo de cor
   const [splashMarcaTxt, setSplashMarcaTxt] = useState(null); // texto da marca enquanto digita (null = o que está no projeto)
   const { height: alturaTela, width: larguraTela } = useWindowDimensions();
@@ -5431,12 +5783,41 @@ function CindraStudioScreen({ visible, onClose }) {
   projetoRef.current = projeto;
   const splashTimerRef = useRef(null);
   const splashAnim = useRef(new Animated.Value(1)).current;
+  const splashSaida = useRef(new Animated.Value(0)).current; // 0 = splash na tela · 1 = já mostrou o app
+  const splashVelRef = useRef(SPLASH_VEL_PADRAO);
+  const splashFonteRef = useRef(null); // última foto aberta no recorte (pra "Ajustar" sem escolher de novo)
+  const animMigradaRef = useRef(null);
+  splashVelRef.current = splashVel !== null ? splashVel : lerVelocidadeSplash(projeto);
 
   // Toca de novo a animação da prévia (o ícone "entra" como numa splash de verdade).
-  const tocarAnimSplash = () => {
+  // comSaida: depois de entrar, a splash some devagar e mostra o app, na velocidade escolhida.
+  const tocarAnimSplash = (comSaida = false) => {
+    splashSaida.stopAnimation();
+    splashSaida.setValue(0);
     splashAnim.setValue(0);
-    Animated.timing(splashAnim, { toValue: 1, duration: 800, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    const entrada = Animated.timing(splashAnim, { toValue: 1, duration: 800, easing: Easing.out(Easing.cubic), useNativeDriver: true });
+    if (!comSaida) {
+      entrada.start();
+      return;
+    }
+    Animated.sequence([
+      entrada,
+      Animated.delay(450),
+      Animated.timing(splashSaida, { toValue: 1, duration: splashVelRef.current, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+      Animated.delay(800),
+    ]).start(({ finished }) => { if (finished) splashSaida.setValue(0); });
   };
+
+  // Projeto que já tinha a splash ligada antes da animação existir: ganha o
+  // arquivo da velocidade (900 ms) uma vez, sem a pessoa mexer em nada.
+  useEffect(() => {
+    if (!projeto) return;
+    const sp = lerSplash(projeto);
+    if (sp.ativa && !sp.temAnim && animMigradaRef.current !== projeto.pacote) {
+      animMigradaRef.current = projeto.pacote;
+      setProjeto((atual) => (atual ? aplicarSplashNoProjeto(atual, {}) : atual));
+    }
+  }, [projeto]);
 
   // Ponto único que grava a splash no projeto. mud: { cor?, marca?, ops? }.
   // A marca é texto: vira PNG de novo sempre que o texto ou a cor do fundo mudam.
@@ -5465,9 +5846,10 @@ function CindraStudioScreen({ visible, onClose }) {
         exibirAviso('Não deu pra gerar a marca', String(e && e.message ? e.message : e), 'erro');
       }
     }
-    setProjeto((atual) => (atual ? aplicarSplashNoProjeto(atual, { cor, marca, ops }) : atual));
-    [SPLASH_STYLES_PATH, SPLASH_FUNDO_XML, SPLASH_BASE_STYLES_PATH].forEach((c) => { delete historicoRef.current[c]; });
-    tocarAnimSplash();
+    setProjeto((atual) => (atual ? aplicarSplashNoProjeto(atual, { cor, marca, ops, velocidade: mud.velocidade }) : atual));
+    [SPLASH_STYLES_PATH, SPLASH_FUNDO_XML, SPLASH_BASE_STYLES_PATH, SPLASH_ANIM_XML].forEach((c) => { delete historicoRef.current[c]; });
+    if (mud.velocidade !== undefined) splashVelRef.current = mud.velocidade;
+    tocarAnimSplash(!!mud.testar);
   };
 
   const ativarSplash = (ligar) => {
@@ -5481,10 +5863,12 @@ function CindraStudioScreen({ visible, onClose }) {
         FileSystem.deleteAsync(pastaBinariosStudio(proj.pacote) + c, { idempotent: true }).catch(() => {});
       });
     }
+    splashFonteRef.current = null;
     setSplashPrev({ icone: null });
     setSplashMarcaTxt(null);
+    setSplashVel(null);
     setProjeto((atual) => (atual ? aplicarSplashNoProjeto(atual, { desativar: true }) : atual));
-    [SPLASH_STYLES_PATH, SPLASH_FUNDO_XML, SPLASH_BASE_STYLES_PATH].forEach((c) => { delete historicoRef.current[c]; });
+    [SPLASH_STYLES_PATH, SPLASH_FUNDO_XML, SPLASH_BASE_STYLES_PATH, SPLASH_ANIM_XML].forEach((c) => { delete historicoRef.current[c]; });
   };
 
   const digitarMarcaSplash = (t) => {
@@ -5494,8 +5878,9 @@ function CindraStudioScreen({ visible, onClose }) {
     splashTimerRef.current = setTimeout(() => { atualizarSplash({ marca: txt }); }, 600);
   };
 
-  // Foto do ícone: recorte quadrado → PNG 432. A máscara redonda é aplicada
-  // pelo próprio tema (splash_mask.xml), então funciona em qualquer Android.
+  // Foto do ícone: galeria → editor de recorte (a foto anda por baixo de um
+  // círculo) → PNG 432. A máscara redonda é aplicada pelo próprio tema
+  // (splash_mask.xml), então funciona em qualquer Android.
   const escolherIconeSplash = async () => {
     if (!projeto) return;
     if (!ImagePicker || !ImageManipulator) {
@@ -5505,22 +5890,53 @@ function CindraStudioScreen({ visible, onClose }) {
     try {
       const r = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaType ? ['images'] : ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
+        allowsEditing: false,
         quality: 1,
       });
       if (r.canceled || !r.assets || !r.assets.length) return;
       setProcessandoSplash('icone');
-      const uri = r.assets[0].uri;
-      const base = await ImageManipulator.manipulateAsync(uri, [], {});
-      const lado = Math.min(base.width, base.height);
-      const acoes = [];
-      if (base.width !== base.height) {
-        acoes.push({ crop: { originX: Math.floor((base.width - lado) / 2), originY: Math.floor((base.height - lado) / 2), width: lado, height: lado } });
+      // passa uma vez pelo manipulador: aplica a rotação do EXIF e dá o tamanho real
+      let base = await ImageManipulator.manipulateAsync(r.assets[0].uri, [], { format: ImageManipulator.SaveFormat.JPEG, compress: 1 });
+      const maior = Math.max(base.width, base.height);
+      if (maior > 1800) {
+        const f = 1800 / maior;
+        base = await ImageManipulator.manipulateAsync(
+          base.uri,
+          [{ resize: { width: Math.round(base.width * f), height: Math.round(base.height * f) } }],
+          { format: ImageManipulator.SaveFormat.JPEG, compress: 0.95 },
+        );
       }
-      acoes.push({ resize: { width: Math.min(432, lado), height: Math.min(432, lado) } });
-      const saida = await ImageManipulator.manipulateAsync(uri, acoes, { format: ImageManipulator.SaveFormat.PNG, compress: 1 });
-      const destino = pastaBinariosStudio(projeto.pacote) + SPLASH_ICONE_IMG;
+      const fonte = { uri: base.uri, w: base.width, h: base.height, pacote: projeto.pacote };
+      splashFonteRef.current = fonte;
+      setRecorteFoto(fonte);
+    } catch (e) {
+      exibirAviso('Não deu pra abrir a foto', String(e && e.message ? e.message : e), 'erro');
+    } finally {
+      setProcessandoSplash(null);
+    }
+  };
+
+  // Reabre o editor com a última foto escolhida (pra reposicionar sem escolher de novo).
+  const ajustarFotoSplash = () => {
+    const f = splashFonteRef.current;
+    if (f && projeto && f.pacote === projeto.pacote) setRecorteFoto(f);
+  };
+
+  // "Usar foto" no editor: corta o quadrado escolhido e grava o PNG do ícone.
+  const confirmarRecorteSplash = async (caixa) => {
+    const fonte = recorteFoto;
+    setRecorteFoto(null);
+    const proj = projetoRef.current;
+    if (!fonte || !proj) return;
+    setProcessandoSplash('icone');
+    try {
+      const lado = Math.min(432, caixa.width);
+      const saida = await ImageManipulator.manipulateAsync(
+        fonte.uri,
+        [{ crop: caixa }, { resize: { width: lado, height: lado } }],
+        { format: ImageManipulator.SaveFormat.PNG, compress: 1 },
+      );
+      const destino = pastaBinariosStudio(proj.pacote) + SPLASH_ICONE_IMG;
       await FileSystem.makeDirectoryAsync(destino.split('/').slice(0, -1).join('/'), { intermediates: true });
       await FileSystem.deleteAsync(destino, { idempotent: true });
       await FileSystem.copyAsync({ from: saida.uri, to: destino });
@@ -5534,10 +5950,19 @@ function CindraStudioScreen({ visible, onClose }) {
     }
   };
 
+  // Velocidade da saída: o slider só mexe no número; ao soltar grava e toca a prévia completa.
+  const confirmarVelocidadeSplash = async (ms) => {
+    const v = limitarVelocidadeSplash(ms);
+    setSplashVel(v);
+    await atualizarSplash({ velocidade: v, testar: true });
+    setSplashVel(null);
+  };
+
   const removerIconeSplash = () => {
     const proj = projetoRef.current;
     if (!proj) return;
     FileSystem.deleteAsync(pastaBinariosStudio(proj.pacote) + SPLASH_ICONE_IMG, { idempotent: true }).catch(() => {});
+    splashFonteRef.current = null;
     setSplashPrev({ icone: null });
     atualizarSplash({ ops: [{ caminho: SPLASH_ICONE_IMG, remover: true }] });
   };
@@ -6294,6 +6719,14 @@ function CindraStudioScreen({ visible, onClose }) {
         </FolhaInferiorStudio>
       )}
 
+      {recorteFoto && (
+        <EditorRecorteFoto
+          foto={recorteFoto}
+          onCancelar={() => setRecorteFoto(null)}
+          onConfirmar={confirmarRecorteSplash}
+        />
+      )}
+
       {confirmarSaida && (
         <FolhaInferiorStudio onFechar={() => setConfirmarSaida(false)} insetBottom={insets.bottom}>
           {(fechar) => (
@@ -6865,24 +7298,37 @@ function CindraStudioScreen({ visible, onClose }) {
                           </View>
 
                           <View style={{ alignItems: 'center' }}>
-                            <Pressable onPress={tocarAnimSplash} style={[studioStyles.spCelular, { width: faseW, height: faseH, backgroundColor: sp.cor, borderColor: COLORS.ember }]}>
-                              <View style={studioStyles.spEntalhe} />
-                              <View style={studioStyles.spCentro}>
-                                <Animated.View style={animIcone}>
-                                  {iconeUri ? (
-                                    <Image source={{ uri: iconeUri }} style={{ width: iconeTam, height: iconeTam, borderRadius: iconeTam / 2 }} />
-                                  ) : (
-                                    <View style={{ width: iconeTam, height: iconeTam, borderRadius: iconeTam / 2, borderWidth: 1.5, borderStyle: 'dashed', borderColor: corTexto === '#ffffff' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center' }}>
-                                      <MaterialCommunityIcons name="image-plus" size={Math.round(iconeTam * 0.36)} color={corTexto === '#ffffff' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.45)'} />
-                                    </View>
-                                  )}
-                                </Animated.View>
+                            <Pressable onPress={() => tocarAnimSplash(true)} style={[studioStyles.spCelular, { width: faseW, height: faseH, backgroundColor: '#1b1112', borderColor: COLORS.ember }]}>
+                              <View style={recorteStyles.mockApp}>
+                                <View style={recorteStyles.mockBarra} />
+                                <View style={recorteStyles.mockCard} />
+                                <View style={recorteStyles.mockCard} />
+                                <View style={recorteStyles.mockCard} />
                               </View>
-                              {!!marcaTexto.trim() && (
-                                <Animated.Text numberOfLines={1} style={[studioStyles.spMarcaPrev, { color: corTexto, opacity: splashAnim }]}>
-                                  {marcaTexto.trim()}
-                                </Animated.Text>
-                              )}
+                              <Animated.View
+                                style={[
+                                  StyleSheet.absoluteFill,
+                                  { backgroundColor: sp.cor, alignItems: 'center', justifyContent: 'center', opacity: splashSaida.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) },
+                                ]}
+                              >
+                                <View style={studioStyles.spCentro}>
+                                  <Animated.View style={[animIcone, { transform: [...animIcone.transform, { scale: splashSaida.interpolate({ inputRange: [0, 1], outputRange: [1, 1.15] }) }] }]}>
+                                    {iconeUri ? (
+                                      <Image source={{ uri: iconeUri }} style={{ width: iconeTam, height: iconeTam, borderRadius: iconeTam / 2 }} />
+                                    ) : (
+                                      <View style={{ width: iconeTam, height: iconeTam, borderRadius: iconeTam / 2, borderWidth: 1.5, borderStyle: 'dashed', borderColor: corTexto === '#ffffff' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center' }}>
+                                        <MaterialCommunityIcons name="image-plus" size={Math.round(iconeTam * 0.36)} color={corTexto === '#ffffff' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.45)'} />
+                                      </View>
+                                    )}
+                                  </Animated.View>
+                                </View>
+                                {!!marcaTexto.trim() && (
+                                  <Animated.Text numberOfLines={1} style={[studioStyles.spMarcaPrev, { color: corTexto, opacity: splashAnim }]}>
+                                    {marcaTexto.trim()}
+                                  </Animated.Text>
+                                )}
+                              </Animated.View>
+                              <View style={studioStyles.spEntalhe} />
                             </Pressable>
                             <Text style={studioStyles.spLegendaTitulo}>O seu</Text>
                             <Text style={studioStyles.spLegendaSub}>toque pra repetir</Text>
@@ -6894,6 +7340,7 @@ function CindraStudioScreen({ visible, onClose }) {
                             { i: 'circle-outline', t: 'Ícone', d: 'Sua foto, cortada em círculo, no centro da tela.' },
                             { i: 'format-text', t: 'Marca', d: 'Um texto pequeno embaixo, tipo "from Cindra".' },
                             { i: 'palette-outline', t: 'Fundo', d: 'A cor que fica atrás de tudo.' },
+                            { i: 'timer-sand', t: 'Saída', d: 'Como a abertura some e mostra o app.' },
                           ].map((l) => (
                             <View key={l.t} style={studioStyles.spLegendaLinha}>
                               <MaterialCommunityIcons name={l.i} size={17} color={COLORS.ember} />
@@ -6926,6 +7373,11 @@ function CindraStudioScreen({ visible, onClose }) {
                                 : <MaterialCommunityIcons name="image-plus" size={17} color="#1a0806" />}
                               <Text style={studioStyles.spBtnPrimTexto}>{sp.temIcone ? 'Trocar foto' : 'Escolher foto'}</Text>
                             </TouchableOpacity>
+                            {sp.temIcone && splashFonteRef.current && projeto && splashFonteRef.current.pacote === projeto.pacote && (
+                              <TouchableOpacity style={studioStyles.spBtnSec} onPress={ajustarFotoSplash} activeOpacity={0.85} disabled={!!processandoSplash}>
+                                <MaterialCommunityIcons name="crop" size={18} color={COLORS.ink} />
+                              </TouchableOpacity>
+                            )}
                             {sp.temIcone && (
                               <TouchableOpacity style={studioStyles.spBtnSec} onPress={removerIconeSplash} activeOpacity={0.85}>
                                 <MaterialCommunityIcons name="trash-can-outline" size={18} color={COLORS.dim} />
@@ -7001,10 +7453,54 @@ function CindraStudioScreen({ visible, onClose }) {
                           </View>
                         </View>
 
+                        {(() => {
+                          const velAtual = splashVel !== null ? splashVel : sp.velocidade;
+                          return (
+                            <View style={studioStyles.spCard}>
+                              <View style={studioStyles.spCardTopo}>
+                                <View style={studioStyles.spMiniatura}>
+                                  <MaterialCommunityIcons name="timer-sand" size={24} color={COLORS.ember} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={studioStyles.spCardTitulo}>Animação de saída</Text>
+                                  <Text style={studioStyles.nodoOpcaoDesc}>A abertura some suave e mostra o app. Toque na prévia pra ver.</Text>
+                                </View>
+                              </View>
+                              <View style={recorteStyles.chips}>
+                                {SPLASH_VEL_PRESETS.map((pr) => {
+                                  const sel = Math.abs(velAtual - pr.ms) < 25;
+                                  return (
+                                    <TouchableOpacity
+                                      key={pr.rotulo}
+                                      style={[recorteStyles.chip, sel && recorteStyles.chipSel]}
+                                      onPress={() => confirmarVelocidadeSplash(pr.ms)}
+                                      activeOpacity={0.85}
+                                    >
+                                      <Text style={[recorteStyles.chipTexto, sel && recorteStyles.chipTextoSel]}>{pr.rotulo}</Text>
+                                    </TouchableOpacity>
+                                  );
+                                })}
+                              </View>
+                              <View style={recorteStyles.velLinha}>
+                                <MaterialCommunityIcons name="speedometer" size={18} color={COLORS.dim} />
+                                <SliderStudio
+                                  valor={velAtual}
+                                  min={SPLASH_VEL_MIN}
+                                  max={SPLASH_VEL_MAX}
+                                  passo={50}
+                                  onChange={setSplashVel}
+                                  onFim={confirmarVelocidadeSplash}
+                                />
+                                <Text style={recorteStyles.velValor}>{(velAtual / 1000).toFixed(2).replace('.', ',')} s</Text>
+                              </View>
+                            </View>
+                          );
+                        })()}
+
                         <View style={studioStyles.spAviso}>
                           <MaterialCommunityIcons name="information-outline" size={16} color={COLORS.dim} />
                           <Text style={studioStyles.spAvisoTexto}>
-                            Entra no APK na hora de compilar. Em versões novas do Android a marca pode não aparecer.
+                            Entra no APK na hora de compilar. A animação de saída vale no Android 12 ou mais; no 11 ou menos a troca é direta. Em versões novas do Android a marca pode não aparecer.
                           </Text>
                         </View>
                       </>
