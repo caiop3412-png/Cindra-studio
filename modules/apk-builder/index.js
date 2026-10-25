@@ -56,7 +56,7 @@ export function aoLogar(callback) {
 // ── Pasta pública (/storage/emulated/0/cindra-studio) ──────────────────
 // true só se o módulo nativo instalado já tem essas funções (precisa de
 // build novo). Com módulo antigo, o JS cai no caminho antigo.
-export const temPastaNativa = !!(Nativo && Nativo.criarPasta && Nativo.copiarArquivo && Nativo.temAcessoTodosArquivos);
+export const temPastaNativa = !!(Nativo && Nativo.criarPasta && Nativo.copiarArquivo && Nativo.copiarSequencial && Nativo.temAcessoTodosArquivos);
 
 // true/false: "Acesso a todos os arquivos" liberado? (Android 11+)
 export function temAcessoTodosArquivos() {
@@ -76,4 +76,9 @@ export function criarPasta(caminho) {
 // Copia origem -> destino. Devolve o caminho final (file://...).
 export function copiarArquivo(origem, destino) {
   return Nativo.copiarArquivo(origem, destino);
+}
+
+// Copia pra pasta/base-N.apk (N = próximo número livre: 1, 2, 3...).
+export function copiarSequencial(origem, pasta, base) {
+  return Nativo.copiarSequencial(origem, pasta, base);
 }

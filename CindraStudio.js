@@ -1393,6 +1393,16 @@ async function completarIconesBuildsStudio(builds, projetos) {
 const PASTA_PUBLICA_STUDIO = 'file:///storage/emulated/0/cindra-studio/';
 const PASTA_PUBLICA_TEXTO = '/storage/emulated/0/cindra-studio';
 
+// Nome limpo do app (sem acento/espaço) — vira o nome da subpasta e o prefixo do APK.
+function nomeBasePublicoStudio(b) {
+  const limpo = (t) => {
+    let x = String(t || '');
+    try { if (x.normalize) x = x.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) { /* segue sem tirar acento */ }
+    return x.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '');
+  };
+  return limpo(b.nomeApp) || limpo(String(b.pacote || '').split('.').pop()) || 'app';
+}
+
 function nomeArquivoPublicoStudio(b) {
   const limpo = (t) => {
     let x = String(t || '');
@@ -1436,10 +1446,14 @@ async function testarAcessoPastaPublicaStudio() {
 async function copiarParaPastaPublicaStudio(b) {
   if (ApkBuilder.temPastaNativa) {
     try {
-      await ApkBuilder.criarPasta(PASTA_PUBLICA_TEXTO);
-      const destino = await ApkBuilder.copiarArquivo(
+      // cindra-studio/NomeDoApp/NomeDoApp-1.apk, -2.apk, -3.apk...
+      const base = nomeBasePublicoStudio(b);
+      const pastaApp = PASTA_PUBLICA_TEXTO + '/' + base;
+      await ApkBuilder.criarPasta(pastaApp);
+      const destino = await ApkBuilder.copiarSequencial(
         String(b.apk).replace(/^file:\/\//, ''),
-        PASTA_PUBLICA_TEXTO + '/' + nomeArquivoPublicoStudio(b)
+        pastaApp,
+        base
       );
       return { ok: true, destino };
     } catch (e) {
@@ -1476,7 +1490,9 @@ async function copiarPendentesPastaPublicaStudio(lista) {
   let copiados = 0;
   let falhou = false;
   let motivo = '';
-  for (const b of lista) {
+  // do mais antigo pro mais novo: o primeiro build criado vira -1, o segundo -2...
+  const ordenados = lista.slice().sort((x, y) => (x.criadoEm || 0) - (y.criadoEm || 0));
+  for (const b of ordenados) {
     if (b.apkPublico) continue;
     try {
       const i = await FileSystem.getInfoAsync(b.apk);
@@ -6986,7 +7002,7 @@ function CindraStudioScreen({ visible, onClose }) {
                 <Text style={[studioStyles.folhaTitulo, { flex: 1 }]}>Liberar acesso aos arquivos</Text>
               </View>
               <Text style={{ color: COLORS.dim, fontSize: 13, lineHeight: 19, marginBottom: 16 }}>
-                Pra salvar seus APKs em {PASTA_PUBLICA_TEXTO} (a pasta é criada sozinha), ative "Permitir acesso para gerenciar todos os arquivos" pro Cindra Studio na tela que vai abrir.
+                Pra salvar seus APKs em {PASTA_PUBLICA_TEXTO} (uma subpasta por app, criada sozinha), ative "Permitir acesso para gerenciar todos os arquivos" pro Cindra Studio na tela que vai abrir.
               </Text>
               <View style={studioStyles.folhaConfirmaBotoes}>
                 <TouchableOpacity style={studioStyles.folhaBtn} onPress={fechar} activeOpacity={0.8}>

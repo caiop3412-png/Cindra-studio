@@ -166,6 +166,23 @@ class ApkBuilderModule : Module() {
       "file://" + para.absolutePath
     }
 
+    // Copia pra "pasta/base-N.apk", onde N = maior número que já existe na pasta + 1
+    // (1, 2, 3... na ordem em que foram copiados). Devolve file://caminho.
+    AsyncFunction("copiarSequencial") { origem: String, pasta: String, base: String ->
+      val de = File(origem.removePrefix("file://"))
+      val dir = File(pasta.removePrefix("file://"))
+      dir.mkdirs()
+      val padrao = Regex("^" + Regex.escape(base) + "-(\\d+)\\.apk$")
+      val maior = dir.listFiles()
+        ?.mapNotNull { padrao.find(it.name)?.groupValues?.get(1)?.toIntOrNull() }
+        ?.maxOrNull() ?: 0
+      val para = File(dir, base + "-" + (maior + 1) + ".apk")
+      de.inputStream().use { entrada ->
+        FileOutputStream(para).use { saida -> entrada.copyTo(saida) }
+      }
+      "file://" + para.absolutePath
+    }
+
     // Abre o instalador do Android com o APK gerado.
     AsyncFunction("instalar") { apkPath: String ->
       val ctx = context
