@@ -472,7 +472,7 @@ class ApkPipeline(private val ctx: Context, private val log: (String) -> Unit) {
     -keepclassmembers class * extends android.app.Activity {
         public void *(android.view.View);
     }
-    -keepattributes *Annotation*,Signature,InnerClasses
+    -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
     -dontwarn **
   """.trimIndent()
 
