@@ -17,6 +17,7 @@ import {
   PixelRatio,
   Keyboard,
   Image,
+  Share,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -35,6 +36,10 @@ let ImagePicker = null;
 let ImageManipulator = null;
 try { ImagePicker = require('expo-image-picker'); } catch (e) { ImagePicker = null; }
 try { ImageManipulator = require('expo-image-manipulator'); } catch (e) { ImageManipulator = null; }
+// Botão "Copiar" da aba Aprender: opcional também. Sem o expo-clipboard,
+// cai pro menu de compartilhar do Android.
+let Clipboard = null;
+try { Clipboard = require('expo-clipboard'); } catch (e) { Clipboard = null; }
 
 const CODIGO_FONTE = 13; // fonte do editor (também usada pra calcular a largura do código)
 
@@ -1963,9 +1968,10 @@ function NoArvoreArquivo({ no, pastasAbertas, alternarPasta, arquivoAtivo, onAbr
 // aviso "em breve" ao tocar; coloque a URL (site, Instagram, Pix...) pra abrir.
 const STUDIO_LINK_APOIO = '';
 
-// Barra de baixo da tela inicial: aba "Meus apps" + botão "Criar".
+// Barra de baixo da tela inicial: abas "Meus apps" e "Aprender" + botão "Criar".
 const ABAS_HOME_STUDIO = [
   { id: 'apps', rotulo: 'Meus apps', icone: 'view-dashboard-outline', iconeAtivo: 'view-dashboard' },
+  { id: 'aprender', rotulo: 'Aprender', icone: 'school-outline', iconeAtivo: 'school' },
   { id: 'criar', rotulo: 'Criar', especial: true },
 ];
 
@@ -2175,6 +2181,1793 @@ function IconeAppStudio({ dados, lado = 52, icone = 28, raio = 16 }) {
 // texto removido, texto inserido), não o arquivo inteiro. Cada evento de
 // digitação vira 1 passo (letra por letra); colar um bloco é 1 evento só,
 // então desfazer tira o bloco colado de uma vez.
+// ─────────────────────────────────────────────────────────
+// Aba "Aprender": exemplos de código prontos pra copiar.
+// Cada exemplo tem 1+ blocos (MainActivity, manifest, outros arquivos).
+// Os códigos usam só o Android puro (sem AndroidX) e classes anônimas
+// no lugar de lambdas, pra compilar em qualquer configuração do Studio.
+// ─────────────────────────────────────────────────────────
+const JAVA = String.raw;
+
+const AVISO_PACKAGE = 'Cole embaixo da linha "package ..." do seu MainActivity.java (apague o resto e deixe só o package no topo).';
+
+const EXEMPLOS_APRENDER = [
+  // ═══════════════ TELAS E BOTÕES ═══════════════
+  {
+    categoria: 'Telas e botões',
+    icone: 'gesture-tap-button',
+    itens: [
+      {
+        id: 'botao',
+        titulo: 'Botão simples',
+        icone: 'gesture-tap',
+        descricao: 'Um botão no centro da tela que mostra um aviso (Toast) quando é tocado.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.Toast;
+
+public class MainActivity extends Activity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        Button botao = new Button(this);
+        botao.setText("Toque aqui");
+        botao.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Toast.makeText(MainActivity.this, "Você tocou!", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        FrameLayout raiz = new FrameLayout(this);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(botao, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER));
+        setContentView(raiz);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'contador',
+        titulo: 'Contador',
+        icone: 'counter',
+        descricao: 'Um número grande na tela e um botão que soma +1 a cada toque.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+public class MainActivity extends Activity {
+
+    private int contagem = 0;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setGravity(Gravity.CENTER);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+
+        final TextView numero = new TextView(this);
+        numero.setText("0");
+        numero.setTextColor(Color.WHITE);
+        numero.setTextSize(56);
+        numero.setGravity(Gravity.CENTER);
+
+        Button mais = new Button(this);
+        mais.setText("+1");
+        mais.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                contagem++;
+                numero.setText(String.valueOf(contagem));
+            }
+        });
+
+        raiz.addView(numero);
+        raiz.addView(mais);
+        setContentView(raiz);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'varios',
+        titulo: 'Vários botões (menu)',
+        icone: 'format-list-bulleted',
+        descricao: 'Uma coluna de botões largos, criados por um laço. Ideal pra menu inicial.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.Toast;
+
+public class MainActivity extends Activity {
+
+    private int dp(int valor) {
+        return (int) (valor * getResources().getDisplayMetrics().density);
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setGravity(Gravity.CENTER);
+        raiz.setPadding(dp(24), dp(24), dp(24), dp(24));
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+
+        String[] nomes = {"Jogar", "Opções", "Sobre", "Sair"};
+        for (final String nome : nomes) {
+            Button b = new Button(this);
+            b.setText(nome);
+            b.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    Toast.makeText(MainActivity.this, "Você escolheu: " + nome, Toast.LENGTH_SHORT).show();
+                }
+            });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.setMargins(0, 0, 0, dp(12));
+            raiz.addView(b, lp);
+        }
+
+        setContentView(raiz);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'arredondado',
+        titulo: 'Botão arredondado colorido',
+        icone: 'palette-outline',
+        descricao: 'Botão com cor própria e cantos redondos (GradientDrawable). Troque a cor no código.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.widget.Button;
+import android.widget.FrameLayout;
+
+public class MainActivity extends Activity {
+
+    private int dp(int valor) {
+        return (int) (valor * getResources().getDisplayMetrics().density);
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        GradientDrawable fundo = new GradientDrawable();
+        fundo.setColor(Color.parseColor("#ff5227")); // cor do botão
+        fundo.setCornerRadius(dp(28));               // quanto mais, mais redondo
+
+        Button botao = new Button(this);
+        botao.setText("Começar");
+        botao.setTextColor(Color.WHITE);
+        botao.setAllCaps(false);
+        botao.setBackground(fundo);
+        botao.setPadding(dp(36), dp(14), dp(36), dp(14));
+
+        FrameLayout raiz = new FrameLayout(this);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(botao, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER));
+        setContentView(raiz);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'campo',
+        titulo: 'Campo de texto',
+        icone: 'form-textbox',
+        descricao: 'Um campo onde a pessoa digita e um botão que mostra o que foi escrito.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+public class MainActivity extends Activity {
+
+    private int dp(int valor) {
+        return (int) (valor * getResources().getDisplayMetrics().density);
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setGravity(Gravity.CENTER);
+        raiz.setPadding(dp(24), dp(24), dp(24), dp(24));
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+
+        final EditText campo = new EditText(this);
+        campo.setHint("Digite seu nome");
+        campo.setHintTextColor(Color.GRAY);
+        campo.setTextColor(Color.WHITE);
+        campo.setSingleLine(true);
+
+        final TextView resposta = new TextView(this);
+        resposta.setTextColor(Color.WHITE);
+        resposta.setTextSize(20);
+        resposta.setGravity(Gravity.CENTER);
+        resposta.setPadding(0, dp(16), 0, 0);
+
+        Button ok = new Button(this);
+        ok.setText("Enviar");
+        ok.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String nome = campo.getText().toString().trim();
+                resposta.setText("Olá, " + nome + "!");
+            }
+        });
+
+        raiz.addView(campo);
+        raiz.addView(ok);
+        raiz.addView(resposta);
+        setContentView(raiz);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'lista',
+        titulo: 'Lista de itens',
+        icone: 'format-list-checkbox',
+        descricao: 'Uma lista rolável. Tocar num item mostra qual foi escolhido.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.ListView;
+import android.widget.Toast;
+
+public class MainActivity extends Activity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        final String[] itens = {"Maçã", "Banana", "Uva", "Manga", "Laranja", "Melancia"};
+
+        ListView lista = new ListView(this);
+        lista.setBackgroundColor(Color.parseColor("#03050a"));
+        lista.setAdapter(new ArrayAdapter<String>(
+                this, android.R.layout.simple_list_item_1, itens));
+        lista.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> pai, View view, int posicao, long id) {
+                Toast.makeText(MainActivity.this, itens[posicao], Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        setContentView(lista);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'trocar',
+        titulo: 'Trocar de tela',
+        icone: 'swap-horizontal',
+        descricao: 'Duas telas (menu e jogo) dentro do mesmo app. O botão de cada uma troca pra outra.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+public class MainActivity extends Activity {
+
+    private View telaMenu;
+    private View telaJogo;
+
+    // Monta uma tela simples com título e um botão
+    private View criarTela(String titulo, String textoBotao, View.OnClickListener acao) {
+        LinearLayout tela = new LinearLayout(this);
+        tela.setOrientation(LinearLayout.VERTICAL);
+        tela.setGravity(Gravity.CENTER);
+        tela.setBackgroundColor(Color.parseColor("#03050a"));
+
+        TextView t = new TextView(this);
+        t.setText(titulo);
+        t.setTextColor(Color.WHITE);
+        t.setTextSize(32);
+        t.setGravity(Gravity.CENTER);
+
+        Button b = new Button(this);
+        b.setText(textoBotao);
+        b.setOnClickListener(acao);
+
+        tela.addView(t);
+        tela.addView(b);
+        return tela;
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        telaMenu = criarTela("Menu", "Ir para o jogo", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                setContentView(telaJogo);
+            }
+        });
+
+        telaJogo = criarTela("Jogo", "Voltar ao menu", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                setContentView(telaMenu);
+            }
+        });
+
+        setContentView(telaMenu);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'arrastar',
+        titulo: 'Arrastar com o dedo',
+        icone: 'drag',
+        descricao: 'Um quadrado que segue o dedo. Base pra personagem, joystick ou peça de jogo.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.MotionEvent;
+import android.view.View;
+import android.widget.FrameLayout;
+
+public class MainActivity extends Activity {
+
+    private int dp(int valor) {
+        return (int) (valor * getResources().getDisplayMetrics().density);
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        FrameLayout raiz = new FrameLayout(this);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+
+        View quadrado = new View(this);
+        quadrado.setBackgroundColor(Color.parseColor("#ff5227"));
+        raiz.addView(quadrado, new FrameLayout.LayoutParams(dp(90), dp(90)));
+
+        quadrado.setOnTouchListener(new View.OnTouchListener() {
+            float deslocX, deslocY;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent e) {
+                switch (e.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        deslocX = v.getX() - e.getRawX();
+                        deslocY = v.getY() - e.getRawY();
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        v.setX(e.getRawX() + deslocX);
+                        v.setY(e.getRawY() + deslocY);
+                        return true;
+                }
+                return false;
+            }
+        });
+
+        setContentView(raiz);
+    }
+}`,
+        }],
+      },
+    ],
+  },
+
+  // ═══════════════ BARRAS E TELA ═══════════════
+  {
+    categoria: 'Barras e tela',
+    icone: 'fullscreen',
+    itens: [
+      {
+        id: 'imersivo',
+        titulo: 'Esconder barra de navegação',
+        icone: 'fullscreen',
+        descricao: 'Esconde a barra de baixo (botões do Android) e a de cima (hora, bateria). Passar o dedo na borda mostra elas por um instante.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Build;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
+import android.widget.TextView;
+
+public class MainActivity extends Activity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        TextView texto = new TextView(this);
+        texto.setText("Tela cheia!");
+        texto.setTextColor(Color.WHITE);
+        texto.setTextSize(28);
+        texto.setGravity(Gravity.CENTER);
+        texto.setBackgroundColor(Color.parseColor("#03050a"));
+        setContentView(texto);
+    }
+
+    // Esconde de novo toda vez que o app volta a ter foco
+    @Override
+    public void onWindowFocusChanged(boolean temFoco) {
+        super.onWindowFocusChanged(temFoco);
+        if (temFoco) {
+            esconderBarras();
+        }
+    }
+
+    private void esconderBarras() {
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowInsetsController c = getWindow().getInsetsController();
+            if (c != null) {
+                c.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+                c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            }
+        } else {
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        }
+    }
+}`,
+        }],
+      },
+      {
+        id: 'statusbar',
+        titulo: 'Esconder só a barra de cima',
+        icone: 'battery-outline',
+        descricao: 'Tira a barra de status (hora, sinal, bateria) e deixa a de navegação.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.WindowManager;
+import android.widget.TextView;
+
+public class MainActivity extends Activity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        // Tem que vir antes do setContentView
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+
+        TextView texto = new TextView(this);
+        texto.setText("Sem barra de status");
+        texto.setTextColor(Color.WHITE);
+        texto.setTextSize(24);
+        texto.setGravity(Gravity.CENTER);
+        texto.setBackgroundColor(Color.parseColor("#03050a"));
+        setContentView(texto);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'ligada',
+        titulo: 'Manter a tela ligada',
+        icone: 'brightness-7',
+        descricao: 'A tela não apaga sozinha enquanto o app está aberto. Bom pra jogo, vídeo e cronômetro.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.WindowManager;
+import android.widget.TextView;
+
+public class MainActivity extends Activity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        TextView texto = new TextView(this);
+        texto.setText("A tela não apaga");
+        texto.setTextColor(Color.WHITE);
+        texto.setTextSize(24);
+        texto.setGravity(Gravity.CENTER);
+        texto.setBackgroundColor(Color.parseColor("#03050a"));
+        setContentView(texto);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'orientacao',
+        titulo: 'Em pé ou deitado',
+        icone: 'screen-rotation',
+        descricao: 'Troca a orientação da tela pelo código, com dois botões. Pra fixar de vez, use screenOrientation no manifest.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.content.pm.ActivityInfo;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
+
+public class MainActivity extends Activity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setGravity(Gravity.CENTER);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+
+        Button emPe = new Button(this);
+        emPe.setText("Em pé");
+        emPe.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            }
+        });
+
+        Button deitado = new Button(this);
+        deitado.setText("Deitado");
+        deitado.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+            }
+        });
+
+        Button livre = new Button(this);
+        livre.setText("Automático (gira com o celular)");
+        livre.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+            }
+        });
+
+        raiz.addView(emPe);
+        raiz.addView(deitado);
+        raiz.addView(livre);
+        setContentView(raiz);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'voltar',
+        titulo: 'Confirmar ao sair',
+        icone: 'exit-to-app',
+        descricao: 'Ao apertar o botão voltar do Android, pergunta "Sair?" antes de fechar o app.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.widget.TextView;
+
+public class MainActivity extends Activity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        TextView texto = new TextView(this);
+        texto.setText("Aperte o botão voltar");
+        texto.setTextColor(Color.WHITE);
+        texto.setTextSize(22);
+        texto.setGravity(Gravity.CENTER);
+        texto.setBackgroundColor(Color.parseColor("#03050a"));
+        setContentView(texto);
+    }
+
+    @Override
+    public void onBackPressed() {
+        new AlertDialog.Builder(this)
+                .setTitle("Sair?")
+                .setMessage("Quer mesmo fechar o app?")
+                .setNegativeButton("Não", null)
+                .setPositiveButton("Sim", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogo, int quala) {
+                        finish();
+                    }
+                })
+                .show();
+    }
+}`,
+        }],
+      },
+    ],
+  },
+
+  // ═══════════════ AVISOS ═══════════════
+  {
+    categoria: 'Avisos e balão',
+    icone: 'bell-ring-outline',
+    itens: [
+      {
+        id: 'dialogo',
+        titulo: 'Caixa de diálogo',
+        icone: 'message-alert-outline',
+        descricao: 'Uma janelinha com título, mensagem e botões (OK / Cancelar).',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.Toast;
+
+public class MainActivity extends Activity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        Button botao = new Button(this);
+        botao.setText("Abrir aviso");
+        botao.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                new AlertDialog.Builder(MainActivity.this)
+                        .setTitle("Atenção")
+                        .setMessage("Deseja continuar?")
+                        .setNegativeButton("Cancelar", null)
+                        .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialogo, int quala) {
+                                Toast.makeText(MainActivity.this, "Você disse OK", Toast.LENGTH_SHORT).show();
+                            }
+                        })
+                        .show();
+            }
+        });
+
+        FrameLayout raiz = new FrameLayout(this);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(botao, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER));
+        setContentView(raiz);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'notificacao',
+        titulo: 'Notificação',
+        icone: 'bell-outline',
+        descricao: 'Mostra uma notificação na barra do celular. No Android 13+ o app pede a permissão na primeira vez.',
+        blocos: [
+          {
+            rotulo: 'AndroidManifest.xml — adicione antes de <application>',
+            codigo: JAVA`<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />`,
+          },
+          {
+            rotulo: 'MainActivity.java',
+            codigo: JAVA`import android.Manifest;
+import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.os.Build;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.FrameLayout;
+
+public class MainActivity extends Activity {
+
+    private static final String CANAL_ID = "avisos";
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        // Android 13+: pede permissão pra mostrar notificação
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
+        }
+
+        // Android 8+: toda notificação precisa de um "canal"
+        if (Build.VERSION.SDK_INT >= 26) {
+            NotificationChannel canal = new NotificationChannel(
+                    CANAL_ID, "Avisos", NotificationManager.IMPORTANCE_DEFAULT);
+            NotificationManager gerente =
+                    (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            gerente.createNotificationChannel(canal);
+        }
+
+        Button botao = new Button(this);
+        botao.setText("Mostrar notificação");
+        botao.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mostrarNotificacao();
+            }
+        });
+
+        FrameLayout raiz = new FrameLayout(this);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(botao, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER));
+        setContentView(raiz);
+    }
+
+    private void mostrarNotificacao() {
+        // Ao tocar na notificação, abre o app
+        Intent abrir = new Intent(this, MainActivity.class);
+        PendingIntent toque = PendingIntent.getActivity(
+                this, 0, abrir, PendingIntent.FLAG_IMMUTABLE);
+
+        Notification.Builder n;
+        if (Build.VERSION.SDK_INT >= 26) {
+            n = new Notification.Builder(this, CANAL_ID);
+        } else {
+            n = new Notification.Builder(this);
+        }
+        n.setSmallIcon(android.R.drawable.ic_dialog_info);
+        n.setContentTitle("Olá!");
+        n.setContentText("Essa é uma notificação do meu app");
+        n.setContentIntent(toque);
+        n.setAutoCancel(true);
+
+        NotificationManager gerente =
+                (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        gerente.notify(1, n.build());
+    }
+}`,
+          },
+        ],
+      },
+      {
+        id: 'balao',
+        titulo: 'Balão flutuante',
+        icone: 'chat-processing-outline',
+        descricao: 'Uma bolinha que fica por cima de outros apps e dá pra arrastar. Precisa de 3 passos: manifest, MainActivity e um arquivo novo (BalaoService.java).',
+        blocos: [
+          {
+            rotulo: '1) AndroidManifest.xml — permissão (antes de <application>)',
+            codigo: JAVA`<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />`,
+          },
+          {
+            rotulo: '2) AndroidManifest.xml — dentro de <application>',
+            codigo: JAVA`<service
+    android:name=".BalaoService"
+    android:exported="false" />`,
+          },
+          {
+            rotulo: '3) MainActivity.java',
+            codigo: JAVA`import android.app.Activity;
+import android.content.Intent;
+import android.graphics.Color;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.provider.Settings;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.Toast;
+
+public class MainActivity extends Activity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        Button mostrar = new Button(this);
+        mostrar.setText("Mostrar balão");
+        mostrar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                boolean semPermissao = Build.VERSION.SDK_INT >= 23
+                        && !Settings.canDrawOverlays(MainActivity.this);
+                if (semPermissao) {
+                    Toast.makeText(MainActivity.this,
+                            "Ative \"Aparecer sobre outros apps\" e volte", Toast.LENGTH_LONG).show();
+                    Intent pedir = new Intent(
+                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:" + getPackageName()));
+                    startActivity(pedir);
+                } else {
+                    startService(new Intent(MainActivity.this, BalaoService.class));
+                }
+            }
+        });
+
+        Button remover = new Button(this);
+        remover.setText("Remover balão");
+        remover.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                stopService(new Intent(MainActivity.this, BalaoService.class));
+            }
+        });
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setGravity(Gravity.CENTER);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(mostrar);
+        raiz.addView(remover);
+        setContentView(raiz);
+    }
+}`,
+          },
+          {
+            rotulo: '4) Arquivo NOVO: BalaoService.java (mesma pasta do MainActivity, com o mesmo "package ..." na 1ª linha)',
+            codigo: JAVA`import android.app.Service;
+import android.content.Context;
+import android.content.Intent;
+import android.graphics.Color;
+import android.graphics.PixelFormat;
+import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
+import android.os.IBinder;
+import android.view.Gravity;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.WindowManager;
+import android.widget.TextView;
+import android.widget.Toast;
+
+public class BalaoService extends Service {
+
+    private WindowManager janela;
+    private View balao;
+
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        if (balao != null) {
+            return START_STICKY; // já está na tela
+        }
+        janela = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
+
+        // A bolinha (círculo laranja com uma letra)
+        TextView texto = new TextView(this);
+        texto.setText("C");
+        texto.setTextColor(Color.WHITE);
+        texto.setTextSize(22);
+        texto.setGravity(Gravity.CENTER);
+        GradientDrawable fundo = new GradientDrawable();
+        fundo.setShape(GradientDrawable.OVAL);
+        fundo.setColor(Color.parseColor("#ff5227"));
+        texto.setBackground(fundo);
+        balao = texto;
+
+        int tamanho = (int) (60 * getResources().getDisplayMetrics().density);
+        int tipo;
+        if (Build.VERSION.SDK_INT >= 26) {
+            tipo = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        } else {
+            tipo = WindowManager.LayoutParams.TYPE_PHONE;
+        }
+
+        final WindowManager.LayoutParams p = new WindowManager.LayoutParams(
+                tamanho, tamanho, tipo,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSLUCENT);
+        p.gravity = Gravity.TOP | Gravity.START;
+        p.x = 100;
+        p.y = 300;
+
+        // Arrastar com o dedo; toque rápido = ação do balão
+        balao.setOnTouchListener(new View.OnTouchListener() {
+            private int xInicial, yInicial;
+            private float toqueX, toqueY;
+            private boolean moveu;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent e) {
+                switch (e.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        xInicial = p.x;
+                        yInicial = p.y;
+                        toqueX = e.getRawX();
+                        toqueY = e.getRawY();
+                        moveu = false;
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        float dx = e.getRawX() - toqueX;
+                        float dy = e.getRawY() - toqueY;
+                        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                            moveu = true;
+                        }
+                        p.x = xInicial + (int) dx;
+                        p.y = yInicial + (int) dy;
+                        janela.updateViewLayout(balao, p);
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                        if (!moveu) {
+                            // Toque simples: coloque aqui o que o balão faz
+                            Toast.makeText(BalaoService.this, "Balão tocado!", Toast.LENGTH_SHORT).show();
+                        }
+                        return true;
+                }
+                return false;
+            }
+        });
+
+        janela.addView(balao, p);
+        return START_STICKY;
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (balao != null) {
+            janela.removeView(balao);
+            balao = null;
+        }
+    }
+}`,
+          },
+        ],
+      },
+      {
+        id: 'vibrar',
+        titulo: 'Vibrar',
+        icone: 'vibrate',
+        descricao: 'Faz o celular vibrar por 300 milissegundos quando o botão é tocado.',
+        blocos: [
+          {
+            rotulo: 'AndroidManifest.xml — adicione antes de <application>',
+            codigo: JAVA`<uses-permission android:name="android.permission.VIBRATE" />`,
+          },
+          {
+            rotulo: 'MainActivity.java',
+            codigo: JAVA`import android.app.Activity;
+import android.content.Context;
+import android.graphics.Color;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.FrameLayout;
+
+public class MainActivity extends Activity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        final Vibrator vibrador = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+
+        Button botao = new Button(this);
+        botao.setText("Vibrar");
+        botao.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (Build.VERSION.SDK_INT >= 26) {
+                    vibrador.vibrate(VibrationEffect.createOneShot(300, VibrationEffect.DEFAULT_AMPLITUDE));
+                } else {
+                    vibrador.vibrate(300);
+                }
+            }
+        });
+
+        FrameLayout raiz = new FrameLayout(this);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(botao, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER));
+        setContentView(raiz);
+    }
+}`,
+          },
+        ],
+      },
+    ],
+  },
+
+  // ═══════════════ SISTEMA ═══════════════
+  {
+    categoria: 'Sistema e internet',
+    icone: 'cellphone-cog',
+    itens: [
+      {
+        id: 'link',
+        titulo: 'Abrir um site',
+        icone: 'open-in-new',
+        descricao: 'Abre um endereço no navegador do celular.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.content.Intent;
+import android.graphics.Color;
+import android.net.Uri;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.FrameLayout;
+
+public class MainActivity extends Activity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        Button botao = new Button(this);
+        botao.setText("Abrir site");
+        botao.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent abrir = new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com"));
+                startActivity(abrir);
+            }
+        });
+
+        FrameLayout raiz = new FrameLayout(this);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(botao, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER));
+        setContentView(raiz);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'compartilhar',
+        titulo: 'Compartilhar texto',
+        icone: 'share-variant-outline',
+        descricao: 'Abre o menu de compartilhar do Android (WhatsApp, Telegram, e-mail...) com um texto pronto.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.content.Intent;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.FrameLayout;
+
+public class MainActivity extends Activity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        Button botao = new Button(this);
+        botao.setText("Compartilhar");
+        botao.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent enviar = new Intent(Intent.ACTION_SEND);
+                enviar.setType("text/plain");
+                enviar.putExtra(Intent.EXTRA_TEXT, "Olha o app que eu fiz no CindraStudio!");
+                startActivity(Intent.createChooser(enviar, "Compartilhar via"));
+            }
+        });
+
+        FrameLayout raiz = new FrameLayout(this);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(botao, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER));
+        setContentView(raiz);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'permissao',
+        titulo: 'Pedir permissão',
+        icone: 'shield-key-outline',
+        descricao: 'Pede uma permissão à pessoa na hora (exemplo com a câmera) e mostra se ela aceitou. Serve de modelo pra microfone, localização etc.',
+        blocos: [
+          {
+            rotulo: 'AndroidManifest.xml — adicione antes de <application>',
+            codigo: JAVA`<uses-permission android:name="android.permission.CAMERA" />`,
+          },
+          {
+            rotulo: 'MainActivity.java',
+            codigo: JAVA`import android.Manifest;
+import android.app.Activity;
+import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.os.Build;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.Toast;
+
+public class MainActivity extends Activity {
+
+    private static final int CODIGO_CAMERA = 10;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        Button botao = new Button(this);
+        botao.setText("Pedir permissão da câmera");
+        botao.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                boolean precisaPedir = Build.VERSION.SDK_INT >= 23
+                        && checkSelfPermission(Manifest.permission.CAMERA)
+                        != PackageManager.PERMISSION_GRANTED;
+                if (precisaPedir) {
+                    requestPermissions(new String[]{Manifest.permission.CAMERA}, CODIGO_CAMERA);
+                } else {
+                    Toast.makeText(MainActivity.this, "Já tenho permissão!", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
+        FrameLayout raiz = new FrameLayout(this);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(botao, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER));
+        setContentView(raiz);
+    }
+
+    // Chamado quando a pessoa responde ao pedido
+    @Override
+    public void onRequestPermissionsResult(int codigo, String[] permissoes, int[] resultados) {
+        super.onRequestPermissionsResult(codigo, permissoes, resultados);
+        if (codigo == CODIGO_CAMERA) {
+            boolean aceitou = resultados.length > 0
+                    && resultados[0] == PackageManager.PERMISSION_GRANTED;
+            String msg = aceitou ? "Permissão concedida" : "Permissão negada";
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+        }
+    }
+}`,
+          },
+        ],
+      },
+      {
+        id: 'webview',
+        titulo: 'Site dentro do app (WebView)',
+        icone: 'web',
+        descricao: 'Mostra uma página da internet dentro do seu app. O botão voltar navega no histórico do site.',
+        blocos: [
+          {
+            rotulo: 'AndroidManifest.xml — adicione antes de <application>',
+            codigo: JAVA`<uses-permission android:name="android.permission.INTERNET" />`,
+          },
+          {
+            rotulo: 'MainActivity.java',
+            codigo: JAVA`import android.app.Activity;
+import android.os.Bundle;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+
+public class MainActivity extends Activity {
+
+    private WebView web;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        web = new WebView(this);
+        web.getSettings().setJavaScriptEnabled(true);
+        web.setWebViewClient(new WebViewClient()); // links abrem aqui dentro
+        web.loadUrl("https://www.google.com");     // use https://
+
+        setContentView(web);
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (web.canGoBack()) {
+            web.goBack();
+        } else {
+            super.onBackPressed();
+        }
+    }
+}`,
+          },
+        ],
+      },
+    ],
+  },
+
+  // ═══════════════ MÍDIA ═══════════════
+  {
+    categoria: 'Som e imagem',
+    icone: 'music-note-outline',
+    itens: [
+      {
+        id: 'bipe',
+        titulo: 'Tocar um bipe',
+        icone: 'volume-high',
+        descricao: 'Toca um som curto sem precisar de nenhum arquivo.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.media.AudioManager;
+import android.media.ToneGenerator;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.FrameLayout;
+
+public class MainActivity extends Activity {
+
+    private ToneGenerator tom;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        tom = new ToneGenerator(AudioManager.STREAM_MUSIC, 100);
+
+        Button botao = new Button(this);
+        botao.setText("Bipe");
+        botao.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                tom.startTone(ToneGenerator.TONE_PROP_BEEP, 200);
+            }
+        });
+
+        FrameLayout raiz = new FrameLayout(this);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(botao, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER));
+        setContentView(raiz);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        tom.release();
+    }
+}`,
+        }],
+      },
+      {
+        id: 'somassets',
+        titulo: 'Tocar música (assets)',
+        icone: 'music',
+        descricao: 'Toca um arquivo de som que você adicionou na pasta assets (segure o dedo na pasta e use "Adicionar arquivo"). Troque "musica.mp3" pelo nome do seu arquivo.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.content.res.AssetFileDescriptor;
+import android.graphics.Color;
+import android.media.MediaPlayer;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.Toast;
+
+public class MainActivity extends Activity {
+
+    private MediaPlayer player;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        Button tocar = new Button(this);
+        tocar.setText("Tocar");
+        tocar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                try {
+                    if (player != null) {
+                        player.release();
+                    }
+                    AssetFileDescriptor afd = getAssets().openFd("musica.mp3");
+                    player = new MediaPlayer();
+                    player.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
+                    afd.close();
+                    player.setLooping(true);
+                    player.prepare();
+                    player.start();
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "Erro: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                }
+            }
+        });
+
+        Button parar = new Button(this);
+        parar.setText("Parar");
+        parar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (player != null) {
+                    player.release();
+                    player = null;
+                }
+            }
+        });
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setGravity(Gravity.CENTER);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(tocar);
+        raiz.addView(parar);
+        setContentView(raiz);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (player != null) {
+            player.release();
+            player = null;
+        }
+    }
+}`,
+        }],
+      },
+      {
+        id: 'imagem',
+        titulo: 'Mostrar imagem (assets)',
+        icone: 'image-outline',
+        descricao: 'Mostra uma imagem que você adicionou na pasta assets. Troque "foto.png" pelo nome do seu arquivo.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.widget.ImageView;
+import android.widget.Toast;
+
+import java.io.InputStream;
+
+public class MainActivity extends Activity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        ImageView imagem = new ImageView(this);
+        imagem.setBackgroundColor(Color.parseColor("#03050a"));
+        imagem.setScaleType(ImageView.ScaleType.FIT_CENTER);
+
+        try {
+            InputStream entrada = getAssets().open("foto.png");
+            Bitmap bmp = BitmapFactory.decodeStream(entrada);
+            entrada.close();
+            imagem.setImageBitmap(bmp);
+        } catch (Exception e) {
+            Toast.makeText(this, "Imagem não encontrada em assets", Toast.LENGTH_LONG).show();
+        }
+
+        setContentView(imagem);
+    }
+}`,
+        }],
+      },
+    ],
+  },
+
+  // ═══════════════ DADOS E TEMPO ═══════════════
+  {
+    categoria: 'Dados, tempo e sensores',
+    icone: 'database-outline',
+    itens: [
+      {
+        id: 'salvar',
+        titulo: 'Salvar dados',
+        icone: 'content-save-outline',
+        descricao: 'Guarda um número no celular. Fecha o app, abre de novo e o valor continua lá (SharedPreferences).',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.content.SharedPreferences;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.widget.TextView;
+
+public class MainActivity extends Activity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        SharedPreferences prefs = getSharedPreferences("dados", MODE_PRIVATE);
+
+        // Lê o que estava salvo (0 se for a primeira vez) e soma 1
+        int aberturas = prefs.getInt("aberturas", 0) + 1;
+
+        // Salva o novo valor
+        prefs.edit().putInt("aberturas", aberturas).apply();
+
+        TextView texto = new TextView(this);
+        texto.setText("Você abriu o app " + aberturas + " vez(es)");
+        texto.setTextColor(Color.WHITE);
+        texto.setTextSize(22);
+        texto.setGravity(Gravity.CENTER);
+        texto.setBackgroundColor(Color.parseColor("#03050a"));
+        setContentView(texto);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'timer',
+        titulo: 'Contagem regressiva',
+        icone: 'timer-outline',
+        descricao: 'Conta de 10 até 0, uma vez por segundo, e avisa quando acabar.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.os.CountDownTimer;
+import android.view.Gravity;
+import android.widget.TextView;
+
+public class MainActivity extends Activity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        final TextView texto = new TextView(this);
+        texto.setText("10");
+        texto.setTextColor(Color.WHITE);
+        texto.setTextSize(64);
+        texto.setGravity(Gravity.CENTER);
+        texto.setBackgroundColor(Color.parseColor("#03050a"));
+        setContentView(texto);
+
+        // 10000 ms no total, atualizando a cada 1000 ms
+        new CountDownTimer(10000, 1000) {
+            @Override
+            public void onTick(long faltam) {
+                texto.setText(String.valueOf(faltam / 1000));
+            }
+
+            @Override
+            public void onFinish() {
+                texto.setText("Acabou!");
+            }
+        }.start();
+    }
+}`,
+        }],
+      },
+      {
+        id: 'animacao',
+        titulo: 'Animação',
+        icone: 'animation-play-outline',
+        descricao: 'O botão dá uma "pulsada" (cresce e volta) a cada toque, e o quadrado gira.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
+
+public class MainActivity extends Activity {
+
+    private int dp(int valor) {
+        return (int) (valor * getResources().getDisplayMetrics().density);
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setGravity(Gravity.CENTER);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+
+        final View quadrado = new View(this);
+        quadrado.setBackgroundColor(Color.parseColor("#ff5227"));
+        raiz.addView(quadrado, new LinearLayout.LayoutParams(dp(100), dp(100)));
+
+        Button botao = new Button(this);
+        botao.setText("Animar");
+        botao.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(final View v) {
+                // Pulsada no botão: cresce e volta
+                v.animate().scaleX(1.25f).scaleY(1.25f).setDuration(150)
+                        .withEndAction(new Runnable() {
+                            @Override
+                            public void run() {
+                                v.animate().scaleX(1f).scaleY(1f).setDuration(150).start();
+                            }
+                        }).start();
+
+                // Quadrado dá uma volta completa
+                quadrado.animate().rotationBy(360f).setDuration(600).start();
+            }
+        });
+        raiz.addView(botao);
+
+        setContentView(raiz);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'sensor',
+        titulo: 'Sensor de movimento',
+        icone: 'axis-arrow',
+        descricao: 'Lê o acelerômetro e mostra os valores X, Y e Z. Incline o celular pra ver mudar. Base pra jogos controlados inclinando.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.content.Context;
+import android.graphics.Color;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.widget.TextView;
+
+public class MainActivity extends Activity implements SensorEventListener {
+
+    private SensorManager sensores;
+    private TextView texto;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        sensores = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+
+        texto = new TextView(this);
+        texto.setTextColor(Color.WHITE);
+        texto.setTextSize(22);
+        texto.setGravity(Gravity.CENTER);
+        texto.setBackgroundColor(Color.parseColor("#03050a"));
+        setContentView(texto);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        Sensor acelerometro = sensores.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        sensores.registerListener(this, acelerometro, SensorManager.SENSOR_DELAY_GAME);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        sensores.unregisterListener(this);
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent e) {
+        texto.setText("X: " + e.values[0] + "\nY: " + e.values[1] + "\nZ: " + e.values[2]);
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int precisao) {
+    }
+}`,
+        }],
+      },
+    ],
+  },
+];
+
+// Copiar pra área de transferência. Usa o expo-clipboard se estiver
+// instalado no app; se não estiver, abre o menu de compartilhar do
+// Android (de lá a pessoa escolhe "Copiar"). Assim funciona na OTA.
+async function copiarTextoStudio(texto) {
+  try {
+    if (Clipboard && Clipboard.setStringAsync) {
+      await Clipboard.setStringAsync(texto);
+      return 'copiado';
+    }
+  } catch (e) { /* cai pro compartilhar */ }
+  try {
+    await Share.share({ message: texto });
+    return 'compartilhado';
+  } catch (e) {
+    return 'erro';
+  }
+}
+
+const FONTE_MONO = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
+
+const aprenderStyles = StyleSheet.create({
+  intro: { color: COLORS.dim, fontSize: 14, lineHeight: 20, marginTop: 4, marginBottom: 6 },
+  catLinha: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 20, marginBottom: 10 },
+  catTitulo: { color: COLORS.ink, fontSize: 16, fontWeight: '800' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  chipAtivo: { backgroundColor: 'rgba(255,82,39,0.20)', borderColor: 'rgba(255,82,39,0.55)' },
+  chipTexto: { color: COLORS.dim, fontSize: 13, fontWeight: '600' },
+  chipTextoAtivo: { color: COLORS.ink, fontWeight: '700' },
+  painel: {
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  painelTitulo: { color: COLORS.ink, fontSize: 17, fontWeight: '800' },
+  painelDesc: { color: COLORS.dim, fontSize: 13.5, lineHeight: 20, marginTop: 6 },
+  painelDica: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,182,72,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,182,72,0.25)',
+    color: COLORS.gold,
+    fontSize: 12.5,
+    lineHeight: 18,
+  },
+  blocoCab: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, marginBottom: 8 },
+  blocoRotulo: { flex: 1, color: COLORS.ink, fontSize: 12.5, fontWeight: '700' },
+  copiarBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: 17,
+    backgroundColor: COLORS.ember,
+  },
+  copiarBtnOk: { backgroundColor: COLORS.gold },
+  copiarTexto: { color: '#1a0806', fontSize: 13, fontWeight: '800' },
+  codigoCaixa: {
+    borderRadius: 12,
+    backgroundColor: '#0d0707',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  codigoTexto: {
+    color: '#e8dcd9',
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: FONTE_MONO,
+    padding: 12,
+  },
+});
+
 const LIMITE_HISTORICO = 500;
 function diffTexto(antes, depois) {
   const max = Math.min(antes.length, depois.length);
@@ -2210,7 +4003,9 @@ function CindraStudioScreen({ visible, onClose }) {
   const [favoritosNoTopo, setFavoritosNoTopo] = useState(true);
   const [modoLista, setModoLista] = useState('lista'); // 'lista' | 'grade'
   const [menuOrdenarAberto, setMenuOrdenarAberto] = useState(false); // folha "Ordenar por"
-  const [abaHome, setAbaHome] = useState('apps'); // barra de baixo da tela inicial
+  const [abaHome, setAbaHome] = useState('apps'); // barra de baixo da tela inicial: 'apps' | 'aprender'
+  const [exemploAberto, setExemploAberto] = useState(null); // id do exemplo aberto na aba Aprender
+  const [copiadoChave, setCopiadoChave] = useState(null); // bloco que acabou de ser copiado (mostra "Copiado!")
   const [avisoRecuperarVisivel, setAvisoRecuperarVisivel] = useState(false); // só depois de ler as prefs
   const prefsRef = useRef({});
 
@@ -3421,7 +5216,105 @@ function CindraStudioScreen({ visible, onClose }) {
     );
   };
 
-  // Barra de baixo: "Meus apps" e o botão "Criar".
+  // Aba "Aprender": exemplos de código. Toca num botão, o código aparece
+  // logo embaixo, com botão de copiar em cada bloco.
+  const copiarBloco = async (chave, codigo) => {
+    const r = await copiarTextoStudio(codigo);
+    if (r === 'copiado') {
+      setCopiadoChave(chave);
+      setTimeout(() => setCopiadoChave((atual) => (atual === chave ? null : atual)), 2000);
+    } else if (r === 'compartilhado') {
+      exibirAviso('Toque em "Copiar"', 'No menu que abriu, escolha Copiar pra guardar o código.', 'aviso');
+    } else {
+      exibirAviso('Não deu pra copiar', 'Segure o dedo em cima do código pra selecionar e copiar.', 'erro');
+    }
+  };
+
+  const renderPainelExemplo = (item) => {
+    const temMain = item.blocos.some((b) => b.rotulo.indexOf('MainActivity') !== -1);
+    return (
+      <View key={`painel-${item.id}`} style={aprenderStyles.painel}>
+        <Text style={aprenderStyles.painelTitulo}>{item.titulo}</Text>
+        <Text style={aprenderStyles.painelDesc}>{item.descricao}</Text>
+        {temMain && <Text style={aprenderStyles.painelDica}>{AVISO_PACKAGE}</Text>}
+        {item.blocos.map((bloco, i) => {
+          const chave = `${item.id}:${i}`;
+          const copiado = copiadoChave === chave;
+          return (
+            <View key={chave}>
+              <View style={aprenderStyles.blocoCab}>
+                <Text style={aprenderStyles.blocoRotulo}>{bloco.rotulo}</Text>
+                <TouchableOpacity
+                  style={[aprenderStyles.copiarBtn, copiado && aprenderStyles.copiarBtnOk]}
+                  onPress={() => copiarBloco(chave, bloco.codigo)}
+                  activeOpacity={0.85}
+                >
+                  <MaterialCommunityIcons name={copiado ? 'check' : 'content-copy'} size={16} color="#1a0806" />
+                  <Text style={aprenderStyles.copiarTexto}>{copiado ? 'Copiado!' : 'Copiar'}</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={aprenderStyles.codigoCaixa}>
+                <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator>
+                  <Text selectable style={aprenderStyles.codigoTexto}>{bloco.codigo}</Text>
+                </ScrollView>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
+  const renderAbaAprender = () => (
+    <>
+      <View style={studioStyles.homeHeader}>
+        <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ marginRight: 4 }}>
+          <MaterialCommunityIcons name="arrow-left" size={24} color={COLORS.ink} />
+        </TouchableOpacity>
+        <View style={{ flex: 1 }}>
+          <Text style={studioStyles.homeOverline}>CINDRA-STUDIO</Text>
+          <Text style={studioStyles.homeTitulo} numberOfLines={1}>Aprender</Text>
+        </View>
+      </View>
+
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 28 }}
+      >
+        <Text style={aprenderStyles.intro}>
+          Toque num exemplo pra ver o código. Depois é só copiar e colar no seu projeto.
+        </Text>
+
+        {EXEMPLOS_APRENDER.map((cat) => (
+          <View key={cat.categoria}>
+            <View style={aprenderStyles.catLinha}>
+              <MaterialCommunityIcons name={cat.icone} size={20} color={COLORS.ember} />
+              <Text style={aprenderStyles.catTitulo}>{cat.categoria}</Text>
+            </View>
+            <View style={aprenderStyles.chips}>
+              {cat.itens.map((item) => {
+                const ativo = exemploAberto === item.id;
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[aprenderStyles.chip, ativo && aprenderStyles.chipAtivo]}
+                    onPress={() => setExemploAberto(ativo ? null : item.id)}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialCommunityIcons name={item.icone} size={16} color={ativo ? '#ff8a68' : COLORS.dim} />
+                    <Text style={[aprenderStyles.chipTexto, ativo && aprenderStyles.chipTextoAtivo]}>{item.titulo}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {cat.itens.map((item) => (exemploAberto === item.id ? renderPainelExemplo(item) : null))}
+          </View>
+        ))}
+      </ScrollView>
+    </>
+  );
+
+  // Barra de baixo: "Meus apps", "Aprender" e o botão "Criar".
   const renderNavHome = () => (
     <View style={[studioStyles.navHome, { paddingBottom: Math.max(insets.bottom, 8) + 6 }]}>
       {ABAS_HOME_STUDIO.map((a) => {
@@ -3453,7 +5346,7 @@ function CindraStudioScreen({ visible, onClose }) {
       <View pointerEvents="none" style={studioStyles.homeGlowTop} />
       <View pointerEvents="none" style={studioStyles.homeGlowBottom} />
 
-      {renderAbaApps()}
+      {abaHome === 'aprender' ? renderAbaAprender() : renderAbaApps()}
 
       {renderNavHome()}
 
