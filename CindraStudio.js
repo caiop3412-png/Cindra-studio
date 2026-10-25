@@ -19,6 +19,7 @@ import {
   Image,
   Share,
   BackHandler,
+  useWindowDimensions,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1955,6 +1956,12 @@ const studioStyles = StyleSheet.create({
     marginBottom: 8,
   },
   folhaLinhaTexto: { flex: 1, color: COLORS.ink, fontSize: 15, fontWeight: '600' },
+  permGrupo: { color: COLORS.dim, fontSize: 11.5, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 14, marginBottom: 8, marginLeft: 4 },
+  permLinha: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingLeft: 12, paddingRight: 8,
+    borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.05)', marginBottom: 8,
+  },
+  permNome: { color: COLORS.ink, fontSize: 15, fontWeight: '600' },
   nodoTopo: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   nodoIcone: {
     width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center',
@@ -4070,6 +4077,144 @@ const aprenderStyles = StyleSheet.create({
 
 const LIMITE_HISTORICO = 500;
 
+// ─────────────────────────────────────────────────────────
+// Permissões do app (botão de engrenagem no editor). Cada chave liga/
+// desliga uma linha <uses-permission> no AndroidManifest.xml.
+// `perigosa` = o Android também exige pedir autorização ao usuário
+// dentro do app (o manifest sozinho não basta).
+// ─────────────────────────────────────────────────────────
+const MANIFEST_PATH_STUDIO = 'app/src/main/AndroidManifest.xml';
+const P = (id, nome, desc, icone, grupo, perigosa = false) => ({ id: `android.permission.${id}`, nome, desc, icone, grupo, perigosa });
+const PERMISSOES_STUDIO = [
+  P('INTERNET', 'Internet', 'Acessar a internet', 'web', 'Rede'),
+  P('ACCESS_NETWORK_STATE', 'Estado da rede', 'Saber se está online', 'lan-connect', 'Rede'),
+  P('ACCESS_WIFI_STATE', 'Estado do Wi-Fi', 'Ver informações do Wi-Fi', 'wifi', 'Rede'),
+  P('CHANGE_WIFI_STATE', 'Alterar Wi-Fi', 'Ligar, desligar e conectar o Wi-Fi', 'wifi-cog', 'Rede'),
+  P('ACCESS_COARSE_LOCATION', 'Localização aproximada', 'Onde a pessoa está, com pouca precisão', 'map-marker-outline', 'Localização', true),
+  P('ACCESS_FINE_LOCATION', 'Localização precisa', 'GPS com precisão', 'crosshairs-gps', 'Localização', true),
+  P('ACCESS_BACKGROUND_LOCATION', 'Localização em segundo plano', 'Continuar usando o GPS com o app fechado', 'map-marker-radius-outline', 'Localização', true),
+  P('POST_NOTIFICATIONS', 'Notificações', 'Mostrar notificações (Android 13 ou mais)', 'bell-outline', 'Notificações', true),
+  P('VIBRATE', 'Vibração', 'Fazer o celular vibrar', 'vibrate', 'Notificações'),
+  P('USE_FULL_SCREEN_INTENT', 'Notificação em tela cheia', 'Abrir tela cheia, tipo alarme ou chamada', 'fullscreen', 'Notificações'),
+  P('CAMERA', 'Câmera', 'Tirar fotos e gravar vídeo', 'camera-outline', 'Câmera e áudio', true),
+  P('RECORD_AUDIO', 'Microfone', 'Gravar áudio', 'microphone-outline', 'Câmera e áudio', true),
+  P('MODIFY_AUDIO_SETTINGS', 'Ajustar áudio', 'Mudar volume e modo de som', 'volume-high', 'Câmera e áudio'),
+  P('FLASHLIGHT', 'Lanterna', 'Ligar o flash como lanterna', 'flashlight', 'Câmera e áudio'),
+  P('READ_MEDIA_IMAGES', 'Ler fotos', 'Acessar as fotos (Android 13 ou mais)', 'image-multiple-outline', 'Fotos e arquivos', true),
+  P('READ_MEDIA_VIDEO', 'Ler vídeos', 'Acessar os vídeos (Android 13 ou mais)', 'video-outline', 'Fotos e arquivos', true),
+  P('READ_MEDIA_AUDIO', 'Ler músicas', 'Acessar os áudios (Android 13 ou mais)', 'music-note-outline', 'Fotos e arquivos', true),
+  P('READ_EXTERNAL_STORAGE', 'Ler armazenamento', 'Ler arquivos (Android 12 ou menos)', 'folder-outline', 'Fotos e arquivos', true),
+  P('WRITE_EXTERNAL_STORAGE', 'Gravar armazenamento', 'Salvar arquivos (Android 9 ou menos)', 'content-save-outline', 'Fotos e arquivos', true),
+  P('MANAGE_EXTERNAL_STORAGE', 'Todos os arquivos', 'Acesso total ao armazenamento', 'folder-lock-outline', 'Fotos e arquivos'),
+  P('READ_CONTACTS', 'Ler contatos', 'Ver a lista de contatos', 'contacts-outline', 'Contatos e telefone', true),
+  P('WRITE_CONTACTS', 'Editar contatos', 'Criar e alterar contatos', 'account-edit-outline', 'Contatos e telefone', true),
+  P('READ_PHONE_STATE', 'Estado do telefone', 'Ver chamadas em andamento e operadora', 'cellphone', 'Contatos e telefone', true),
+  P('CALL_PHONE', 'Fazer ligações', 'Ligar sem abrir o discador', 'phone-outline', 'Contatos e telefone', true),
+  P('READ_CALL_LOG', 'Histórico de ligações', 'Ler as chamadas recentes', 'phone-log-outline', 'Contatos e telefone', true),
+  P('READ_CALENDAR', 'Ler calendário', 'Ver os eventos', 'calendar-outline', 'Contatos e telefone', true),
+  P('WRITE_CALENDAR', 'Editar calendário', 'Criar e alterar eventos', 'calendar-edit', 'Contatos e telefone', true),
+  P('SEND_SMS', 'Enviar SMS', 'Mandar mensagens de texto', 'message-arrow-right-outline', 'Mensagens', true),
+  P('READ_SMS', 'Ler SMS', 'Ler as mensagens de texto', 'message-text-outline', 'Mensagens', true),
+  P('RECEIVE_SMS', 'Receber SMS', 'Ser avisado quando chega SMS', 'message-badge-outline', 'Mensagens', true),
+  P('BLUETOOTH', 'Bluetooth', 'Usar o Bluetooth (Android 11 ou menos)', 'bluetooth', 'Bluetooth e conexão'),
+  P('BLUETOOTH_ADMIN', 'Gerenciar Bluetooth', 'Ligar e parear (Android 11 ou menos)', 'bluetooth-settings', 'Bluetooth e conexão'),
+  P('BLUETOOTH_CONNECT', 'Conectar por Bluetooth', 'Falar com aparelhos pareados (Android 12 ou mais)', 'bluetooth-connect', 'Bluetooth e conexão', true),
+  P('BLUETOOTH_SCAN', 'Procurar Bluetooth', 'Achar aparelhos por perto (Android 12 ou mais)', 'bluetooth-audio', 'Bluetooth e conexão', true),
+  P('NFC', 'NFC', 'Ler e usar etiquetas NFC', 'nfc', 'Bluetooth e conexão'),
+  P('BODY_SENSORS', 'Sensores do corpo', 'Batimentos e sensores de saúde', 'heart-pulse', 'Sensores', true),
+  P('ACTIVITY_RECOGNITION', 'Atividade física', 'Contar passos e reconhecer movimento', 'run', 'Sensores', true),
+  P('USE_BIOMETRIC', 'Biometria', 'Pedir digital ou rosto', 'fingerprint', 'Sensores'),
+  P('WAKE_LOCK', 'Manter ligado', 'Impedir o celular de dormir', 'lightbulb-on-outline', 'Sistema'),
+  P('RECEIVE_BOOT_COMPLETED', 'Iniciar com o celular', 'Rodar algo quando o celular liga', 'restart', 'Sistema'),
+  P('FOREGROUND_SERVICE', 'Serviço em primeiro plano', 'Continuar rodando com notificação fixa', 'cog-sync-outline', 'Sistema'),
+  P('SYSTEM_ALERT_WINDOW', 'Sobrepor outros apps', 'Desenhar por cima de outros apps', 'layers-outline', 'Sistema'),
+  P('REQUEST_INSTALL_PACKAGES', 'Instalar apps', 'Pedir pra instalar APKs', 'download-outline', 'Sistema'),
+  P('SCHEDULE_EXACT_ALARM', 'Alarmes exatos', 'Agendar alarmes na hora certa', 'alarm', 'Sistema'),
+  P('SET_WALLPAPER', 'Papel de parede', 'Trocar o papel de parede', 'wallpaper', 'Sistema'),
+  P('WRITE_SETTINGS', 'Ajustes do sistema', 'Mudar brilho e outros ajustes', 'tune-variant', 'Sistema'),
+  P('QUERY_ALL_PACKAGES', 'Ver todos os apps', 'Listar os apps instalados', 'apps', 'Sistema'),
+];
+const GRUPOS_PERMISSOES_STUDIO = ['Rede', 'Localização', 'Notificações', 'Câmera e áudio', 'Fotos e arquivos', 'Contatos e telefone', 'Mensagens', 'Bluetooth e conexão', 'Sensores', 'Sistema'];
+
+// Troca o conteúdo dos comentários XML por espaços (mantendo as quebras de
+// linha), pra a busca ignorar permissões que estão só comentadas e os
+// índices continuarem batendo com o texto original.
+function mascararComentariosXml(xml) {
+  return xml.replace(/<!--[\s\S]*?-->/g, (m) => m.replace(/[^\n]/g, ' '));
+}
+const REGEX_TAG_PERMISSAO = /<uses-permission\b[^>]*?(?:\/>|>\s*<\/uses-permission>)/g;
+function nomeDaTagPermissao(tag) {
+  const n = /android:name\s*=\s*"([^"]*)"/.exec(tag);
+  return n ? n[1] : null;
+}
+// Permissões que estão ATIVAS no manifest (fora de comentário).
+function lerPermissoesManifest(xml) {
+  const m = mascararComentariosXml(xml);
+  const re = new RegExp(REGEX_TAG_PERMISSAO.source, 'g');
+  const achadas = new Set();
+  let r;
+  while ((r = re.exec(m))) {
+    const nome = nomeDaTagPermissao(r[0]);
+    if (nome) achadas.add(nome);
+  }
+  return achadas;
+}
+// Liga: escreve a linha <uses-permission> (junto das outras, ou antes do
+// <application> se ainda não tem nenhuma). Não duplica.
+function ativarPermissaoManifest(xml, nome) {
+  if (lerPermissoesManifest(xml).has(nome)) return xml;
+  const m = mascararComentariosXml(xml);
+  const linha = `<uses-permission android:name="${nome}" />`;
+  const re = new RegExp(REGEX_TAG_PERMISSAO.source, 'g');
+  let ultimo = null;
+  let r;
+  while ((r = re.exec(m))) ultimo = r;
+  if (ultimo) {
+    const fim = ultimo.index + ultimo[0].length;
+    const iniLinha = xml.lastIndexOf('\n', ultimo.index - 1) + 1;
+    const indent = /^[ \t]*/.exec(xml.slice(iniLinha, ultimo.index))[0];
+    return `${xml.slice(0, fim)}\n${indent}${linha}${xml.slice(fim)}`;
+  }
+  const app = /<application\b/.exec(m);
+  if (app) {
+    const iniLinha = xml.lastIndexOf('\n', app.index - 1) + 1;
+    return `${xml.slice(0, iniLinha)}    ${linha}\n\n${xml.slice(iniLinha)}`;
+  }
+  const man = /<manifest\b[^>]*>/.exec(m);
+  if (man) {
+    const fim = man.index + man[0].length;
+    return `${xml.slice(0, fim)}\n    ${linha}\n${xml.slice(fim)}`;
+  }
+  return xml;
+}
+// Desliga: apaga só a linha dessa permissão. O arquivo continua lá.
+function desativarPermissaoManifest(xml, nome) {
+  const m = mascararComentariosXml(xml);
+  const re = new RegExp(REGEX_TAG_PERMISSAO.source, 'g');
+  const achados = [];
+  let r;
+  while ((r = re.exec(m))) {
+    if (nomeDaTagPermissao(r[0]) === nome) achados.push({ ini: r.index, fim: r.index + r[0].length });
+  }
+  let saida = xml;
+  for (let i = achados.length - 1; i >= 0; i--) {
+    let { ini, fim } = achados[i];
+    const iniLinha = saida.lastIndexOf('\n', ini - 1) + 1;
+    let fimLinha = saida.indexOf('\n', fim);
+    if (fimLinha === -1) fimLinha = saida.length;
+    const sozinha = /^[ \t]*$/.test(saida.slice(iniLinha, ini)) && /^[ \t\r]*$/.test(saida.slice(fim, fimLinha));
+    if (sozinha) {
+      ini = iniLinha;
+      fim = Math.min(fimLinha + 1, saida.length);
+      // tinha linha em branco em cima e embaixo? tira uma, pra não sobrar buraco duplo
+      const depois = /^[ \t]*\r?\n/.exec(saida.slice(fim));
+      if (depois && /\n[ \t]*\n$/.test(saida.slice(0, ini))) fim += depois[0].length;
+    }
+    saida = saida.slice(0, ini) + saida.slice(fim);
+  }
+  return saida;
+}
+
 // Linhas que o TextInput carrega de cada vez. Arquivo grande NÃO vai inteiro
 // pro TextInput nativo (é isso que travava ao abrir/rolar/digitar): só um
 // trecho em volta do que está na tela, e o resto é espaço em branco do
@@ -4158,7 +4303,6 @@ function CindraStudioScreen({ visible, onClose }) {
 
   // Compilação (▶)
   const [compilando, setCompilando] = useState(false);
-  const [gerandoZip, setGerandoZip] = useState(false);
   const [painelCompilacao, setPainelCompilacao] = useState(false);
   const [logCompilacao, setLogCompilacao] = useState([]);
   const [errosCompilacao, setErrosCompilacao] = useState([]);
@@ -4172,6 +4316,9 @@ function CindraStudioScreen({ visible, onClose }) {
   // fechar o app. Só começa do zero se a pessoa tocar em "Novo projeto".
   const [estadoCarregado, setEstadoCarregado] = useState(false);
   const [confirmandoNovo, setConfirmandoNovo] = useState(false);
+  const [permissoesAberto, setPermissoesAberto] = useState(false); // folha de permissões (engrenagem do editor)
+  const [buscaPermissao, setBuscaPermissao] = useState('');
+  const { height: alturaTela } = useWindowDimensions();
   const [cardNo, setCardNo] = useState(null); // pasta/arquivo segurado (card de ação)
   const [confirmandoExclusao, setConfirmandoExclusao] = useState(null); // caminho do arquivo aguardando o 2º toque pra excluir
   const [pastaEmCriacao, setPastaEmCriacao] = useState(false); // dentro do card: mostrando o campo de nome da nova pasta
@@ -4802,62 +4949,19 @@ function CindraStudioScreen({ visible, onClose }) {
     }
   };
 
-  // ⬇ ZIP — empacota o projeto inteiro (código + binários) num .zip e
-  // salva na pasta que a pessoa escolher (ex.: Downloads) pelo seletor de
-  // pastas do Android. Se já existir um .zip com o mesmo nome lá, substitui.
-  const baixarZip = async () => {
-    if (gerandoZip || !projeto) return;
-    if (Platform.OS !== 'android') {
-      exibirAviso('Só no Android', 'Exportar .zip usa o seletor de pastas do Android.', 'aviso');
-      return;
-    }
-    setGerandoZip(true);
-    try {
-      const SAF = FileSystem.StorageAccessFramework;
-      const perm = await SAF.requestDirectoryPermissionsAsync();
-      if (!perm.granted) return;
-
-      const base = String(nomeApp || 'projeto').trim().replace(/[^A-Za-z0-9._-]/g, '_') || 'projeto';
-      const entradas = [];
-      const cedeVez = () => new Promise((r) => setTimeout(r, 0));
-
-      for (const caminho of Object.keys(projeto.conteudos)) {
-        entradas.push({ nome: `${base}/${caminho}`, bytes: textoParaBytes(projeto.conteudos[caminho]) });
-      }
-      const binarios = projeto.binarios || {};
-      for (const caminho of Object.keys(binarios)) {
-        await cedeVez();
-        const b64 = await FileSystem.readAsStringAsync(pastaBinariosStudio(projeto.pacote) + caminho, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        entradas.push({ nome: `${base}/${caminho}`, bytes: base64ParaBytes(b64) });
-      }
-      for (const caminho of pastasVaziasDaArvore(projeto.arvore)) {
-        entradas.push({ nome: `${base}/${caminho}/`, bytes: new Uint8Array(0) });
-      }
-      await cedeVez();
-      const zipB64 = bytesParaBase64(montarZipStudio(entradas));
-
-      // Já tem um zip com esse nome na pasta? Apaga pra não virar "nome (1).zip".
-      try {
-        const itens = await SAF.readDirectoryAsync(perm.directoryUri);
-        for (const u of itens) {
-          let dec = '';
-          try { dec = decodeURIComponent(u); } catch (e) { dec = u; }
-          if (dec.endsWith(`/${base}.zip`) || dec.endsWith(`:${base}.zip`)) {
-            await FileSystem.deleteAsync(u, { idempotent: true });
-          }
-        }
-      } catch (e) { /* segue: no pior caso o Android numera o arquivo */ }
-
-      const destino = await SAF.createFileAsync(perm.directoryUri, base, 'application/zip');
-      await FileSystem.writeAsStringAsync(destino, zipB64, { encoding: FileSystem.EncodingType.Base64 });
-      exibirAviso('ZIP salvo', `${base}.zip com ${Object.keys(projeto.conteudos).length + Object.keys(binarios).length} arquivos.`, 'sucesso');
-    } catch (e) {
-      exibirAviso('Erro ao gerar o ZIP', String(e && e.message ? e.message : e), 'erro');
-    } finally {
-      setGerandoZip(false);
-    }
+  // Liga/desliga uma permissão: escreve (ou apaga) a linha <uses-permission>
+  // no AndroidManifest.xml do projeto. O arquivo nunca é excluído.
+  const alternarPermissao = (nomePermissao, ligar) => {
+    setProjeto((atual) => {
+      if (!atual) return atual;
+      const xml = atual.conteudos[MANIFEST_PATH_STUDIO];
+      if (xml === undefined) return atual;
+      const novo = ligar ? ativarPermissaoManifest(xml, nomePermissao) : desativarPermissaoManifest(xml, nomePermissao);
+      if (novo === xml) return atual;
+      return { ...atual, conteudos: { ...atual.conteudos, [MANIFEST_PATH_STUDIO]: novo } };
+    });
+    // o texto mudou "por fora" do teclado: o desfazer antigo do manifest não vale mais
+    delete historicoRef.current[MANIFEST_PATH_STUDIO];
   };
 
   // ▶ — grava, garante o android.jar e roda o pipeline nativo.
@@ -5138,6 +5242,7 @@ function CindraStudioScreen({ visible, onClose }) {
     if (cardProjeto) { setCardProjeto(null); return; }
     if (menuOrdenarAberto) { setMenuOrdenarAberto(false); return; }
     if (cardNo) { setCardNo(null); setPastaEmCriacao(false); setNomeNovaPasta(''); return; }
+    if (permissoesAberto) { setPermissoesAberto(false); setBuscaPermissao(''); return; }
     if (menuProjetoAberto) { setMenuProjetoAberto(false); return; }
     if (painelCompilacao) { if (!compilando) setPainelCompilacao(false); return; }
     if (sidebarAberta) { setSidebarAberta(false); return; }
@@ -5823,14 +5928,11 @@ function CindraStudioScreen({ visible, onClose }) {
             </TouchableOpacity>
             <TouchableOpacity
               style={studioStyles.topBarIconBtn}
-              onPress={baixarZip}
-              disabled={gerandoZip}
+              onPress={() => setPermissoesAberto(true)}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.75}
             >
-              {gerandoZip
-                ? <ActivityIndicator size="small" color={COLORS.ember} />
-                : <MaterialCommunityIcons name="folder-zip-outline" size={17} color={COLORS.dim} />}
+              <MaterialCommunityIcons name="cog-outline" size={18} color={COLORS.dim} />
             </TouchableOpacity>
             <View style={studioStyles.topBarDivider} />
             <TouchableOpacity
@@ -6058,6 +6160,109 @@ function CindraStudioScreen({ visible, onClose }) {
           )}
         </FolhaInferiorStudio>
       )}
+
+      {permissoesAberto && (() => {
+        const xml = projeto && projeto.conteudos ? projeto.conteudos[MANIFEST_PATH_STUDIO] : undefined;
+        const ativas = xml !== undefined ? lerPermissoesManifest(xml) : new Set();
+        const termo = buscaPermissao.trim().toLowerCase();
+        const casa = (pm) => !termo || pm.nome.toLowerCase().includes(termo) || pm.desc.toLowerCase().includes(termo) || pm.id.toLowerCase().includes(termo);
+        const conhecidas = new Set(PERMISSOES_STUDIO.map((pm) => pm.id));
+        const outras = [...ativas].filter((n) => !conhecidas.has(n) && (!termo || n.toLowerCase().includes(termo)));
+        const linhaPerm = (id, nome, desc, icone, perigosa) => {
+          const ligada = ativas.has(id);
+          return (
+            <View key={id} style={studioStyles.permLinha}>
+              <View style={studioStyles.nodoOpcaoIcone}>
+                <MaterialCommunityIcons name={icone} size={20} color={ligada ? COLORS.ember : COLORS.dim} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={studioStyles.permNome} numberOfLines={1}>{nome}</Text>
+                <Text style={studioStyles.nodoOpcaoDesc} numberOfLines={2}>
+                  {desc}{perigosa ? ' · o app também precisa pedir autorização' : ''}
+                </Text>
+              </View>
+              <Switch
+                value={ligada}
+                onValueChange={(v) => alternarPermissao(id, v)}
+                trackColor={{ false: 'rgba(255,255,255,0.15)', true: COLORS.ember }}
+                thumbColor="#ffffff"
+              />
+            </View>
+          );
+        };
+        let algumaCoisa = false;
+        return (
+          <FolhaInferiorStudio
+            onFechar={() => { setPermissoesAberto(false); setBuscaPermissao(''); }}
+            insetBottom={alturaTeclado > 0 ? alturaTeclado + 12 : insets.bottom}
+          >
+            {() => (
+              <>
+                <View style={studioStyles.nodoTopo}>
+                  <View style={studioStyles.nodoIcone}>
+                    <MaterialCommunityIcons name="shield-check-outline" size={24} color={COLORS.ember} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={studioStyles.folhaTitulo}>Permissões do app</Text>
+                    <Text style={studioStyles.folhaSub} numberOfLines={2}>
+                      {xml === undefined
+                        ? 'AndroidManifest.xml não encontrado'
+                        : `${ativas.size} ${ativas.size === 1 ? 'ativa' : 'ativas'} · escreve sozinho no AndroidManifest.xml`}
+                    </Text>
+                  </View>
+                </View>
+
+                {xml !== undefined && (
+                  <>
+                    <View style={[studioStyles.cfgCampo, { marginTop: 14, marginBottom: 6 }]}>
+                      <MaterialCommunityIcons name="magnify" size={18} color={COLORS.dim} />
+                      <TextInput
+                        style={studioStyles.cfgCampoInput}
+                        value={buscaPermissao}
+                        onChangeText={setBuscaPermissao}
+                        placeholder="Buscar permissão"
+                        placeholderTextColor={COLORS.dim}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                      />
+                    </View>
+                    <ScrollView
+                      style={{ maxHeight: Math.round(alturaTela * 0.48) }}
+                      nestedScrollEnabled
+                      keyboardShouldPersistTaps="handled"
+                      showsVerticalScrollIndicator={false}
+                    >
+                      {GRUPOS_PERMISSOES_STUDIO.map((grupo) => {
+                        const itens = PERMISSOES_STUDIO.filter((pm) => pm.grupo === grupo && casa(pm));
+                        if (!itens.length) return null;
+                        algumaCoisa = true;
+                        return (
+                          <View key={grupo}>
+                            <Text style={studioStyles.permGrupo}>{grupo}</Text>
+                            {itens.map((pm) => linhaPerm(pm.id, pm.nome, pm.desc, pm.icone, pm.perigosa))}
+                          </View>
+                        );
+                      })}
+                      {outras.length > 0 && (() => {
+                        algumaCoisa = true;
+                        return (
+                          <View>
+                            <Text style={studioStyles.permGrupo}>Outras no manifest</Text>
+                            {outras.map((n) => linhaPerm(n, n.split('.').pop(), n, 'shield-outline', false))}
+                          </View>
+                        );
+                      })()}
+                      {!algumaCoisa && (
+                        <Text style={[studioStyles.nodoOpcaoDesc, { textAlign: 'center', paddingVertical: 24 }]}>Nenhuma permissão encontrada</Text>
+                      )}
+                    </ScrollView>
+                  </>
+                )}
+              </>
+            )}
+          </FolhaInferiorStudio>
+        );
+      })()}
 
       {cardNo && (
         <FolhaInferiorStudio
