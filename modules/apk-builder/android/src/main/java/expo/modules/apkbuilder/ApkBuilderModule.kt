@@ -253,6 +253,29 @@ class ApkBuilderModule : Module() {
       saida
     }
 
+    // Lista as PASTAS (recursivo, só caminhos relativos), inclusive as vazias.
+    AsyncFunction("listarPastas") { raiz: String ->
+      val base = File(raiz.removePrefix("file://"))
+      val saida = ArrayList<String>()
+      if (base.isDirectory) {
+        base.walkTopDown().toList().forEach { f ->
+          if (f.isDirectory && f != base) saida.add(f.relativeTo(base).path)
+        }
+      }
+      saida
+    }
+
+    // Cria pastas (inclusive vazias) dentro da raiz. Devolve quantas criou.
+    AsyncFunction("criarPastas") { raiz: String, pastas: List<String> ->
+      val base = File(raiz.removePrefix("file://"))
+      var criadas = 0
+      for (rel in pastas) {
+        val d = File(base, rel)
+        if (!d.isDirectory && d.mkdirs()) criadas += 1
+      }
+      criadas
+    }
+
     // Lê vários arquivos de texto de uma vez. Devolve { caminho: texto } só dos que existem.
     AsyncFunction("lerTextos") { raiz: String, caminhos: List<String> ->
       val base = File(raiz.removePrefix("file://"))

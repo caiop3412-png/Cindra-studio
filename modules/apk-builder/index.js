@@ -106,3 +106,16 @@ export function lerTextos(raiz, caminhos) {
 export function copiarSobrescrevendo(origem, destino) {
   return Nativo.copiarSobrescrevendo(origem, destino);
 }
+
+// Pastas (inclusive vazias) — precisa de build novo do módulo.
+export const temPastasNativas = !!(temEspelhoNativo && Nativo.listarPastas && Nativo.criarPastas);
+
+// ['app/src/main/res', ...] todas as pastas dentro da raiz.
+export function listarPastas(raiz) {
+  return Nativo.listarPastas(raiz);
+}
+
+// Cria as pastas (caminhos relativos à raiz). Devolve quantas criou.
+export function criarPastas(raiz, pastas) {
+  return Nativo.criarPastas(raiz, pastas);
+}
