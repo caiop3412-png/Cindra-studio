@@ -123,10 +123,30 @@ const EXTENSOES_TEXTO = new Set([
   'xml', 'json', 'css', 'scss', 'html', 'htm', 'md', 'txt',
   'gradle', 'properties', 'yml', 'yaml', 'ini', 'cfg', 'env',
   'sh', 'c', 'h', 'cpp', 'go', 'rs', 'rb', 'php', 'sql', 'csv', 'pro',
+  'svg', 'aidl', 'smali', 'bat', 'lua', 'dart', 'swift', 'toml', 'log', 'tsv',
+  'conf', 'rules', 'plist', 'xsd', 'vue', 'less', 'sass', 'gitignore', 'bak',
+]);
+// Arquivos de texto que não têm extensão (ou só têm o "ponto" do início).
+const NOMES_TEXTO_SEM_EXTENSAO = new Set([
+  'dockerfile', 'makefile', 'license', 'readme', 'gradlew', 'procfile',
+  '.gitignore', '.gitattributes', '.editorconfig', '.env',
+]);
+// Extensões que a gente já sabe que são binárias — nem perde tempo
+// espiando o conteúdo.
+const EXTENSOES_BINARIAS = new Set([
+  'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'mp3', 'ogg', 'wav', 'm4a', 'flac',
+  'mp4', 'mkv', 'webm', 'avi', 'zip', 'jar', 'aar', 'apk', 'dex', 'so', 'class', 'gz', 'tar',
+  '7z', 'rar', 'ttf', 'otf', 'woff', 'woff2', 'pdf', 'glb', 'fbx', 'bin', 'db', 'keystore', 'jks',
 ]);
 function ehExtensaoTexto(nome) {
-  const m = /\.([a-zA-Z0-9]+)$/.exec(String(nome || ''));
-  return !!m && EXTENSOES_TEXTO.has(m[1].toLowerCase());
+  const n = String(nome || '').toLowerCase();
+  if (NOMES_TEXTO_SEM_EXTENSAO.has(n)) return true;
+  const m = /\.([a-zA-Z0-9]+)$/.exec(n);
+  return !!m && EXTENSOES_TEXTO.has(m[1]);
+}
+function ehExtensaoBinaria(nome) {
+  const m = /\.([a-zA-Z0-9]+)$/.exec(String(nome || '').toLowerCase());
+  return !!m && EXTENSOES_BINARIAS.has(m[1]);
 }
 
 // Extensão do arquivo → linguagem reconhecida (null = sem destaque, mostra
@@ -458,6 +478,59 @@ function iconeArquivoStudio(nome) {
     json: { icon: 'code-tags', color: COLORS.ember },
   };
   return MAPA[ext] || { icon: 'file-document-outline', color: COLORS.dim };
+}
+
+// Nome "de gente" do tipo do arquivo (aparece na folha e nos avisos).
+const ROTULOS_ARQUIVO_STUDIO = {
+  java: 'Java', kt: 'Kotlin', xml: 'XML', json: 'JSON', html: 'HTML', css: 'CSS', js: 'JavaScript',
+  ts: 'TypeScript', py: 'Python', md: 'Markdown', txt: 'Texto', gradle: 'Gradle', properties: 'Propriedades',
+  yml: 'YAML', yaml: 'YAML', svg: 'Imagem SVG', png: 'Imagem PNG', jpg: 'Imagem JPG', jpeg: 'Imagem JPEG',
+  gif: 'Imagem GIF', webp: 'Imagem WebP', mp3: 'Som MP3', ogg: 'Som OGG', wav: 'Som WAV', mp4: 'Vídeo MP4',
+  zip: 'Arquivo ZIP', jar: 'Biblioteca JAR', aar: 'Biblioteca AAR', apk: 'APK', so: 'Biblioteca nativa',
+  ttf: 'Fonte TTF', otf: 'Fonte OTF', pdf: 'PDF', glb: 'Modelo 3D', gltf: 'Modelo 3D', obj: 'Modelo 3D',
+  sql: 'SQL', csv: 'Planilha CSV', pro: 'Regras ProGuard', sh: 'Script shell',
+};
+function descreverArquivoStudio(nome, ehTexto) {
+  const n = String(nome || '');
+  const m = /\.([a-zA-Z0-9]+)$/.exec(n);
+  const ext = m ? m[1].toLowerCase() : '';
+  const rotulo = ROTULOS_ARQUIVO_STUDIO[ext] || (ext ? ext.toUpperCase() : 'Arquivo');
+  const modo = ehTexto === undefined ? '' : ehTexto ? 'editável' : 'binário';
+  return { rotulo, modo, texto: modo ? `${rotulo} · ${modo}` : rotulo };
+}
+function formatarTamanhoStudio(bytes) {
+  const b = Number(bytes) || 0;
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${Math.round(b / 1024)} KB`;
+  return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+}
+// Extensão desconhecida? Espia os primeiros 4 KB: sem byte 0 e com poucos
+// caracteres de controle = texto (abre no editor); senão = binário.
+async function pareceTextoPorConteudo(uri) {
+  try {
+    const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64, position: 0, length: 4096 });
+    const bytes = base64ParaBytes(b64);
+    if (!bytes.length) return true;
+    let estranhos = 0;
+    for (let i = 0; i < bytes.length; i++) {
+      const b = bytes[i];
+      if (b === 0) return false;
+      if (b < 9 || (b > 13 && b < 32)) estranhos++;
+    }
+    return estranhos / bytes.length < 0.02;
+  } catch (e) {
+    return false;
+  }
+}
+// Sugestões de nome ao criar pasta, conforme onde a pasta nova vai ficar.
+function sugestoesPastaStudio(caminhoPai, filhos) {
+  const base = /\/res$/.test(caminhoPai)
+    ? ['drawable', 'layout', 'values', 'menu', 'mipmap-hdpi', 'raw']
+    : /\/main$/.test(caminhoPai)
+      ? ['java', 'res', 'assets']
+      : ['res', 'assets', 'libs', 'drawable', 'layout', 'values', 'raw'];
+  const existentes = new Set((filhos || []).map((f) => f.nome));
+  return base.filter((n) => !existentes.has(n)).slice(0, 5);
 }
 
 // SDK do projeto gerado — vale pro <uses-sdk> do manifest e pro
@@ -1882,6 +1955,32 @@ const studioStyles = StyleSheet.create({
     marginBottom: 8,
   },
   folhaLinhaTexto: { flex: 1, color: COLORS.ink, fontSize: 15, fontWeight: '600' },
+  nodoTopo: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  nodoIcone: {
+    width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
+  },
+  nodoCaminho: { color: COLORS.dim, fontSize: 11.5, marginTop: 10, marginBottom: 16, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  nodoOpcao: {
+    flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12, paddingHorizontal: 12,
+    borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.05)', marginBottom: 8,
+  },
+  nodoOpcaoIcone: {
+    width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  nodoOpcaoDesc: { color: COLORS.dim, fontSize: 12, lineHeight: 16, marginTop: 2 },
+  nodoDica: { color: COLORS.dim, fontSize: 12, marginTop: 8, marginLeft: 4 },
+  nodoChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  nodoChip: {
+    paddingVertical: 7, paddingHorizontal: 12, borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
+  },
+  nodoChipTexto: { color: COLORS.ink, fontSize: 13, fontWeight: '600' },
+  nodoBtnSec: { backgroundColor: 'rgba(255,255,255,0.07)' },
+  nodoBtnSecTexto: { color: COLORS.ink, fontSize: 15, fontWeight: '700' },
+  nodoBtnPrim: { backgroundColor: COLORS.ember, flexDirection: 'row', gap: 6 },
+  nodoBtnPrimTexto: { color: '#1a0806', fontSize: 15, fontWeight: '800' },
   folhaConfirma: { backgroundColor: 'rgba(255,107,107,0.10)', borderRadius: 16, padding: 14 },
   folhaConfirmaTexto: { color: '#ffb4a8', fontSize: 13.5, lineHeight: 19, marginBottom: 14 },
   folhaConfirmaBotoes: { flexDirection: 'row', gap: 10 },
@@ -3970,6 +4069,23 @@ const aprenderStyles = StyleSheet.create({
 });
 
 const LIMITE_HISTORICO = 500;
+
+// Linhas que o TextInput carrega de cada vez. Arquivo grande NÃO vai inteiro
+// pro TextInput nativo (é isso que travava ao abrir/rolar/digitar): só um
+// trecho em volta do que está na tela, e o resto é espaço em branco do
+// tamanho certo, igual já era feito com os números e as cores.
+const TRECHO_MARGEM_LINHAS = 25;   // chegou perto da borda do trecho → recentra
+const TRECHO_FOLGA_LINHAS = 80;    // linhas extras pra cada lado ao recentrar
+
+// Em qual linha (0-based) cai a posição `pos` do texto, sem criar strings.
+function linhaDoOffset(linhas, pos) {
+  let o = 0;
+  for (let i = 0; i < linhas.length; i++) {
+    o += linhas[i].length + 1;
+    if (pos < o) return i;
+  }
+  return Math.max(0, linhas.length - 1);
+}
 function diffTexto(antes, depois) {
   const max = Math.min(antes.length, depois.length);
   let p = 0;
@@ -4033,6 +4149,11 @@ function CindraStudioScreen({ visible, onClose }) {
   const [janelaEditor, setJanelaEditor] = useState({ inicio: 0, fim: 120 });
   const janelaEditorRef = useRef(janelaEditor);
   janelaEditorRef.current = janelaEditor;
+  // Trecho (em linhas) que está de fato dentro do TextInput.
+  const [trecho, setTrecho] = useState({ ini: 0, fim: 150 });
+  const trechoInfoRef = useRef({ ini: 0, fim: 1, offset: 0, tamanho: 0, quebras: 0, total: 1 });
+  const ignorarSelecaoAteRef = useRef(0); // ignora seleção "fantasma" logo após trocar o trecho
+  const primeiraTrocaTrechoRef = useRef(true);
   const [menuProjetoAberto, setMenuProjetoAberto] = useState(false); // folha "Opções do projeto" (fora do menu lateral)
 
   // Compilação (▶)
@@ -4328,6 +4449,13 @@ function CindraStudioScreen({ visible, onClose }) {
         noExistente = acharNoNaArvore(projeto.arvore, `${pastaCaminho}/${nome}`);
       }
 
+      // Detecção do tipo: extensão conhecida de texto → texto; extensão
+      // conhecida binária → binário; qualquer outra → espia o conteúdo.
+      const eTexto = ehExtensaoTexto(nome)
+        ? true
+        : ehExtensaoBinaria(nome) ? false : await pareceTextoPorConteudo(arq.uri);
+      const tipoArq = descreverArquivoStudio(nome, eTexto);
+
       const caminho = `${pastaCaminho}/${nome}`;
       const eraTexto = projeto.conteudos[caminho] !== undefined;
       const eraBinario = !!(projeto.binarios && projeto.binarios[caminho]);
@@ -4342,7 +4470,7 @@ function CindraStudioScreen({ visible, onClose }) {
       // Extensão de texto/código → lê o conteúdo direto (sem limite de
       // tamanho) e guarda em `conteudos`, pra abrir editável no Studio.
       // Qualquer outra extensão continua indo pra `binarios` como antes.
-      if (ehExtensaoTexto(nome)) {
+      if (eTexto) {
         const texto = await FileSystem.readAsStringAsync(arq.uri, { encoding: FileSystem.EncodingType.UTF8 });
         FileSystem.deleteAsync(arq.uri, { idempotent: true }).catch(() => {}); // limpa o cache
         // Se antes era binário nesse caminho, apaga o binário velho do disco.
@@ -4381,7 +4509,12 @@ function CindraStudioScreen({ visible, onClose }) {
         });
       }
       setPastasAbertas((atual) => ({ ...atual, [pastaCaminho]: true }));
-      exibirAviso(substituindo ? 'Arquivo substituído' : 'Arquivo adicionado', `${nome} está em ${pastaCaminho}`, 'sucesso');
+      const tam = arq.size ? ` · ${formatarTamanhoStudio(arq.size)}` : '';
+      exibirAviso(
+        substituindo ? 'Arquivo substituído' : 'Arquivo adicionado',
+        `${nome} (${tipoArq.texto}${tam}) está em ${pastaCaminho}`,
+        'sucesso'
+      );
     } catch (e) {
       exibirAviso('Erro ao adicionar', String(e && e.message ? e.message : e), 'erro');
     }
@@ -4545,6 +4678,15 @@ function CindraStudioScreen({ visible, onClose }) {
     const linhasNaTela = Math.ceil((alturaVisivel || 700) / (alturaLinha || 20));
     const novoInicio = Math.max(0, linha - OVERSCAN_LINHAS_EDITOR);
     const novoFim = linha + linhasNaTela + OVERSCAN_LINHAS_EDITOR;
+    const info = trechoInfoRef.current;
+    const base = linha + linhasNaTela;
+    if (
+      (linha - info.ini < TRECHO_MARGEM_LINHAS && info.ini > 0) ||
+      (info.fim - base < TRECHO_MARGEM_LINHAS && info.fim < info.total)
+    ) {
+      ignorarSelecaoAteRef.current = Date.now() + 250;
+      setTrecho({ ini: Math.max(0, linha - TRECHO_FOLGA_LINHAS), fim: base + TRECHO_FOLGA_LINHAS });
+    }
     const atual = janelaEditorRef.current;
     if (Math.abs(atual.inicio - novoInicio) < 15 && Math.abs(atual.fim - novoFim) < 15) return;
     setJanelaEditor({ inicio: novoInicio, fim: novoFim });
@@ -4590,6 +4732,20 @@ function CindraStudioScreen({ visible, onClose }) {
     if (h.undo.length > LIMITE_HISTORICO) h.undo.shift();
     h.redo = []; // editou de novo → o "refazer" antigo perde o sentido
     gravarTextoAtivo(texto);
+  };
+
+  // O TextInput só tem o TRECHO; aqui encaixa o que ele devolveu de volta
+  // no texto inteiro e ajusta o fim do trecho se entraram/saíram linhas.
+  const alterarTrecho = (novoTrecho) => {
+    if (!arquivoAtivo) return;
+    const { offset, tamanho, quebras } = trechoInfoRef.current;
+    const completo = conteudoAtivoRef.current;
+    const novo = completo.slice(0, offset) + novoTrecho + completo.slice(offset + tamanho);
+    let q = 0;
+    for (let i = 0; i < novoTrecho.length; i++) if (novoTrecho.charCodeAt(i) === 10) q++;
+    const delta = q - quebras;
+    alterarConteudo(novo);
+    if (delta !== 0) setTrecho((t) => ({ ini: t.ini, fim: t.fim + delta }));
   };
 
   const posicionarCursor = (pos) => {
@@ -4814,6 +4970,33 @@ function CindraStudioScreen({ visible, onClose }) {
   const larguraGutter = Math.ceil(digitosNumeroLinhas * 13 * 0.6 * escalaFonte) + 16;
   const alturaTotalCodigo = 28 + numeroDeLinhas * alturaLinhaEditor;
 
+  // Trecho carregado no TextInput (sempre com pelo menos 1 linha).
+  const trechoIni = Math.min(Math.max(0, trecho.ini), Math.max(0, numeroDeLinhas - 1));
+  const trechoFim = Math.max(trechoIni + 1, Math.min(trecho.fim, numeroDeLinhas));
+  const textoTrecho = useMemo(
+    () => linhasAtivas.slice(trechoIni, trechoFim).join('\n'),
+    [linhasAtivas, trechoIni, trechoFim]
+  );
+  const offsetTrecho = useMemo(() => {
+    let o = 0;
+    for (let i = 0; i < trechoIni; i++) o += linhasAtivas[i].length + 1;
+    return o;
+  }, [linhasAtivas, trechoIni]);
+  trechoInfoRef.current = {
+    ini: trechoIni,
+    fim: trechoFim,
+    offset: offsetTrecho,
+    tamanho: textoTrecho.length,
+    quebras: trechoFim - trechoIni - 1,
+    total: numeroDeLinhas,
+  };
+  const selecaoTrecho = selecaoForcada
+    ? {
+        start: Math.min(Math.max(0, selecaoForcada.start - offsetTrecho), textoTrecho.length),
+        end: Math.min(Math.max(0, selecaoForcada.end - offsetTrecho), textoTrecho.length),
+      }
+    : undefined;
+
   // Destaque de sintaxe: linguagem do arquivo aberto e a regex já cacheada
   // pra ela (null pra extensão desconhecida = sem cor, comportamento antigo).
   const linguagemAtiva = useMemo(() => detectarLinguagem(arquivoAtivo), [arquivoAtivo]);
@@ -4844,7 +5027,20 @@ function CindraStudioScreen({ visible, onClose }) {
   useEffect(() => {
     scrollYEditorRef.current = 0;
     setJanelaEditor({ inicio: 0, fim: 120 });
+    setTrecho({ ini: 0, fim: 150 });
   }, [arquivoAtivo]);
+
+  // Depois que o trecho muda de lugar, devolve o cursor pra onde estava
+  // (se ele ainda está dentro do trecho novo).
+  useEffect(() => {
+    if (primeiraTrocaTrechoRef.current) { primeiraTrocaTrechoRef.current = false; return undefined; }
+    const info = trechoInfoRef.current;
+    if (caretPos < info.offset || caretPos > info.offset + info.tamanho) return undefined;
+    setSelecaoForcada({ start: caretPos, end: caretPos });
+    const t = setTimeout(() => setSelecaoForcada(null), 80);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trechoIni]);
 
   // Altura do teclado: o app desenha de ponta a ponta (edge-to-edge) e o
   // teclado fica POR CIMA da tela, então a gente encolhe a área do editor
@@ -4866,7 +5062,7 @@ function CindraStudioScreen({ visible, onClose }) {
       const rolagem = scrollEditorRef.current;
       const visivel = alturaAreaEditorRef.current;
       if (!rolagem || !visivel) return;
-      const linha = conteudoAtivo.slice(0, caretPos).split('\n').length - 1;
+      const linha = linhaDoOffset(linhasAtivas, caretPos);
       const topo = 14 + linha * alturaLinhaEditor;
       const base = topo + alturaLinhaEditor;
       const y = scrollYEditorRef.current;
@@ -4881,7 +5077,12 @@ function CindraStudioScreen({ visible, onClose }) {
   // nunca fica "sumido" esperando a próxima rolagem pra reaparecer.
   useEffect(() => {
     if (!arquivoAtivo) return;
-    const linha = conteudoAtivo.slice(0, caretPos).split('\n').length - 1;
+    const linha = linhaDoOffset(linhasAtivas, caretPos);
+    const info = trechoInfoRef.current;
+    if ((linha < info.ini && info.ini > 0) || (linha >= info.fim && info.fim < info.total)) {
+      ignorarSelecaoAteRef.current = Date.now() + 250;
+      setTrecho({ ini: Math.max(0, linha - TRECHO_FOLGA_LINHAS), fim: linha + TRECHO_FOLGA_LINHAS });
+    }
     const atual = janelaEditorRef.current;
     if (linha < atual.inicio + 5 || linha > atual.fim - 5) {
       setJanelaEditor({
@@ -5724,13 +5925,16 @@ function CindraStudioScreen({ visible, onClose }) {
                   keyboardShouldPersistTaps="handled"
                   onLayout={(e) => setLarguraVisivelCodigo(Math.floor(e.nativeEvent.layout.width))}
                 >
-                  <View style={{ width: larguraCodigo }}>
+                  <View style={{ width: larguraCodigo, height: alturaTotalCodigo }}>
                     <TextInput
-                      style={[studioStyles.codeInput, { width: larguraCodigo }]}
-                      value={conteudoAtivo}
-                      onChangeText={alterarConteudo}
-                      onSelectionChange={(e) => setCaretPos(e.nativeEvent.selection.end)}
-                      selection={selecaoForcada || undefined}
+                      style={[studioStyles.codeInput, { position: 'absolute', left: 0, top: trechoIni * alturaLinhaEditor, width: larguraCodigo }]}
+                      value={textoTrecho}
+                      onChangeText={alterarTrecho}
+                      onSelectionChange={(e) => {
+                        if (Date.now() < ignorarSelecaoAteRef.current) return;
+                        setCaretPos(trechoInfoRef.current.offset + e.nativeEvent.selection.end);
+                      }}
+                      selection={selecaoTrecho}
                       multiline
                       autoCapitalize="none"
                       autoCorrect={false}
@@ -5856,77 +6060,157 @@ function CindraStudioScreen({ visible, onClose }) {
       )}
 
       {cardNo && (
-        <View style={[StyleSheet.absoluteFill, studioStyles.overlayRaiz]}>
-          <Pressable
-            style={studioStyles.sidebarBackdrop}
-            onPress={() => { setCardNo(null); setPastaEmCriacao(false); setNomeNovaPasta(''); }}
-          />
-          <View style={studioStyles.cardAcao}>
-            <Text style={studioStyles.cardAcaoTitulo} numberOfLines={1}>{cardNo.nome}</Text>
-            <Text style={studioStyles.cardAcaoCaminho} numberOfLines={2}>{cardNo.caminho}</Text>
-            {cardNo.tipo === 'pasta' ? (
-              pastaEmCriacao ? (
-                <>
-                  <View style={studioStyles.cfgCampo}>
-                    <MaterialCommunityIcons name="folder-outline" size={18} color={COLORS.ember} />
-                    <TextInput
-                      style={studioStyles.cfgCampoInput}
-                      value={nomeNovaPasta}
-                      onChangeText={setNomeNovaPasta}
-                      placeholder="Nome da pasta"
-                      placeholderTextColor={COLORS.dim}
-                      autoFocus
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      onSubmitEditing={() => criarPasta(cardNo.caminho, nomeNovaPasta)}
-                    />
+        <FolhaInferiorStudio
+          key={cardNo.caminho}
+          onFechar={() => { setCardNo(null); setPastaEmCriacao(false); setNomeNovaPasta(''); setConfirmandoExclusao(null); }}
+          insetBottom={alturaTeclado > 0 ? alturaTeclado + 12 : insets.bottom}
+        >
+          {(fechar) => {
+            const ehPasta = cardNo.tipo === 'pasta';
+            const bin = projeto && projeto.binarios ? projeto.binarios[cardNo.caminho] : null;
+            const txt = projeto && projeto.conteudos ? projeto.conteudos[cardNo.caminho] : undefined;
+            const info = ehPasta ? { icon: 'folder-outline', color: COLORS.ember } : iconeArquivoStudio(cardNo.nome);
+            const tipoNo = ehPasta ? null : descreverArquivoStudio(cardNo.nome, !bin);
+            const qtdFilhos = (cardNo.filhos || []).length;
+            let detalhe = '';
+            if (ehPasta) detalhe = qtdFilhos === 0 ? 'Pasta vazia' : `Pasta · ${qtdFilhos} ${qtdFilhos === 1 ? 'item' : 'itens'}`;
+            else if (bin) detalhe = `${tipoNo.texto} · ${formatarTamanhoStudio(bin.tamanho)}`;
+            else if (txt !== undefined) {
+              let linhas = 1;
+              for (let i = 0; i < txt.length; i++) if (txt.charCodeAt(i) === 10) linhas++;
+              detalhe = `${tipoNo.texto} · ${linhas} ${linhas === 1 ? 'linha' : 'linhas'}`;
+            } else detalhe = tipoNo.texto;
+
+            const nomeLimpo = nomeNovaPasta.trim().replace(/[^A-Za-z0-9._-]/g, '_');
+            const sugestoes = ehPasta && pastaEmCriacao ? sugestoesPastaStudio(cardNo.caminho, cardNo.filhos) : [];
+
+            return (
+              <>
+                <View style={studioStyles.nodoTopo}>
+                  <View style={studioStyles.nodoIcone}>
+                    <MaterialCommunityIcons name={info.icon} size={24} color={info.color} />
                   </View>
-                  <TouchableOpacity
-                    style={studioStyles.cardAcaoBtn}
-                    onPress={() => criarPasta(cardNo.caminho, nomeNovaPasta)}
-                    activeOpacity={0.8}
-                    disabled={!nomeNovaPasta.trim()}
-                  >
-                    <MaterialCommunityIcons name="check" size={18} color={COLORS.ember} />
-                    <Text style={studioStyles.cardAcaoBtnText}>Criar</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={studioStyles.cardAcaoBtn}
-                    onPress={() => { setPastaEmCriacao(false); setNomeNovaPasta(''); }}
-                    activeOpacity={0.8}
-                  >
-                    <MaterialCommunityIcons name="close" size={18} color={COLORS.dim} />
-                    <Text style={studioStyles.cardAcaoBtnText}>Cancelar</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <>
-                  <TouchableOpacity style={studioStyles.cardAcaoBtn} onPress={() => adicionarArquivo(cardNo.caminho)} activeOpacity={0.8}>
-                    <MaterialCommunityIcons name="file-plus-outline" size={18} color={COLORS.ember} />
-                    <Text style={studioStyles.cardAcaoBtnText}>Adicionar arquivo</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={studioStyles.cardAcaoBtn} onPress={() => setPastaEmCriacao(true)} activeOpacity={0.8}>
-                    <MaterialCommunityIcons name="folder-plus-outline" size={18} color={COLORS.ember} />
-                    <Text style={studioStyles.cardAcaoBtnText}>Criar pasta</Text>
-                  </TouchableOpacity>
-                </>
-              )
-            ) : (
-              <TouchableOpacity
-                style={studioStyles.cardAcaoBtn}
-                onPress={() => (confirmandoExclusao === cardNo.caminho
-                  ? excluirArquivo(cardNo.caminho)
-                  : setConfirmandoExclusao(cardNo.caminho))}
-                activeOpacity={0.8}
-              >
-                <MaterialCommunityIcons name="delete-outline" size={18} color="#ff8a80" />
-                <Text style={[studioStyles.cardAcaoBtnText, { color: '#ff8a80' }]}>
-                  {confirmandoExclusao === cardNo.caminho ? 'Toque de novo: apaga este arquivo' : 'Excluir arquivo'}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={studioStyles.folhaTitulo} numberOfLines={1}>{cardNo.nome}</Text>
+                    <Text style={studioStyles.folhaSub} numberOfLines={1}>{detalhe}</Text>
+                  </View>
+                </View>
+                <Text style={studioStyles.nodoCaminho} numberOfLines={1} ellipsizeMode="head">{cardNo.caminho}</Text>
+
+                {ehPasta && !pastaEmCriacao && (
+                  <>
+                    <TouchableOpacity style={studioStyles.nodoOpcao} onPress={() => adicionarArquivo(cardNo.caminho)} activeOpacity={0.8}>
+                      <View style={studioStyles.nodoOpcaoIcone}>
+                        <MaterialCommunityIcons name="file-plus-outline" size={20} color={COLORS.ember} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={studioStyles.folhaLinhaTexto}>Adicionar arquivo</Text>
+                        <Text style={studioStyles.nodoOpcaoDesc}>Escolha no celular — o Studio detecta o tipo (código, imagem, som...)</Text>
+                      </View>
+                      <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.dim} />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={studioStyles.nodoOpcao} onPress={() => setPastaEmCriacao(true)} activeOpacity={0.8}>
+                      <View style={studioStyles.nodoOpcaoIcone}>
+                        <MaterialCommunityIcons name="folder-plus-outline" size={20} color={COLORS.ember} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={studioStyles.folhaLinhaTexto}>Criar pasta</Text>
+                        <Text style={studioStyles.nodoOpcaoDesc}>Uma pasta nova dentro de {cardNo.nome}</Text>
+                      </View>
+                      <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.dim} />
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                {ehPasta && pastaEmCriacao && (
+                  <>
+                    <View style={studioStyles.cfgCampo}>
+                      <MaterialCommunityIcons name="folder-outline" size={18} color={COLORS.ember} />
+                      <TextInput
+                        style={studioStyles.cfgCampoInput}
+                        value={nomeNovaPasta}
+                        onChangeText={setNomeNovaPasta}
+                        placeholder="Nome da pasta"
+                        placeholderTextColor={COLORS.dim}
+                        autoFocus
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        returnKeyType="done"
+                        onSubmitEditing={() => criarPasta(cardNo.caminho, nomeNovaPasta)}
+                      />
+                    </View>
+                    {nomeLimpo !== '' && nomeLimpo !== nomeNovaPasta.trim() && (
+                      <Text style={studioStyles.nodoDica}>Vai ficar como: {nomeLimpo} (sem espaço nem acento)</Text>
+                    )}
+                    {sugestoes.length > 0 && (
+                      <View style={studioStyles.nodoChips}>
+                        {sugestoes.map((sug) => (
+                          <TouchableOpacity key={sug} style={studioStyles.nodoChip} onPress={() => setNomeNovaPasta(sug)} activeOpacity={0.8}>
+                            <Text style={studioStyles.nodoChipTexto}>{sug}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                    <View style={studioStyles.folhaConfirmaBotoes}>
+                      <TouchableOpacity
+                        style={[studioStyles.folhaBtn, studioStyles.nodoBtnSec]}
+                        onPress={() => { setPastaEmCriacao(false); setNomeNovaPasta(''); }}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={studioStyles.nodoBtnSecTexto}>Voltar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[studioStyles.folhaBtn, studioStyles.nodoBtnPrim, !nomeLimpo && { opacity: 0.4 }]}
+                        onPress={() => criarPasta(cardNo.caminho, nomeNovaPasta)}
+                        disabled={!nomeLimpo}
+                        activeOpacity={0.85}
+                      >
+                        <MaterialCommunityIcons name="check" size={18} color="#1a0806" />
+                        <Text style={studioStyles.nodoBtnPrimTexto}>Criar pasta</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
+
+                {!ehPasta && (
+                  <>
+                    {!bin && (
+                      <TouchableOpacity
+                        style={studioStyles.nodoOpcao}
+                        onPress={() => { const c = cardNo.caminho; setCardNo(null); abrirArquivo(c); }}
+                        activeOpacity={0.8}
+                      >
+                        <View style={studioStyles.nodoOpcaoIcone}>
+                          <MaterialCommunityIcons name="file-edit-outline" size={20} color={COLORS.ember} />
+                        </View>
+                        <Text style={studioStyles.folhaLinhaTexto}>Abrir no editor</Text>
+                        <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.dim} />
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={[studioStyles.nodoOpcao, confirmandoExclusao === cardNo.caminho && { backgroundColor: 'rgba(255,107,107,0.12)' }]}
+                      onPress={() => (confirmandoExclusao === cardNo.caminho
+                        ? excluirArquivo(cardNo.caminho)
+                        : setConfirmandoExclusao(cardNo.caminho))}
+                      activeOpacity={0.8}
+                    >
+                      <View style={studioStyles.nodoOpcaoIcone}>
+                        <MaterialCommunityIcons
+                          name={confirmandoExclusao === cardNo.caminho ? 'alert-outline' : 'trash-can-outline'}
+                          size={20}
+                          color="#ff8a80"
+                        />
+                      </View>
+                      <Text style={[studioStyles.folhaLinhaTexto, { color: '#ff8a80' }]}>
+                        {confirmandoExclusao === cardNo.caminho ? 'Toque de novo: apaga este arquivo' : 'Excluir arquivo'}
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </>
+            );
+          }}
+        </FolhaInferiorStudio>
       )}
 
       {painelCompilacao && (() => {
