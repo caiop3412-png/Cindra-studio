@@ -4901,6 +4901,7 @@ function CindraStudioScreen({ visible, onClose }) {
   const [copiandoPublica, setCopiandoPublica] = useState(false); // copiando APKs pra /storage/emulated/0/cindra-studio
   const avisoPastaPublicaRef = useRef(false); // avisa da permissão só 1 vez por sessão
   const [pedirAcessoArquivos, setPedirAcessoArquivos] = useState(false); // folha "Liberar acesso aos arquivos" ao abrir o app
+  const [verificandoAcessoArquivos, setVerificandoAcessoArquivos] = useState(false); // spinner do botão "verificar de novo"
   const semAcessoPublicoRef = useRef(false); // última checagem: sem permissão pra cindra-studio
   const pedidoRecusadoRef = useRef(false); // "Agora não" (vale até fechar o app)
   const buildsRef = useRef([]);
@@ -5060,12 +5061,24 @@ function CindraStudioScreen({ visible, onClose }) {
   }, [visible, estadoCarregado]);
 
   // Voltou das configurações do Android? Confere de novo; se liberou, já
-  // manda os APKs que faltam pra pasta.
+  // manda os APKs que faltam pra pasta. Tenta mais de uma vez com um
+  // pequeno atraso: em alguns aparelhos o AppState já marca "active" antes
+  // do Android terminar de aplicar o MANAGE_EXTERNAL_STORAGE, então a
+  // primeira checagem logo ao voltar ainda vê "sem permissão".
   useEffect(() => {
+    let cancelado = false;
     const sub = AppState.addEventListener('change', (estadoApp) => {
-      if (estadoApp === 'active' && semAcessoPublicoRef.current) liberouAcessoPastaPublica();
+      if (estadoApp !== 'active' || !semAcessoPublicoRef.current) return;
+      const tentar = async (restantes) => {
+        if (cancelado) return;
+        await liberouAcessoPastaPublica();
+        if (!cancelado && semAcessoPublicoRef.current && restantes > 0) {
+          setTimeout(() => tentar(restantes - 1), 700);
+        }
+      };
+      setTimeout(() => tentar(3), 400);
     });
-    return () => sub.remove();
+    return () => { cancelado = true; sub.remove(); };
   }, []);
 
   // Fechar a tela NÃO apaga o projeto: só fecha os painéis e salva na hora.
@@ -6977,6 +6990,27 @@ function CindraStudioScreen({ visible, onClose }) {
                   <Text style={[studioStyles.folhaBtnTexto, { color: '#1a0806' }]}>Liberar</Text>
                 </TouchableOpacity>
               </View>
+              <TouchableOpacity
+                disabled={verificandoAcessoArquivos}
+                onPress={async () => {
+                  setVerificandoAcessoArquivos(true);
+                  const ok = await verificarAcessoPastaPublica(false);
+                  setVerificandoAcessoArquivos(false);
+                  if (!ok) {
+                    exibirAviso(
+                      'Ainda sem acesso',
+                      'Na tela de Configurações, procure o Cindra Studio na lista e ATIVE a chave "Permitir acesso para gerenciar todos os arquivos" — só abrir a tela não libera, precisa ligar a chave.',
+                      'aviso'
+                    );
+                  }
+                }}
+                activeOpacity={0.7}
+                style={{ alignSelf: 'center', marginTop: 14, padding: 6 }}
+              >
+                <Text style={{ color: COLORS.dim, fontSize: 13, textDecorationLine: 'underline' }}>
+                  {verificandoAcessoArquivos ? 'Verificando…' : 'Já liberei, verificar de novo'}
+                </Text>
+              </TouchableOpacity>
             </>
           )}
         </FolhaInferiorStudio>
