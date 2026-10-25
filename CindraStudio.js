@@ -1439,7 +1439,16 @@ async function copiarParaPastaPublicaStudio(b) {
       if (!existe) break;
       destino = PASTA_PUBLICA_STUDIO + nome.replace(/\.apk$/i, `-${n}.apk`);
     }
-    await FileSystem.copyAsync({ from: b.apk, to: destino });
+    const origem = /^[a-z]+:\/\//i.test(String(b.apk)) ? b.apk : `file://${b.apk}`;
+    try {
+      await FileSystem.copyAsync({ from: origem, to: destino });
+    } catch (erroCopia) {
+      // Plano B: em alguns aparelhos o copyAsync recusa a pasta pública mesmo
+      // com a permissão liberada (a gravação normal funciona). Então lê o APK
+      // e grava no destino direto.
+      const dados = await FileSystem.readAsStringAsync(origem, { encoding: FileSystem.EncodingType.Base64 });
+      await FileSystem.writeAsStringAsync(destino, dados, { encoding: FileSystem.EncodingType.Base64 });
+    }
     return { ok: true, destino };
   } catch (e) {
     return { ok: false, motivo: String(e && e.message ? e.message : e) };
