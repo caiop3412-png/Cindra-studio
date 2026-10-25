@@ -1436,8 +1436,13 @@ async function testarAcessoPastaPublicaStudio() {
 async function copiarParaPastaPublicaStudio(b) {
   if (ApkBuilder.temPastaNativa) {
     try {
-      const nome = nomeArquivoPublicoStudio(b);
-      const destino = await ApkBuilder.copiarArquivo(String(b.apk).replace(/^file:\/\//, ''), `${PASTA_PUBLICA_TEXTO}/${nome}`);
+      // cindra-studio/NomeApp/NomeApp-1.apk, NomeApp-2.apk, ...
+      const pastaApp = nomePastaAppStudio(b.nomeApp, b.pacote);
+      const destino = await ApkBuilder.copiarSequencial(
+        String(b.apk).replace(/^file:\/\//, ''),
+        `${PASTA_PUBLICA_TEXTO}/${pastaApp}`,
+        pastaApp
+      );
       return { ok: true, destino };
     } catch (e) {
       return { ok: false, motivo: String(e && e.message ? e.message : e) };
@@ -1494,6 +1499,168 @@ async function copiarPendentesPastaPublicaStudio(lista) {
     atual = atual.map((x) => (x.id === b.id ? { ...x, apkPublico: r.destino } : x));
   }
   return { lista: atual, copiados, falhou, motivo };
+}
+
+// ─────────────────────────────────────────────────────────
+// Pasta de cada app: cindra-studio/NomeApp/
+//   NomeApp-1.apk, NomeApp-2.apk ...
+//   arquivos/  → espelho do projeto. Mexer lá (alterar, apagar, renomear,
+//                adicionar) altera o app na próxima vez que o Studio abrir
+//                / voltar pra tela / compilar.
+// ─────────────────────────────────────────────────────────
+function nomePastaAppStudio(nomeApp, pacote) {
+  let x = String(nomeApp || '');
+  try { if (x.normalize) x = x.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) { /* segue sem tirar acento */ }
+  x = x.replace(/[^A-Za-z0-9._-]+/g, '').replace(/^[._-]+/, '');
+  if (!x) x = String(pacote || '').split('.').pop().replace(/[^A-Za-z0-9._-]+/g, '');
+  return x || 'app';
+}
+
+const PASTA_SYNC_STUDIO = `${FileSystem.documentDirectory}cindrastudio/_sync/`;
+
+// { ultimaSync, pasta, arquivos } da última sincronização do projeto.
+async function lerSyncStudio(pacote) {
+  try {
+    const t = await FileSystem.readAsStringAsync(`${PASTA_SYNC_STUDIO}${pacote}.json`, { encoding: FileSystem.EncodingType.UTF8 });
+    const o = JSON.parse(t) || {};
+    return { ultimaSync: Number(o.ultimaSync) || 0, pasta: o.pasta || '', arquivos: Array.isArray(o.arquivos) ? o.arquivos : [] };
+  } catch (e) {
+    return { ultimaSync: 0, pasta: '', arquivos: [] };
+  }
+}
+
+async function gravarSyncStudio(pacote, dados) {
+  try {
+    await FileSystem.makeDirectoryAsync(PASTA_SYNC_STUDIO, { intermediates: true }).catch(() => {});
+    await FileSystem.writeAsStringAsync(`${PASTA_SYNC_STUDIO}${pacote}.json`, JSON.stringify(dados), { encoding: FileSystem.EncodingType.UTF8 });
+  } catch (e) { /* sem sync desta vez */ }
+}
+
+// Grava o projeto em cindra-studio/NomeApp/arquivos. Não sobrescreve o que
+// foi editado por fora e ainda não entrou no app.
+async function espelharProjetoNaPastaStudio(proj, nomeApp) {
+  if (!ApkBuilder.temEspelhoNativo || !proj || !proj.pacote) return false;
+  if (!(await testarAcessoPastaPublicaStudio())) return false;
+  const pasta = nomePastaAppStudio(nomeApp, proj.pacote);
+  const raiz = `${PASTA_PUBLICA_TEXTO}/${pasta}/arquivos`;
+  const sync = await lerSyncStudio(proj.pacote);
+  const ultima = sync.pasta === pasta ? sync.ultimaSync : 0;
+  const conteudos = proj.conteudos || {};
+  const binarios = Object.keys(proj.binarios || {});
+  const r = await ApkBuilder.espelharProjeto(raiz, conteudos, pastaBinariosStudio(proj.pacote), binarios, ultima);
+  await gravarSyncStudio(proj.pacote, {
+    ultimaSync: r && r.agora ? r.agora : Date.now(),
+    pasta,
+    arquivos: Object.keys(conteudos).concat(binarios),
+  });
+  return true;
+}
+
+// Compara a pasta "arquivos" com o projeto e devolve o que mudou por fora:
+// { textos: {caminho: texto}, binarios: {caminho: {tamanho}}, removidos: [caminho] }
+// (ou null se não tem nada novo / não dá pra checar).
+async function lerAlteracoesDaPastaStudio(proj, nomeApp) {
+  if (!ApkBuilder.temEspelhoNativo || !proj || !proj.pacote) return null;
+  const pasta = nomePastaAppStudio(nomeApp, proj.pacote);
+  const sync = await lerSyncStudio(proj.pacote);
+  if (!sync.ultimaSync || sync.pasta !== pasta) return null;
+  if (!(await testarAcessoPastaPublicaStudio())) return null;
+  const raiz = `${PASTA_PUBLICA_TEXTO}/${pasta}/arquivos`;
+  const lista = await ApkBuilder.listarPasta(raiz);
+  if (!Array.isArray(lista)) return null;
+
+  const limite = sync.ultimaSync + 1000;
+  const noDisco = new Map();
+  for (const it of lista) {
+    const rel = String(it.caminho).replace(/\\/g, '/');
+    if (rel.split('/').pop().startsWith('.')) continue;
+    noDisco.set(rel, it);
+  }
+  const conteudos = proj.conteudos || {};
+  const binarios = proj.binarios || {};
+  const delta = { textos: {}, binarios: {}, removidos: [] };
+
+  // 1) alterados / novos (só o que foi mexido depois da última sincronia)
+  const lerComoTexto = [];
+  const novosSemTipo = [];
+  for (const [rel, it] of noDisco) {
+    if (!(it.modificado > limite)) continue;
+    const nome = rel.split('/').pop();
+    if (binarios[rel]) {
+      delta.binarios[rel] = { tamanho: it.tamanho || 0 };
+    } else if (conteudos[rel] !== undefined) {
+      lerComoTexto.push(rel);
+    } else if (ehExtensaoTexto(nome)) {
+      lerComoTexto.push(rel);
+    } else if (ehExtensaoBinaria(nome) || (it.tamanho || 0) > 2000000) {
+      delta.binarios[rel] = { tamanho: it.tamanho || 0 };
+    } else {
+      novosSemTipo.push(rel);
+    }
+  }
+  const nomesParaLer = lerComoTexto.concat(novosSemTipo);
+  const lidos = nomesParaLer.length ? await ApkBuilder.lerTextos(raiz, nomesParaLer) : {};
+  for (const rel of lerComoTexto) {
+    if (typeof lidos[rel] === 'string' && lidos[rel] !== conteudos[rel]) delta.textos[rel] = lidos[rel];
+  }
+  for (const rel of novosSemTipo) {
+    const t = typeof lidos[rel] === 'string' ? lidos[rel] : null;
+    if (t === null) continue;
+    const amostra = t.slice(0, 4096);
+    let estranhos = 0;
+    for (let i = 0; i < amostra.length; i += 1) {
+      const c = amostra.charCodeAt(i);
+      if (c === 0) { estranhos = amostra.length; break; }
+      if (c === 0xfffd) estranhos += 1;
+    }
+    if (amostra.length && estranhos / amostra.length > 0.01) delta.binarios[rel] = { tamanho: (noDisco.get(rel).tamanho) || 0 };
+    else delta.textos[rel] = t;
+  }
+
+  // binários alterados/novos: copia pro lugar onde o Studio guarda
+  for (const rel of Object.keys(delta.binarios)) {
+    try {
+      await ApkBuilder.copiarSobrescrevendo(`${raiz}/${rel}`, pastaBinariosStudio(proj.pacote) + rel);
+    } catch (e) {
+      delete delta.binarios[rel];
+    }
+  }
+
+  // 2) apagados / renomeados por fora: só os que a gente tinha espelhado
+  if (lista.length > 0) {
+    for (const rel of sync.arquivos) {
+      if (noDisco.has(rel)) continue;
+      if (conteudos[rel] === undefined && !binarios[rel]) continue;
+      delta.removidos.push(rel);
+      if (binarios[rel]) FileSystem.deleteAsync(pastaBinariosStudio(proj.pacote) + rel, { idempotent: true }).catch(() => {});
+    }
+  }
+
+  const mudou = Object.keys(delta.textos).length + Object.keys(delta.binarios).length + delta.removidos.length > 0;
+  return mudou ? delta : null;
+}
+
+function aplicarAlteracoesDaPastaStudio(proj, d) {
+  if (!proj || !d) return proj;
+  const conteudos = { ...proj.conteudos };
+  const binarios = { ...(proj.binarios || {}) };
+  let arvore = proj.arvore;
+  for (const rel of Object.keys(d.textos)) {
+    delete binarios[rel];
+    conteudos[rel] = d.textos[rel];
+    arvore = garantirArquivoNaArvore(arvore, rel);
+  }
+  for (const rel of Object.keys(d.binarios)) {
+    delete conteudos[rel];
+    binarios[rel] = d.binarios[rel];
+    arvore = garantirArquivoNaArvore(arvore, rel);
+  }
+  for (const rel of d.removidos) {
+    delete conteudos[rel];
+    delete binarios[rel];
+    arvore = removerNoDaArvore(arvore, rel);
+  }
+  return { ...proj, conteudos, binarios, arvore };
 }
 
 // Agrupa os builds por app (pacote). Grupos e builds ficam do mais novo pro
@@ -5109,6 +5276,63 @@ function CindraStudioScreen({ visible, onClose }) {
     return () => { cancelado = true; sub.remove(); };
   }, []);
 
+  // ── Pasta cindra-studio/NomeApp/arquivos (espelho do projeto) ──
+  // importar=true: antes de espelhar, traz pro app o que foi alterado,
+  // apagado, renomeado ou adicionado por fora. Devolve o projeto já atualizado.
+  const sincronizandoRef = useRef(false);
+  const importouRef = useRef('');
+  const sincronizarPastaApp = async (importar, projIn, nomeAppIn) => {
+    const est = estadoRef.current;
+    let proj = projIn || (est && est.projeto);
+    const nomeDoApp = nomeAppIn || (est && est.nomeApp);
+    if (!proj || !proj.pacote || sincronizandoRef.current) return null;
+    sincronizandoRef.current = true;
+    try {
+      if (importar || importouRef.current !== proj.pacote) {
+        const d = await lerAlteracoesDaPastaStudio(proj, nomeDoApp);
+        importouRef.current = proj.pacote;
+        if (d) {
+          proj = aplicarAlteracoesDaPastaStudio(proj, d);
+          setProjeto((atual) => (atual && atual.pacote === proj.pacote ? aplicarAlteracoesDaPastaStudio(atual, d) : atual));
+          const mexidos = Object.keys(d.textos).concat(Object.keys(d.binarios), d.removidos);
+          mexidos.forEach((c) => { delete historicoRef.current[c]; });
+          if (d.removidos.length) {
+            setAbasAbertas((a) => a.filter((c) => !d.removidos.includes(c)));
+            setArquivoAtivo((a) => (a && d.removidos.includes(a) ? null : a));
+          }
+          exibirAviso('Alterações da pasta', `${mexidos.length} ${mexidos.length === 1 ? 'arquivo atualizado' : 'arquivos atualizados'} a partir de cindra-studio/${nomePastaAppStudio(nomeDoApp, proj.pacote)}/arquivos`, 'sucesso');
+        }
+      }
+      await espelharProjetoNaPastaStudio(proj, nomeDoApp);
+      return proj;
+    } catch (e) {
+      return null;
+    } finally {
+      sincronizandoRef.current = false;
+    }
+  };
+
+  // Depois de mexer no projeto (1,5 s parado), atualiza a pasta arquivos.
+  useEffect(() => {
+    if (etapa !== 'workspace' || !projeto) return undefined;
+    const t = setTimeout(() => { sincronizarPastaApp(false).catch(() => {}); }, 1500);
+    return () => clearTimeout(t);
+  }, [projeto, nomeApp, etapa]);
+
+  // Voltou pro Studio (ex.: veio do gerenciador de arquivos): traz o que
+  // mudou na pasta. Foi pro segundo plano: grava o que falta na pasta.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (estadoApp) => {
+      if (!estadoRef.current) return;
+      if (estadoApp === 'active') {
+        setTimeout(() => { sincronizarPastaApp(true).catch(() => {}); }, 600);
+      } else {
+        sincronizarPastaApp(false).catch(() => {});
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
   // Fechar a tela NÃO apaga o projeto: só fecha os painéis e salva na hora.
   useEffect(() => {
     if (!visible) {
@@ -5245,6 +5469,8 @@ function CindraStudioScreen({ visible, onClose }) {
     setErrosCompilacao([]);
     setLogCompilacao([]);
     setEtapa('workspace');
+    importouRef.current = '';
+    sincronizarPastaApp(true, proj, e.nomeApp || 'Meu App').catch(() => {});
   };
 
   // Tela inicial: toque na estrela do card — marca/desmarca favorito sem
@@ -5310,6 +5536,8 @@ function CindraStudioScreen({ visible, onClose }) {
       }).catch(() => null);
       if (lista) setListaProjetos(lista);
     }
+    await sincronizarPastaApp(false).catch(() => {});
+    importouRef.current = '';
     setSidebarAberta(false);
     setPainelCompilacao(false);
     setProjeto(null);
@@ -5700,10 +5928,11 @@ function CindraStudioScreen({ visible, onClose }) {
 
   // Grava o projeto inteiro em disco (é de lá que o compilador nativo vai
   // ler). Devolve a pasta, ou null se der erro (já avisa o usuário).
-  const salvarNoDisco = async () => {
-    if (!projeto) return null;
+  const salvarNoDisco = async (projOverride) => {
+    const alvo = projOverride || projeto;
+    if (!alvo) return null;
     try {
-      return await gravarProjetoStudio(projeto);
+      return await gravarProjetoStudio(alvo);
     } catch (e) {
       exibirAviso('Erro ao salvar', String(e && e.message ? e.message : e), 'erro');
       return null;
@@ -5771,8 +6000,10 @@ function CindraStudioScreen({ visible, onClose }) {
     const add = (linha) => setLogCompilacao((atual) => atual.concat(linha).slice(-200));
     const assinatura = ApkBuilder.aoLogar(add);
     try {
+      // Traz pro projeto o que foi mexido por fora na pasta arquivos.
+      const projSincronizado = await sincronizarPastaApp(true);
       add("Aplicando marca d'água do CindraStudio...");
-      const pasta = await salvarNoDisco();
+      const pasta = await salvarNoDisco(projSincronizado || undefined);
       if (!pasta) {
         add('Não foi possível gravar o projeto em disco.');
         return;
