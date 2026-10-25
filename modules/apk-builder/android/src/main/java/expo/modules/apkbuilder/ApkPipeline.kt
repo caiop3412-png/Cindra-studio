@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import com.android.apksig.ApkSigner
+import com.android.apksig.ApkVerifier
 import com.android.tools.r8.CompilationFailedException
 import com.android.tools.r8.CompilationMode
 import com.android.tools.r8.D8
@@ -21,6 +22,7 @@ import java.io.PrintWriter
 import java.io.StringWriter
 import java.security.KeyPairGenerator
 import java.security.KeyStore
+import java.security.UnrecoverableKeyException
 import java.security.PrivateKey
 import java.security.cert.X509Certificate
 import java.util.Date
@@ -48,13 +50,30 @@ data class ResultadoBuild(
   )
 }
 
+// Dados da assinatura RELEASE (keystore do próprio usuário). Se vier null,
+// o build é assinado com a chave de debug interna (AndroidKeyStore).
+data class ConfigAssinatura(
+  val keystore: String,
+  val senhaKeystore: String,
+  val alias: String,
+  val senhaChave: String
+)
+
+// Erro de assinatura com mensagem já pronta pra mostrar pra pessoa.
+class ErroAssinatura(mensagem: String) : Exception(mensagem)
+
 /**
  * Projeto esperado em <pasta>/app/src/main/{AndroidManifest.xml, java, res, assets}
  * (é o que o CindraStudio grava em disco).
  */
 class ApkPipeline(private val ctx: Context, private val log: (String) -> Unit) {
 
-  fun compilar(projeto: File, androidJar: File, saida: File): ResultadoBuild {
+  fun compilar(
+    projeto: File,
+    androidJar: File,
+    saida: File,
+    assinatura: ConfigAssinatura? = null
+  ): ResultadoBuild {
     val erros = mutableListOf<ErroCompilacao>()
     fun falha(etapa: String) = ResultadoBuild(false, null, erros, etapa)
 
@@ -190,7 +209,12 @@ class ApkPipeline(private val ctx: Context, private val log: (String) -> Unit) {
       // 6) assina
       log("6/6 assinando (apksig)")
       saida.parentFile?.mkdirs()
-      assinar(alinhado, saida, minSdk)
+      try {
+        assinar(alinhado, saida, minSdk, assinatura)
+      } catch (e: ErroAssinatura) {
+        erros += ErroCompilacao("assinatura", 0, e.message ?: "Falha ao assinar")
+        return falha("assinatura")
+      }
 
       log("Pronto: ${saida.length() / 1024} KB")
       return ResultadoBuild(true, saida.path, emptyList(), "ok")
@@ -316,13 +340,20 @@ class ApkPipeline(private val ctx: Context, private val log: (String) -> Unit) {
   }
 
   // ---------- assinatura ----------
-  // Chave RSA no AndroidKeyStore (o Android gera o certificado sozinho).
-  // Fica a mesma entre compilações, então o APK novo atualiza o anterior.
-  // Se o Cindra for desinstalado/ter os dados limpos, a chave some e o app
-  // gerado antes precisa ser desinstalado pra instalar o novo.
-  private fun assinar(entrada: File, saida: File, minSdk: Int) {
-    val (chave, certificado) = chaveDeAssinatura()
-    val config = ApkSigner.SignerConfig.Builder("cindrastudio", chave, listOf(certificado)).build()
+  // Sem config: chave de DEBUG no AndroidKeyStore (o Android gera o certificado
+  // sozinho). Fica a mesma entre compilações, então o APK novo atualiza o
+  // anterior. Se o Cindra for desinstalado/ter os dados limpos, a chave some e
+  // o app gerado antes precisa ser desinstalado pra instalar o novo.
+  // Com config: assina com o keystore do usuário (release). Sempre v1+v2+v3.
+  private fun assinar(entrada: File, saida: File, minSdk: Int, cfg: ConfigAssinatura?) {
+    val config = if (cfg != null) {
+      val (chave, cadeia, aliasReal) = chaveDoKeystore(cfg)
+      log("Assinando com a chave do keystore (alias: $aliasReal)")
+      ApkSigner.SignerConfig.Builder(nomeDoSigner(aliasReal), chave, cadeia).build()
+    } else {
+      val (chave, certificado) = chaveDeAssinatura()
+      ApkSigner.SignerConfig.Builder("cindrastudio", chave, listOf(certificado)).build()
+    }
     ApkSigner.Builder(listOf(config))
       .setInputApk(entrada)
       .setOutputApk(saida)
@@ -332,6 +363,81 @@ class ApkPipeline(private val ctx: Context, private val log: (String) -> Unit) {
       .setV3SigningEnabled(true)
       .build()
       .sign()
+    verificar(saida)
+  }
+
+  // Confere o APK final (o mesmo teste do apksig oficial). Só informa no log;
+  // se o verificador em si quebrar, não derruba o build.
+  private fun verificar(apk: File) {
+    try {
+      val r = ApkVerifier.Builder(apk).build().verify()
+      if (r.isVerified) {
+        log("Assinatura conferida (v1=${r.isVerifiedUsingV1Scheme}, v2=${r.isVerifiedUsingV2Scheme}, v3=${r.isVerifiedUsingV3Scheme})")
+      } else {
+        log("Aviso: a conferência da assinatura achou ${r.errors.size} problema(s)")
+      }
+    } catch (e: Throwable) {
+      log("Conferência da assinatura indisponível: ${e.javaClass.simpleName}")
+    }
+  }
+
+  // Nome do signer v1 (vira META-INF/NOME.SF): só letras/números, até 8 chars.
+  private fun nomeDoSigner(alias: String): String {
+    val limpo = alias.filter { it.isLetterOrDigit() }.take(8)
+    return if (limpo.isEmpty()) "CERT" else limpo.uppercase()
+  }
+
+  private fun chaveDoKeystore(cfg: ConfigAssinatura): Triple<PrivateKey, List<X509Certificate>, String> {
+    val arq = File(cfg.keystore)
+    if (!arq.isFile) throw ErroAssinatura("Keystore não encontrado. Escolha o arquivo de novo.")
+    val senhaStore = cfg.senhaKeystore.toCharArray()
+
+    // Android só abre PKCS12 (.p12/.pfx) e BKS. JKS (.jks) é formato Java
+    // de desktop e não existe no Android — avisa como converter.
+    val cabecalho = ByteArray(4)
+    arq.inputStream().use { it.read(cabecalho) }
+    val ehJks = cabecalho[0] == 0xFE.toByte() && cabecalho[1] == 0xED.toByte() &&
+      cabecalho[2] == 0xFE.toByte() && cabecalho[3] == 0xED.toByte()
+    if (ehJks) {
+      throw ErroAssinatura(
+        "Este keystore é .jks (formato Java antigo), que o Android não abre. " +
+          "Converta no PC: keytool -importkeystore -srckeystore app.jks " +
+          "-destkeystore app.p12 -deststoretype PKCS12"
+      )
+    }
+    val tipo = if (cabecalho[0] == 0x30.toByte()) "PKCS12" else "BKS"
+    val ks = try {
+      KeyStore.getInstance(tipo).apply { arq.inputStream().use { load(it, senhaStore) } }
+    } catch (e: java.io.IOException) {
+      val msg = (e.message ?: "").lowercase()
+      if (msg.contains("password") || msg.contains("mac") || msg.contains("tampered")) {
+        throw ErroAssinatura("Senha do keystore incorreta.")
+      }
+      throw ErroAssinatura("Não consegui abrir o keystore ($tipo): ${e.message}")
+    } catch (e: Exception) {
+      throw ErroAssinatura("Não consegui abrir o keystore ($tipo): ${e.javaClass.simpleName} ${e.message ?: ""}".trim())
+    }
+
+    val todos = ks.aliases().toList()
+    val aliasReal = when {
+      cfg.alias.isBlank() && todos.size == 1 -> todos[0]
+      else -> todos.firstOrNull { it.equals(cfg.alias, ignoreCase = true) }
+    } ?: throw ErroAssinatura(
+      "Alias \"${cfg.alias}\" não existe no keystore. Aliases disponíveis: ${todos.joinToString(", ").ifEmpty { "nenhum" }}"
+    )
+
+    val senhaChave = (if (cfg.senhaChave.isEmpty()) cfg.senhaKeystore else cfg.senhaChave).toCharArray()
+    val chaveBruta = try {
+      ks.getKey(aliasReal, senhaChave)
+    } catch (e: UnrecoverableKeyException) {
+      throw ErroAssinatura("Senha da chave incorreta.")
+    }
+    val chave = chaveBruta as? PrivateKey
+      ?: throw ErroAssinatura("O alias \"$aliasReal\" não tem chave privada.")
+
+    val cadeia = ks.getCertificateChain(aliasReal)?.map { it as X509Certificate }
+    if (cadeia.isNullOrEmpty()) throw ErroAssinatura("O alias \"$aliasReal\" não tem certificado.")
+    return Triple(chave, cadeia, aliasReal)
   }
 
   private fun chaveDeAssinatura(): Pair<PrivateKey, X509Certificate> {

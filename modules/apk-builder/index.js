@@ -19,9 +19,13 @@ export function extrairAndroidJar(zipPath, destino) {
 }
 
 // Compila o projeto. Caminhos SEM o prefixo file://.
+// opcoes (opcional): { release: true, keystore, senhaKeystore, alias, senhaChave }
+//   - sem release: assina com a chave de debug interna do Cindra
+//   - release: assina com o keystore do usuário (.p12/.pfx/.bks, caminho sem file://)
 // Devolve { ok, apk, etapa, erros: [{ arquivo, linha, mensagem }] }
-export function compilar(pastaProjeto, androidJar, apkSaida) {
-  return Nativo.compilar(pastaProjeto, androidJar, apkSaida);
+export function compilar(pastaProjeto, androidJar, apkSaida, opcoes) {
+  // sempre manda um objeto no 4º argumento (o módulo nativo espera 4 parâmetros)
+  return Nativo.compilar(pastaProjeto, androidJar, apkSaida, opcoes || {});
 }
 
 // Abre a tela de instalação do Android. Devolve 'ok' ou 'permissao'

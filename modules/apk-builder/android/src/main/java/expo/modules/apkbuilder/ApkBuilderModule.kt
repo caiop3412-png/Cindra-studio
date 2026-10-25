@@ -48,11 +48,22 @@ class ApkBuilderModule : Module() {
 
     // Roda o pipeline inteiro (aapt2 -> ECJ -> D8 -> zip alinhado -> apksig).
     // AsyncFunction já roda fora da thread de JS, então não trava a tela.
-    AsyncFunction("compilar") { pastaProjeto: String, androidJar: String, apkSaida: String ->
+    // opcoes (opcional): { release: true, keystore, senhaKeystore, alias, senhaChave }.
+    // Sem release (ou sem opcoes) assina com a chave de debug interna.
+    AsyncFunction("compilar") { pastaProjeto: String, androidJar: String, apkSaida: String, opcoes: Map<String, Any?>? ->
       val pipeline = ApkPipeline(context) { linha ->
         sendEvent("onLog", mapOf("linha" to linha))
       }
-      pipeline.compilar(File(pastaProjeto), File(androidJar), File(apkSaida)).paraMapa()
+      val release = opcoes?.get("release") == true
+      val assinatura = if (release) {
+        ConfigAssinatura(
+          keystore = (opcoes?.get("keystore") as? String).orEmpty(),
+          senhaKeystore = (opcoes?.get("senhaKeystore") as? String).orEmpty(),
+          alias = (opcoes?.get("alias") as? String).orEmpty().trim(),
+          senhaChave = (opcoes?.get("senhaChave") as? String).orEmpty()
+        )
+      } else null
+      pipeline.compilar(File(pastaProjeto), File(androidJar), File(apkSaida), assinatura).paraMapa()
     }
 
     // Abre o instalador do Android com o APK gerado.
