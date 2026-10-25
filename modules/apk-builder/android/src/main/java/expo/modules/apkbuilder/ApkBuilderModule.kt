@@ -1,9 +1,11 @@
 package expo.modules.apkbuilder
 
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import expo.modules.kotlin.modules.Module
@@ -51,7 +53,8 @@ class ApkBuilderModule : Module() {
     // opcoes (opcional): { release: true, keystore, senhaKeystore, alias, senhaChave }.
     // Sem release (ou sem opcoes) assina com a chave de debug interna.
     AsyncFunction("compilar") { pastaProjeto: String, androidJar: String, apkSaida: String, opcoes: Map<String, Any?>? ->
-      val pipeline = ApkPipeline(context) { linha ->
+      val ctx = context
+      val pipeline = ApkPipeline(ctx) { linha ->
         sendEvent("onLog", mapOf("linha" to linha))
       }
       val release = opcoes?.get("release") == true
@@ -63,7 +66,50 @@ class ApkBuilderModule : Module() {
           senhaChave = (opcoes?.get("senhaChave") as? String).orEmpty()
         )
       } else null
-      pipeline.compilar(File(pastaProjeto), File(androidJar), File(apkSaida), assinatura).paraMapa()
+
+      // Serviço em primeiro plano: segura o app vivo mesmo fora da tela / com economia de bateria.
+      CompilacaoService.iniciar(ctx)
+      val resultado = try {
+        pipeline.compilar(File(pastaProjeto), File(androidJar), File(apkSaida), assinatura)
+      } catch (e: Throwable) {
+        CompilacaoService.parar(ctx)
+        throw e
+      }
+      val appVisivel = appEmPrimeiroPlano()
+      CompilacaoService.parar(ctx)
+
+      // Só avisa por notificação se a pessoa saiu do app durante o build.
+      if (!appVisivel) {
+        val nome = File(pastaProjeto).name
+        if (resultado.ok) {
+          CompilacaoService.notificarResultado(ctx, "APK pronto", "$nome foi compilado. Toque pra abrir o Cindra Studio e instalar.")
+        } else {
+          CompilacaoService.notificarResultado(ctx, "Erro na compilação", "$nome não compilou. Toque pra ver os erros.")
+        }
+      }
+      resultado.paraMapa()
+    }
+
+    // Economia de bateria: o Android deixa o app rodar solto em segundo plano
+    // quando a pessoa libera (aparece uma janelinha do sistema, uma vez só).
+    AsyncFunction("bateriaLiberada") {
+      val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+      pm.isIgnoringBatteryOptimizations(context.packageName)
+    }
+
+    AsyncFunction("pedirLiberarBateria") {
+      val ctx = context
+      val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
+      val prefs = ctx.getSharedPreferences("apkbuilder_prefs", Context.MODE_PRIVATE)
+      if (pm.isIgnoringBatteryOptimizations(ctx.packageName)) return@AsyncFunction "liberado"
+      if (prefs.getBoolean("pediu_bateria", false)) return@AsyncFunction "ja_pediu"
+      prefs.edit().putBoolean("pediu_bateria", true).apply()
+      val pedido = Intent(
+        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+        Uri.parse("package:${ctx.packageName}")
+      ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      ctx.startActivity(pedido)
+      "aberto"
     }
 
     // Abre o instalador do Android com o APK gerado.
@@ -88,5 +134,12 @@ class ApkBuilderModule : Module() {
       ctx.startActivity(instalar)
       "ok"
     }
+  }
+
+  // true = a tela do Cindra está visível agora (mesmo com o serviço rodando).
+  private fun appEmPrimeiroPlano(): Boolean {
+    val info = ActivityManager.RunningAppProcessInfo()
+    ActivityManager.getMyMemoryState(info)
+    return info.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
   }
 }

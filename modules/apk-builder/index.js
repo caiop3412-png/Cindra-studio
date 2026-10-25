@@ -23,9 +23,22 @@ export function extrairAndroidJar(zipPath, destino) {
 //   - sem release: assina com a chave de debug interna do Cindra
 //   - release: assina com o keystore do usuário (.p12/.pfx/.bks, caminho sem file://)
 // Devolve { ok, apk, etapa, erros: [{ arquivo, linha, mensagem }] }
-export function compilar(pastaProjeto, androidJar, apkSaida, opcoes) {
+let jaVerificouBateria = false;
+export async function compilar(pastaProjeto, androidJar, apkSaida, opcoes) {
+  // Na primeira compilação do app, pede (uma vez só na vida) pra liberar o
+  // app da economia de bateria. Se a pessoa negar, o serviço em primeiro
+  // plano ainda segura a compilação na maioria dos aparelhos.
+  if (!jaVerificouBateria) {
+    jaVerificouBateria = true;
+    try { await Nativo.pedirLiberarBateria(); } catch (e) {}
+  }
   // sempre manda um objeto no 4º argumento (o módulo nativo espera 4 parâmetros)
   return Nativo.compilar(pastaProjeto, androidJar, apkSaida, opcoes || {});
+}
+
+// 'liberado' | 'ja_pediu' | 'aberto' — abre a janelinha do sistema (1 vez só).
+export function pedirLiberarBateria() {
+  return Nativo ? Nativo.pedirLiberarBateria() : Promise.resolve('indisponivel');
 }
 
 // Abre a tela de instalação do Android. Devolve 'ok' ou 'permissao'
