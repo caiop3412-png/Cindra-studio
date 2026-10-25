@@ -183,6 +183,98 @@ class ApkBuilderModule : Module() {
       "file://" + para.absolutePath
     }
 
+    // ── Pasta "arquivos" de cada app (cindra-studio/NomeDoApp/arquivos) ──
+
+    // Espelha o projeto na pasta: grava os textos e copia os binários que mudaram.
+    // Arquivo editado POR FORA depois da última sincronia (modificado > ultimaSync)
+    // não é sobrescrito — ele entra no app na próxima importação.
+    // Só apaga o que o app tinha espelhado e saiu do projeto (e só se ultimaSync > 0).
+    AsyncFunction("espelharProjeto") { raiz: String, textos: Map<String, String>, origemBin: String, binarios: List<String>, ultimaSync: Double ->
+      val base = File(raiz.removePrefix("file://"))
+      base.mkdirs()
+      val temSync = ultimaSync > 0
+      val limite = if (temSync) ultimaSync.toLong() + 1000L else Long.MAX_VALUE
+      val manter = HashSet<String>()
+      var escritos = 0
+      for ((rel, texto) in textos) {
+        manter.add(rel)
+        val f = File(base, rel)
+        if (f.exists() && f.lastModified() > limite) continue
+        if (f.isFile && f.readText(Charsets.UTF_8) == texto) continue
+        f.parentFile?.mkdirs()
+        f.writeText(texto, Charsets.UTF_8)
+        escritos += 1
+      }
+      val origem = File(origemBin.removePrefix("file://"))
+      for (rel in binarios) {
+        manter.add(rel)
+        val src = File(origem, rel)
+        if (!src.isFile) continue
+        val f = File(base, rel)
+        if (f.exists() && f.lastModified() > limite) continue
+        if (f.isFile && f.length() == src.length()) continue
+        f.parentFile?.mkdirs()
+        src.inputStream().use { entrada ->
+          FileOutputStream(f).use { saida -> entrada.copyTo(saida) }
+        }
+        escritos += 1
+      }
+      if (temSync) {
+        base.walkTopDown().toList().forEach { f ->
+          if (f.isFile && !f.name.startsWith(".")) {
+            val rel = f.relativeTo(base).path
+            if (!manter.contains(rel) && f.lastModified() <= limite) f.delete()
+          }
+        }
+      }
+      mapOf<String, Any>(
+        "agora" to System.currentTimeMillis().toDouble(),
+        "escritos" to escritos
+      )
+    }
+
+    // Lista os arquivos da pasta (recursivo): caminho relativo, tamanho e última modificação.
+    AsyncFunction("listarPasta") { raiz: String ->
+      val base = File(raiz.removePrefix("file://"))
+      val saida = ArrayList<Map<String, Any>>()
+      if (base.isDirectory) {
+        base.walkTopDown().toList().forEach { f ->
+          if (f.isFile) {
+            saida.add(
+              mapOf<String, Any>(
+                "caminho" to f.relativeTo(base).path,
+                "tamanho" to f.length().toDouble(),
+                "modificado" to f.lastModified().toDouble()
+              )
+            )
+          }
+        }
+      }
+      saida
+    }
+
+    // Lê vários arquivos de texto de uma vez. Devolve { caminho: texto } só dos que existem.
+    AsyncFunction("lerTextos") { raiz: String, caminhos: List<String> ->
+      val base = File(raiz.removePrefix("file://"))
+      val saida = HashMap<String, String>()
+      for (rel in caminhos) {
+        val f = File(base, rel)
+        if (f.isFile) saida[rel] = f.readText(Charsets.UTF_8)
+      }
+      saida
+    }
+
+    // Copia sobrescrevendo (diferente de copiarArquivo, que renomeia se já existir).
+    AsyncFunction("copiarSobrescrevendo") { origem: String, destino: String ->
+      val de = File(origem.removePrefix("file://"))
+      val para = File(destino.removePrefix("file://"))
+      para.parentFile?.mkdirs()
+      de.inputStream().use { entrada ->
+        FileOutputStream(para).use { saida -> entrada.copyTo(saida) }
+      }
+      para.length().toDouble()
+    }
+
     // Abre o instalador do Android com o APK gerado.
     AsyncFunction("instalar") { apkPath: String ->
       val ctx = context

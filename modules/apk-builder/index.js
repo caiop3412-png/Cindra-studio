@@ -82,3 +82,27 @@ export function copiarArquivo(origem, destino) {
 export function copiarSequencial(origem, pasta, base) {
   return Nativo.copiarSequencial(origem, pasta, base);
 }
+
+// ── Pasta "arquivos" de cada app (espelho do projeto) ───────────────────
+// true só se o módulo nativo instalado tem essas funções (precisa de build novo).
+export const temEspelhoNativo = !!(temPastaNativa && Nativo.espelharProjeto && Nativo.listarPasta && Nativo.lerTextos && Nativo.copiarSobrescrevendo);
+
+// Grava o projeto na pasta. Devolve { agora, escritos }.
+export function espelharProjeto(raiz, textos, origemBin, binarios, ultimaSync) {
+  return Nativo.espelharProjeto(raiz, textos, origemBin, binarios, ultimaSync || 0);
+}
+
+// [{ caminho, tamanho, modificado }] de tudo que está na pasta.
+export function listarPasta(raiz) {
+  return Nativo.listarPasta(raiz);
+}
+
+// { caminho: texto } dos arquivos de texto pedidos.
+export function lerTextos(raiz, caminhos) {
+  return Nativo.lerTextos(raiz, caminhos);
+}
+
+// Copia sobrescrevendo o destino.
+export function copiarSobrescrevendo(origem, destino) {
+  return Nativo.copiarSobrescrevendo(origem, destino);
+}
