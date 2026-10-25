@@ -1301,6 +1301,83 @@ async function importarApksExistentesStudio(builds, projetos) {
   return novos.length ? novos.concat(builds) : builds;
 }
 
+// Acha a foto de ícone REAL de um app: a da lista de projetos, a que está
+// gravada na pasta do projeto (binários) ou no estado salvo. Se achar, faz
+// uma cópia estável em _builds/ (sobrevive à exclusão do projeto).
+async function resolverIconeAppStudio(pacote, projetos) {
+  const existe = async (uri) => {
+    try {
+      const i = await FileSystem.getInfoAsync(uri);
+      return !!(i && i.exists && !i.isDirectory);
+    } catch (e) {
+      return false;
+    }
+  };
+  const proj = (projetos || []).find((x) => x.pacote === pacote) || null;
+  const candidatos = [];
+  if (proj && proj.fotoIcone) candidatos.push(proj.fotoIcone);
+  candidatos.push(pastaBinariosStudio(pacote) + ICONE_FOTO_CAMINHO);
+  candidatos.push(pastaProjetoStudio(pacote) + ICONE_FOTO_CAMINHO);
+  let estado = null;
+  if (!proj) {
+    // projeto fora da lista: o estado salvo ainda pode ter a foto
+    estado = await lerEstadoStudio(pacote);
+    if (estado && estado.fotoIcone) candidatos.push(estado.fotoIcone);
+  }
+  let achada = null;
+  for (const c of candidatos) {
+    if (await existe(c)) { achada = c; break; }
+  }
+  const cor = (proj && proj.corIcone) || (estado && estado.corIcone) || null;
+  const icone = (proj && proj.iconeEscolhido) || (estado && estado.iconeEscolhido) || null;
+  if (!achada) return { fotoIcone: null, corIcone: cor, iconeEscolhido: icone };
+  if (achada.indexOf(PASTA_ICONES_BUILDS_STUDIO) === 0) return { fotoIcone: achada, corIcone: cor, iconeEscolhido: icone };
+  try {
+    await FileSystem.makeDirectoryAsync(PASTA_ICONES_BUILDS_STUDIO, { intermediates: true });
+    const destino = `${PASTA_ICONES_BUILDS_STUDIO}${pacote}_icone.png`;
+    await FileSystem.copyAsync({ from: achada, to: destino }).catch(async () => {
+      await FileSystem.deleteAsync(destino, { idempotent: true });
+      await FileSystem.copyAsync({ from: achada, to: destino });
+    });
+    return { fotoIcone: destino, corIcone: cor, iconeEscolhido: icone };
+  } catch (e) {
+    return { fotoIcone: achada, corIcone: cor, iconeEscolhido: icone };
+  }
+}
+
+// Completa o ícone dos builds que estão sem foto (ou cuja foto sumiu).
+async function completarIconesBuildsStudio(builds, projetos) {
+  const precisam = {};
+  for (const b of builds) {
+    let ok = false;
+    if (b.fotoIcone) {
+      try {
+        const i = await FileSystem.getInfoAsync(b.fotoIcone);
+        ok = !!(i && i.exists);
+      } catch (e) { ok = false; }
+    }
+    if (!ok) precisam[b.pacote] = true;
+  }
+  const pacotes = Object.keys(precisam);
+  if (!pacotes.length) return { lista: builds, mudou: false };
+  const achados = {};
+  for (const pk of pacotes) achados[pk] = await resolverIconeAppStudio(pk, projetos);
+  let mudou = false;
+  const lista = builds.map((b) => {
+    const a = achados[b.pacote];
+    if (!a) return b;
+    const novo = {
+      ...b,
+      fotoIcone: a.fotoIcone,
+      corIcone: a.corIcone || b.corIcone,
+      iconeEscolhido: a.iconeEscolhido || b.iconeEscolhido,
+    };
+    if (novo.fotoIcone !== b.fotoIcone || novo.corIcone !== b.corIcone || novo.iconeEscolhido !== b.iconeEscolhido) mudou = true;
+    return novo;
+  });
+  return { lista, mudou };
+}
+
 // Agrupa os builds por app (pacote). Grupos e builds ficam do mais novo pro
 // mais antigo; o "ultimo" dá nome e ícone do cabeçalho do grupo.
 function agruparBuildsStudio(builds) {
@@ -1312,7 +1389,7 @@ function agruparBuildsStudio(builds) {
   return Object.keys(mapa)
     .map((pacote) => {
       const itens = mapa[pacote].slice().sort((a, b) => b.criadoEm - a.criadoEm);
-      return { pacote, itens, ultimo: itens[0] };
+      return { pacote, itens, ultimo: itens[0], icone: itens.find((x) => x.fotoIcone) || itens[0] };
     })
     .sort((a, b) => b.ultimo.criadoEm - a.ultimo.criadoEm);
 }
@@ -1841,8 +1918,8 @@ const studioStyles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 16,
   },
-  homeVazioTitulo: { color: COLORS.ink, fontSize: 16, fontWeight: '700', marginBottom: 6 },
-  homeVazioTexto: { color: COLORS.dim, fontSize: 13.5, textAlign: 'center', lineHeight: 19 },
+  homeVazioTitulo: { color: COLORS.ink, fontSize: 14, fontWeight: '700', marginBottom: 6 },
+  homeVazioTexto: { color: COLORS.dim, fontSize: 12, textAlign: 'center', lineHeight: 17 },
   // Cabeçalho
   homeHeader: {
     flexDirection: 'row',
@@ -1853,8 +1930,8 @@ const studioStyles = StyleSheet.create({
     paddingBottom: 6,
     minHeight: 68,
   },
-  homeOverline: { color: COLORS.ember, fontSize: 11, fontWeight: '800', letterSpacing: 1.6, marginBottom: 4 },
-  homeTitulo: { color: COLORS.ink, fontSize: 28, fontWeight: '800', letterSpacing: -0.5, marginTop: 4 },
+  homeOverline: { color: COLORS.ember, fontSize: 10.5, fontWeight: '800', letterSpacing: 1.6, marginBottom: 4 },
+  homeTitulo: { color: COLORS.ink, fontSize: 24.5, fontWeight: '800', letterSpacing: -0.5, marginTop: 4 },
   homeIconBtn: {
     width: 42,
     height: 42,
@@ -1873,7 +1950,7 @@ const studioStyles = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
-  buscaInput: { flex: 1, color: COLORS.ink, fontSize: 15, paddingVertical: 0 },
+  buscaInput: { flex: 1, color: COLORS.ink, fontSize: 13, paddingVertical: 0 },
   // Card "Retomar"
   heroCard: { backgroundColor: '#4a1a26', borderRadius: 28, padding: 18, marginTop: 14, overflow: 'hidden' },
   heroMarcaDagua: { position: 'absolute', right: -26, top: -22, opacity: 0.07 },
@@ -1887,11 +1964,11 @@ const studioStyles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  heroSeloTexto: { color: '#ffdcd2', fontSize: 11.5, fontWeight: '800', letterSpacing: 1 },
-  heroTempo: { color: 'rgba(255,220,210,0.7)', fontSize: 12.5 },
+  heroSeloTexto: { color: '#ffdcd2', fontSize: 10.5, fontWeight: '800', letterSpacing: 1 },
+  heroTempo: { color: 'rgba(255,220,210,0.7)', fontSize: 11 },
   heroCorpo: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
-  heroNome: { color: '#ffffff', fontSize: 20, fontWeight: '800' },
-  heroPacote: { color: 'rgba(255,220,210,0.7)', fontSize: 13, marginTop: 2 },
+  heroNome: { color: '#ffffff', fontSize: 17.5, fontWeight: '800' },
+  heroPacote: { color: 'rgba(255,220,210,0.7)', fontSize: 11.5, marginTop: 2 },
   heroBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1901,7 +1978,7 @@ const studioStyles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: '#ffdcd2',
   },
-  heroBtnText: { color: '#4a1a26', fontSize: 15, fontWeight: '800' },
+  heroBtnText: { color: '#4a1a26', fontSize: 13, fontWeight: '800' },
   // Blocos de filtro (Apps / Favoritos / Esta semana)
   tilesLinha: { flexDirection: 'row', gap: 10, marginTop: 14 },
   tile: {
@@ -1914,12 +1991,12 @@ const studioStyles = StyleSheet.create({
   },
   tileAtivo: { backgroundColor: 'rgba(255,82,39,0.16)', borderColor: 'rgba(255,82,39,0.45)' },
   tileTopo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  tileNumero: { color: COLORS.ink, fontSize: 26, fontWeight: '800' },
-  tileRotulo: { color: COLORS.dim, fontSize: 12.5, fontWeight: '600', marginTop: 2 },
+  tileNumero: { color: COLORS.ink, fontSize: 23, fontWeight: '800' },
+  tileRotulo: { color: COLORS.dim, fontSize: 11, fontWeight: '600', marginTop: 2 },
   // Título da seção + ordenar + modo lista/grade
   secaoLinha: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 22, marginBottom: 12 },
-  secaoTitulo: { color: COLORS.ink, fontSize: 18, fontWeight: '800' },
-  secaoContagem: { color: COLORS.dim, fontSize: 14, fontWeight: '600' },
+  secaoTitulo: { color: COLORS.ink, fontSize: 16, fontWeight: '800' },
+  secaoContagem: { color: COLORS.dim, fontSize: 12.5, fontWeight: '600' },
   ordemPilula: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1929,7 +2006,7 @@ const studioStyles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.07)',
   },
-  ordemTexto: { color: COLORS.ink, fontSize: 12.5, fontWeight: '600' },
+  ordemTexto: { color: COLORS.ink, fontSize: 11, fontWeight: '600' },
   modoBtn: {
     width: 36,
     height: 36,
@@ -1950,15 +2027,15 @@ const studioStyles = StyleSheet.create({
     paddingRight: 6,
     marginBottom: 10,
   },
-  projNome: { color: COLORS.ink, fontSize: 16, fontWeight: '700', flexShrink: 1 },
-  projPacote: { color: COLORS.dim, fontSize: 12, marginTop: 3 },
+  projNome: { color: COLORS.ink, fontSize: 14, fontWeight: '700', flexShrink: 1 },
+  projPacote: { color: COLORS.dim, fontSize: 10.5, marginTop: 3 },
   projTempoLinha: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5 },
-  projTempo: { color: COLORS.dim, fontSize: 11.5 },
+  projTempo: { color: COLORS.dim, fontSize: 10.5 },
   projMais: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   gradeWrap: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   gradeCard: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 22, padding: 14 },
   gradeTopo: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  gradeTempo: { color: COLORS.dim, fontSize: 11.5, marginTop: 8 },
+  gradeTempo: { color: COLORS.dim, fontSize: 10.5, marginTop: 8 },
   // Aviso "versão anterior"
   avisoCard: {
     flexDirection: 'row',
@@ -1970,8 +2047,8 @@ const studioStyles = StyleSheet.create({
     paddingHorizontal: 14,
     marginBottom: 12,
   },
-  avisoTexto: { flex: 1, color: COLORS.ink, fontSize: 13, lineHeight: 18 },
-  avisoBtnText: { color: '#ff8a68', fontSize: 13, fontWeight: '800' },
+  avisoTexto: { flex: 1, color: COLORS.ink, fontSize: 11.5, lineHeight: 16 },
+  avisoBtnText: { color: '#ff8a68', fontSize: 11.5, fontWeight: '800' },
   // Card de apoio
   apoioCard: {
     borderWidth: 1,
@@ -1989,7 +2066,7 @@ const studioStyles = StyleSheet.create({
     paddingVertical: 3,
     marginBottom: 10,
   },
-  apoioTagTexto: { color: COLORS.gold, fontSize: 12, fontWeight: '700' },
+  apoioTagTexto: { color: COLORS.gold, fontSize: 10.5, fontWeight: '700' },
   apoioLinha: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   apoioIcone: {
     width: 48,
@@ -1999,8 +2076,8 @@ const studioStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  apoioTitulo: { color: COLORS.ink, fontSize: 16, fontWeight: '700' },
-  apoioSub: { color: COLORS.dim, fontSize: 13, marginTop: 2 },
+  apoioTitulo: { color: COLORS.ink, fontSize: 14, fontWeight: '700' },
+  apoioSub: { color: COLORS.dim, fontSize: 11.5, marginTop: 2 },
   // Estado vazio
   vazioBtn: {
     flexDirection: 'row',
@@ -2012,15 +2089,15 @@ const studioStyles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: COLORS.ember,
   },
-  vazioBtnText: { color: '#1a0806', fontSize: 15, fontWeight: '800' },
+  vazioBtnText: { color: '#1a0806', fontSize: 13, fontWeight: '800' },
   // Barra de baixo
   navHome: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
-    paddingHorizontal: 18,
-    paddingTop: 12,
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingTop: 8,
     backgroundColor: '#211210',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(255,255,255,0.10)',
@@ -2028,26 +2105,26 @@ const studioStyles = StyleSheet.create({
   navAba: {
     flex: 1,
     height: 50,
-    borderRadius: 25,
-    flexDirection: 'row',
+    borderRadius: 16,
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 2,
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
   },
   navAbaAtiva: { backgroundColor: 'rgba(255,82,39,0.20)', borderColor: 'rgba(255,82,39,0.45)' },
-  navAbaTexto: { color: COLORS.dim, fontSize: 14, fontWeight: '600' },
+  navAbaTexto: { color: COLORS.dim, fontSize: 10.5, fontWeight: '600' },
   navAbaTextoAtivo: { color: COLORS.ink, fontWeight: '700' },
   navBotaoCriar: {
     flex: 1,
     height: 50,
-    borderRadius: 25,
+    borderRadius: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 4,
     backgroundColor: COLORS.ember,
     shadowColor: COLORS.ember,
     shadowOpacity: 0.5,
@@ -2055,7 +2132,7 @@ const studioStyles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 6,
   },
-  navBotaoCriarTexto: { color: '#1a0806', fontSize: 14.5, fontWeight: '800' },
+  navBotaoCriarTexto: { color: '#1a0806', fontSize: 12, fontWeight: '800' },
   // Folha que sobe do rodapé
   folha: {
     position: 'absolute',
@@ -2255,51 +2332,52 @@ const STUDIO_LINK_APOIO = '';
 
 // Estilos da aba "Gerados" (apps compilados + histórico de APKs).
 const geradosStyles = StyleSheet.create({
-  lista: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24 },
+  lista: { paddingHorizontal: 14, paddingTop: 6, paddingBottom: 20 },
+  resumo: { color: COLORS.dim, fontSize: 10.5, marginTop: 2 },
   grupo: {
     backgroundColor: COLORS.panel,
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.lineSoft,
-    marginBottom: 12,
+    marginBottom: 8,
     overflow: 'hidden',
   },
-  grupoTopo: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
-  grupoNome: { color: COLORS.ink, fontSize: 16, fontWeight: '700', flexShrink: 1 },
-  grupoPacote: { color: COLORS.dim, fontSize: 12, marginTop: 2 },
-  grupoMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5 },
+  grupoTopo: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, paddingVertical: 9 },
+  grupoNome: { color: COLORS.ink, fontSize: 13, fontWeight: '700', flexShrink: 1 },
+  grupoPacote: { color: COLORS.dim, fontSize: 10.5, marginTop: 1 },
+  grupoMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   grupoBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: 7,
     backgroundColor: 'rgba(255,82,39,0.16)',
   },
-  grupoBadgeTexto: { color: '#ff8a68', fontSize: 11, fontWeight: '800' },
-  grupoData: { color: COLORS.dim, fontSize: 11.5 },
+  grupoBadgeTexto: { color: '#ff8a68', fontSize: 10.5, fontWeight: '800' },
+  grupoData: { color: COLORS.dim, fontSize: 10.5 },
   seta: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 10,
     backgroundColor: 'rgba(255,255,255,0.07)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  buildsWrap: { borderTopWidth: 1, borderTopColor: COLORS.lineSoft, paddingHorizontal: 14, paddingVertical: 6 },
+  buildsWrap: { borderTopWidth: 1, borderTopColor: COLORS.lineSoft, paddingHorizontal: 10, paddingVertical: 2 },
   buildLinha: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 10,
+    gap: 10,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.lineSoft,
   },
-  buildTitulo: { color: COLORS.ink, fontSize: 14, fontWeight: '700' },
-  buildData: { color: COLORS.dim, fontSize: 12, marginTop: 3 },
-  buildTipo: { fontSize: 10.5, fontWeight: '800', letterSpacing: 0.6 },
+  buildTitulo: { color: COLORS.ink, fontSize: 11.5, fontWeight: '700' },
+  buildData: { color: COLORS.dim, fontSize: 10.5, marginTop: 2 },
+  buildTipo: { fontSize: 9.5, fontWeight: '800', letterSpacing: 0.6 },
   buildAcao: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.07)',
@@ -2314,8 +2392,8 @@ const geradosStyles = StyleSheet.create({
     backgroundColor: 'rgba(255,82,39,0.12)',
     marginBottom: 14,
   },
-  apagarGrupo: { alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10 },
-  apagarGrupoTexto: { color: COLORS.error, fontSize: 12.5, fontWeight: '700' },
+  apagarGrupo: { alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8 },
+  apagarGrupoTexto: { color: COLORS.error, fontSize: 10.5, fontWeight: '700' },
   barraSelecao: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2330,23 +2408,23 @@ const geradosStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    height: 46,
-    paddingHorizontal: 16,
-    borderRadius: 16,
+    height: 42,
+    paddingHorizontal: 14,
+    borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
-  barraBtnTexto: { color: COLORS.ink, fontSize: 14, fontWeight: '700' },
+  barraBtnTexto: { color: COLORS.ink, fontSize: 11.5, fontWeight: '700' },
   barraApagar: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    height: 46,
-    borderRadius: 16,
+    height: 42,
+    borderRadius: 14,
     backgroundColor: COLORS.ember,
   },
-  barraApagarTexto: { color: '#1a0806', fontSize: 14.5, fontWeight: '800' },
+  barraApagarTexto: { color: '#1a0806', fontSize: 12, fontWeight: '800' },
 });
 
 // Barra de baixo da tela inicial: abas "Meus apps", "Gerados" e "Aprender" + botão "Criar".
@@ -2629,8 +2707,17 @@ function ConteudoFolhaProjeto({ projeto, onAbrir, onFavoritar, onExcluir, onCanc
 
 // Ícone do app nos cards/listas: a foto escolhida, ou o robozinho na cor.
 function IconeAppStudio({ dados, lado = 52, icone = 28, raio = 16 }) {
-  if (dados && dados.fotoIcone) {
-    return <Image source={{ uri: dados.fotoIcone }} style={{ width: lado, height: lado, borderRadius: raio, backgroundColor: '#1a0f0e' }} />;
+  const [falhou, setFalhou] = useState(false);
+  const uriFoto = dados && dados.fotoIcone ? dados.fotoIcone : null;
+  useEffect(() => { setFalhou(false); }, [uriFoto]);
+  if (uriFoto && !falhou) {
+    return (
+      <Image
+        source={{ uri: uriFoto }}
+        onError={() => setFalhou(true)}
+        style={{ width: lado, height: lado, borderRadius: raio, backgroundColor: '#1a0f0e' }}
+      />
+    );
   }
   return (
     <View
@@ -4372,9 +4459,9 @@ async function copiarTextoStudio(texto) {
 const FONTE_MONO = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
 
 const aprenderStyles = StyleSheet.create({
-  intro: { color: COLORS.dim, fontSize: 14, lineHeight: 20, marginTop: 4, marginBottom: 6 },
+  intro: { color: COLORS.dim, fontSize: 12.5, lineHeight: 18, marginTop: 4, marginBottom: 6 },
   catLinha: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 20, marginBottom: 10 },
-  catTitulo: { color: COLORS.ink, fontSize: 16, fontWeight: '800' },
+  catTitulo: { color: COLORS.ink, fontSize: 14, fontWeight: '800' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     flexDirection: 'row',
@@ -4388,7 +4475,7 @@ const aprenderStyles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.10)',
   },
   chipAtivo: { backgroundColor: 'rgba(255,82,39,0.20)', borderColor: 'rgba(255,82,39,0.55)' },
-  chipTexto: { color: COLORS.dim, fontSize: 13, fontWeight: '600' },
+  chipTexto: { color: COLORS.dim, fontSize: 11.5, fontWeight: '600' },
   chipTextoAtivo: { color: COLORS.ink, fontWeight: '700' },
   painel: {
     marginTop: 12,
@@ -4398,8 +4485,8 @@ const aprenderStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.10)',
   },
-  painelTitulo: { color: COLORS.ink, fontSize: 17, fontWeight: '800' },
-  painelDesc: { color: COLORS.dim, fontSize: 13.5, lineHeight: 20, marginTop: 6 },
+  painelTitulo: { color: COLORS.ink, fontSize: 15, fontWeight: '800' },
+  painelDesc: { color: COLORS.dim, fontSize: 12, lineHeight: 18, marginTop: 6 },
   painelDica: {
     marginTop: 10,
     padding: 10,
@@ -4408,11 +4495,11 @@ const aprenderStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,182,72,0.25)',
     color: COLORS.gold,
-    fontSize: 12.5,
-    lineHeight: 18,
+    fontSize: 11,
+    lineHeight: 16,
   },
   blocoCab: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, marginBottom: 8 },
-  blocoRotulo: { flex: 1, color: COLORS.ink, fontSize: 12.5, fontWeight: '700' },
+  blocoRotulo: { flex: 1, color: COLORS.ink, fontSize: 11, fontWeight: '700' },
   copiarBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -4423,7 +4510,7 @@ const aprenderStyles = StyleSheet.create({
     backgroundColor: COLORS.ember,
   },
   copiarBtnOk: { backgroundColor: COLORS.gold },
-  copiarTexto: { color: '#1a0806', fontSize: 13, fontWeight: '800' },
+  copiarTexto: { color: '#1a0806', fontSize: 11.5, fontWeight: '800' },
   codigoCaixa: {
     borderRadius: 12,
     backgroundColor: '#0d0707',
@@ -4432,8 +4519,8 @@ const aprenderStyles = StyleSheet.create({
   },
   codigoTexto: {
     color: '#e8dcd9',
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 10.5,
+    lineHeight: 16,
     fontFamily: FONTE_MONO,
     padding: 12,
   },
@@ -4825,8 +4912,9 @@ function CindraStudioScreen({ visible, onClose }) {
     (async () => {
       const registrados = await lerBuildsStudio();
       const projetos = await lerListaProjetosStudio();
-      const completo = await importarApksExistentesStudio(registrados, projetos);
-      if (completo.length !== registrados.length) gravarBuildsStudio(completo).catch(() => {});
+      const importados = await importarApksExistentesStudio(registrados, projetos);
+      const { lista: completo, mudou } = await completarIconesBuildsStudio(importados, projetos);
+      if (mudou || importados.length !== registrados.length) gravarBuildsStudio(completo).catch(() => {});
       if (vivo) setBuilds(completo);
     })().catch(() => {});
     return () => { vivo = false; };
@@ -6295,6 +6383,11 @@ function CindraStudioScreen({ visible, onClose }) {
             <Text style={studioStyles.homeTitulo} numberOfLines={1}>
               {modoSelecaoBuilds ? (qtdSel ? `${qtdSel} selecionado${qtdSel > 1 ? 's' : ''}` : 'Selecionar APKs') : 'Apps gerados'}
             </Text>
+            {grupos.length > 0 && !modoSelecaoBuilds && (
+              <Text style={geradosStyles.resumo}>
+                {grupos.length} {grupos.length === 1 ? 'app' : 'apps'} · {builds.length} {builds.length === 1 ? 'APK' : 'APKs'}
+              </Text>
+            )}
           </View>
           {grupos.length > 0 && (
             <TouchableOpacity
@@ -6348,7 +6441,7 @@ function CindraStudioScreen({ visible, onClose }) {
                         }
                       }}
                     >
-                      <IconeAppStudio dados={g.ultimo} lado={52} icone={28} raio={16} />
+                      <IconeAppStudio dados={g.icone} lado={42} icone={22} raio={12} />
                       <View style={{ flex: 1 }}>
                         <Text style={geradosStyles.grupoNome} numberOfLines={1}>{g.ultimo.nomeApp}</Text>
                         <Text style={geradosStyles.grupoPacote} numberOfLines={1}>{g.pacote}</Text>
@@ -6363,11 +6456,11 @@ function CindraStudioScreen({ visible, onClose }) {
                         {modoSelecaoBuilds ? (
                           <MaterialCommunityIcons
                             name={grupoTodoSel ? 'checkbox-multiple-marked' : qtdGrupoSel ? 'minus-box-multiple' : 'checkbox-multiple-blank-outline'}
-                            size={20}
+                            size={16}
                             color={qtdGrupoSel ? COLORS.ember : COLORS.dim}
                           />
                         ) : (
-                          <MaterialCommunityIcons name={aberto ? 'chevron-up' : 'chevron-down'} size={22} color={COLORS.ink} />
+                          <MaterialCommunityIcons name={aberto ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.ink} />
                         )}
                       </View>
                     </TouchableOpacity>
@@ -6390,11 +6483,11 @@ function CindraStudioScreen({ visible, onClose }) {
                               {modoSelecaoBuilds && (
                                 <MaterialCommunityIcons
                                   name={marcado ? 'checkbox-marked' : 'checkbox-blank-outline'}
-                                  size={24}
+                                  size={22}
                                   color={marcado ? COLORS.ember : COLORS.dim}
                                 />
                               )}
-                              <IconeAppStudio dados={b} lado={40} icone={22} raio={12} />
+                              <IconeAppStudio dados={b} lado={32} icone={18} raio={10} />
                               <View style={{ flex: 1 }}>
                                 <Text style={geradosStyles.buildTitulo} numberOfLines={1}>
                                   {b.versaoNome ? `v${b.versaoNome}` : 'APK'}{b.versaoCodigo ? ` (${b.versaoCodigo})` : ''}
@@ -6410,14 +6503,14 @@ function CindraStudioScreen({ visible, onClose }) {
                               {!modoSelecaoBuilds && (
                                 <>
                                   <TouchableOpacity style={geradosStyles.buildAcao} onPress={() => instalarBuild(b)} activeOpacity={0.8}>
-                                    <MaterialCommunityIcons name="cellphone-arrow-down" size={20} color="#8bd450" />
+                                    <MaterialCommunityIcons name="cellphone-arrow-down" size={17} color="#8bd450" />
                                   </TouchableOpacity>
                                   <TouchableOpacity
                                     style={[geradosStyles.buildAcao, armado && { backgroundColor: COLORS.error }]}
                                     onPress={() => tocarLixeiraBuild(b)}
                                     activeOpacity={0.8}
                                   >
-                                    <MaterialCommunityIcons name={armado ? 'check' : 'trash-can-outline'} size={20} color={armado ? '#1a0806' : COLORS.error} />
+                                    <MaterialCommunityIcons name={armado ? 'check' : 'trash-can-outline'} size={17} color={armado ? '#1a0806' : COLORS.error} />
                                   </TouchableOpacity>
                                 </>
                               )}
@@ -6527,7 +6620,7 @@ function CindraStudioScreen({ visible, onClose }) {
         if (a.especial) {
           return (
             <TouchableOpacity key={a.id} style={studioStyles.navBotaoCriar} onPress={abrirTelaConfigNova} activeOpacity={0.85}>
-              <MaterialCommunityIcons name="plus" size={22} color="#1a0806" />
+              <MaterialCommunityIcons name="plus" size={20} color="#1a0806" />
               <Text style={studioStyles.navBotaoCriarTexto} numberOfLines={1}>{a.rotulo}</Text>
             </TouchableOpacity>
           );
@@ -6537,7 +6630,7 @@ function CindraStudioScreen({ visible, onClose }) {
           <TouchableOpacity key={a.id} style={[studioStyles.navAba, ativo && studioStyles.navAbaAtiva]} onPress={() => setAbaHome(a.id)} activeOpacity={0.8}>
             <MaterialCommunityIcons
               name={ativo ? a.iconeAtivo : a.icone}
-              size={22}
+              size={20}
               color={ativo ? '#ff8a68' : COLORS.dim}
             />
             <Text style={[studioStyles.navAbaTexto, ativo && studioStyles.navAbaTextoAtivo]} numberOfLines={1}>{a.rotulo}</Text>
