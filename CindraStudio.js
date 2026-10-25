@@ -43,6 +43,10 @@ try { ImageManipulator = require('expo-image-manipulator'); } catch (e) { ImageM
 let Clipboard = null;
 try { Clipboard = require('expo-clipboard'); } catch (e) { Clipboard = null; }
 
+// Foto de exemplo da tela de abertura (print de um app de verdade). Coloque o
+// arquivo em assets/ex.jpg, na raiz do projeto do Studio.
+const EXEMPLO_SPLASH = require('./assets/ex.jpg');
+
 const CODIGO_FONTE = 13; // fonte do editor (também usada pra calcular a largura do código)
 
 const COLORS = {
@@ -966,6 +970,22 @@ function acharNoNaArvore(nos, caminho) {
 
 function arvoreTemCaminho(nos, caminho) {
   return nos.some((no) => no.caminho === caminho || (no.tipo === 'pasta' && arvoreTemCaminho(no.filhos, caminho)));
+}
+
+// Insere o arquivo na árvore criando as pastas do caminho que ainda não
+// existem (ex.: drawable-nodpi, values-v31). Não duplica.
+function garantirArquivoNaArvore(arvore, caminho) {
+  if (arvoreTemCaminho(arvore, caminho)) return arvore;
+  const partes = caminho.split('/');
+  let nova = arvore;
+  for (let i = 0; i < partes.length - 1; i += 1) {
+    const alvo = partes.slice(0, i + 1).join('/');
+    if (!arvoreTemCaminho(nova, alvo)) {
+      const no = { nome: partes[i], caminho: alvo, tipo: 'pasta', filhos: [] };
+      nova = i === 0 ? nova.concat(no) : inserirNoNaArvore(nova, partes.slice(0, i).join('/'), no);
+    }
+  }
+  return inserirNoNaArvore(nova, partes.slice(0, -1).join('/'), { nome: partes[partes.length - 1], caminho, tipo: 'arquivo' });
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1984,6 +2004,48 @@ const studioStyles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
   },
   nodoChipTexto: { color: COLORS.ink, fontSize: 13, fontWeight: '600' },
+  cfgAbas: {
+    flexDirection: 'row', gap: 6, marginTop: 14, marginBottom: 10, padding: 4,
+    borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  cfgAba: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, borderRadius: 12 },
+  cfgAbaSel: { backgroundColor: COLORS.ember },
+  cfgAbaTexto: { color: COLORS.dim, fontSize: 13, fontWeight: '700' },
+  cfgAbaTextoSel: { color: '#1a0806' },
+  splashTopo: { flexDirection: 'row', gap: 12, marginTop: 6 },
+  splashExemploMoldura: {
+    width: 116, height: 238, borderRadius: 20, overflow: 'hidden',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)', backgroundColor: '#000',
+  },
+  splashExemploImg: { width: '100%', height: '100%' },
+  splashLegenda: { color: COLORS.dim, fontSize: 11.5, fontWeight: '700', textAlign: 'center', marginTop: 6 },
+  splashBadge: {
+    position: 'absolute', width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.ember, borderWidth: 2, borderColor: '#170c0b',
+  },
+  splashBadgeFixo: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.ember },
+  splashBadgeTexto: { color: '#1a0806', fontSize: 12, fontWeight: '900' },
+  splashItem: { padding: 10, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.05)' },
+  splashItemTopo: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3 },
+  splashItemTitulo: { color: COLORS.ink, fontSize: 14.5, fontWeight: '800' },
+  splashBotoes: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+  splashBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: 12,
+    backgroundColor: 'rgba(255,82,39,0.12)', borderWidth: 1, borderColor: 'rgba(255,82,39,0.35)',
+  },
+  splashBtnTexto: { color: COLORS.ember, fontSize: 13, fontWeight: '800' },
+  splashBtnRemover: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.07)' },
+  splashCores: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 8 },
+  splashCor: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
+  splashCorSel: { borderWidth: 2, borderColor: COLORS.ember },
+  splashPrevLinha: { flexDirection: 'row', gap: 14, alignItems: 'center', paddingBottom: 6 },
+  splashPrevTela: {
+    width: 92, height: 188, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', overflow: 'hidden',
+  },
+  splashPrevIcone: { width: 46, height: 46 },
+  splashPrevIconeVazio: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.3)' },
+  splashPrevMarca: { position: 'absolute', bottom: 12, width: 52, height: 18 },
   nodoBtnSec: { backgroundColor: 'rgba(255,255,255,0.07)' },
   nodoBtnSecTexto: { color: COLORS.ink, fontSize: 15, fontWeight: '700' },
   nodoBtnPrim: { backgroundColor: COLORS.ember, flexDirection: 'row', gap: 6 },
@@ -4184,6 +4246,105 @@ function nomeDaTagPermissao(tag) {
   const n = /android:name\s*=\s*"([^"]*)"/.exec(tag);
   return n ? n[1] : null;
 }
+// ─────────────────────────────────────────────────────────
+// Tela de abertura (splash do Android 12+). Vira arquivos normais do
+// projeto, então o módulo nativo compila sem mudar nada:
+//  - res/values-v31/styles.xml  → tema com fundo, ícone e marca
+//  - res/drawable/splash_icon.xml → ícone com margem (o Android corta num círculo)
+//  - res/drawable-nodpi/*.png   → as imagens escolhidas
+// ─────────────────────────────────────────────────────────
+const SPLASH_STYLES_PATH = 'app/src/main/res/values-v31/styles.xml';
+const SPLASH_BASE_STYLES_PATH = 'app/src/main/res/values/styles.xml';
+const SPLASH_ICONE_XML = 'app/src/main/res/drawable/splash_icon.xml';
+const SPLASH_ICONE_IMG = 'app/src/main/res/drawable-nodpi/splash_icon_img.png';
+const SPLASH_MARCA_IMG = 'app/src/main/res/drawable-nodpi/splash_brand.png';
+const SPLASH_COR_PADRAO = '#03050a';
+const SPLASH_CORES = ['#03050a', '#ffffff', '#ff5227', '#c81e50', '#2563eb', '#16a34a', '#f5b301', '#7c3aed'];
+const SPLASH_ICONE_XML_CONTEUDO = `<?xml version="1.0" encoding="utf-8"?>
+<!-- Margem de 26% em volta da imagem: o Android recorta o ícone da splash
+     num círculo, e assim a arte não sai cortada. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/splash_icon_img"
+    android:insetLeft="26%"
+    android:insetTop="26%"
+    android:insetRight="26%"
+    android:insetBottom="26%" />
+`;
+
+function lerSplash(projeto) {
+  const xml = projeto && projeto.conteudos ? projeto.conteudos[SPLASH_STYLES_PATH] : undefined;
+  const bins = (projeto && projeto.binarios) || {};
+  let cor = SPLASH_COR_PADRAO;
+  if (xml) {
+    const m = /windowSplashScreenBackground"\s*>\s*(#[0-9a-fA-F]{6,8})/.exec(xml);
+    if (m) cor = m[1];
+  }
+  return { ativa: xml !== undefined, cor, temIcone: !!bins[SPLASH_ICONE_IMG], temMarca: !!bins[SPLASH_MARCA_IMG] };
+}
+
+// Monta o values-v31/styles.xml herdando o pai (e os itens) do Theme.App
+// que o projeto já tem, pra não perder nada do tema atual.
+function gerarStylesSplash(stylesBase, cor, temIcone, temMarca) {
+  let pai = 'android:Theme.Material.NoActionBar';
+  let extras = '';
+  const m = /<style\s+name="Theme\.App"([^>]*?)(\/>|>([\s\S]*?)<\/style>)/.exec(stylesBase || '');
+  if (m) {
+    const p = /parent="([^"]+)"/.exec(m[1]);
+    if (p) pai = p[1];
+    if (m[3]) {
+      extras = m[3].split('\n')
+        .filter((l) => l.trim() && !/windowSplashScreen/.test(l))
+        .map((l) => `        ${l.trim()}`)
+        .join('\n');
+      if (extras) extras += '\n';
+    }
+  }
+  return `<resources>
+    <!-- Tela de abertura (Android 12 ou mais). Editada pela engrenagem do Studio. -->
+    <style name="Theme.App" parent="${pai}">
+${extras}        <item name="android:windowSplashScreenBackground">${cor}</item>
+${temIcone ? '        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>\n' : ''}${temMarca ? '        <item name="android:windowSplashScreenBrandingImage">@drawable/splash_brand</item>\n' : ''}    </style>
+</resources>
+`;
+}
+
+// Função pura: devolve o projeto com a splash aplicada.
+//  ops: [{ caminho, tamanho }] = imagem nova · [{ caminho, remover: true }]
+function aplicarSplashNoProjeto(atual, { cor, ops = [], desativar = false }) {
+  let arvore = atual.arvore;
+  const conteudos = { ...atual.conteudos };
+  const binarios = { ...(atual.binarios || {}) };
+  const tirar = (caminho) => {
+    delete conteudos[caminho];
+    delete binarios[caminho];
+    arvore = removerNoDaArvore(arvore, caminho);
+  };
+  if (desativar) {
+    [SPLASH_STYLES_PATH, SPLASH_ICONE_XML, SPLASH_ICONE_IMG, SPLASH_MARCA_IMG].forEach(tirar);
+    return { ...atual, arvore, conteudos, binarios };
+  }
+  const corAtual = cor || lerSplash(atual).cor;
+  for (const op of ops) {
+    if (op.remover) tirar(op.caminho);
+    else {
+      binarios[op.caminho] = { tamanho: op.tamanho || 0 };
+      arvore = garantirArquivoNaArvore(arvore, op.caminho);
+    }
+  }
+  const temIcone = !!binarios[SPLASH_ICONE_IMG];
+  const temMarca = !!binarios[SPLASH_MARCA_IMG];
+  conteudos[SPLASH_STYLES_PATH] = gerarStylesSplash(conteudos[SPLASH_BASE_STYLES_PATH], corAtual, temIcone, temMarca);
+  arvore = garantirArquivoNaArvore(arvore, SPLASH_STYLES_PATH);
+  if (temIcone) {
+    conteudos[SPLASH_ICONE_XML] = SPLASH_ICONE_XML_CONTEUDO;
+    arvore = garantirArquivoNaArvore(arvore, SPLASH_ICONE_XML);
+  } else {
+    delete conteudos[SPLASH_ICONE_XML];
+    arvore = removerNoDaArvore(arvore, SPLASH_ICONE_XML);
+  }
+  return { ...atual, arvore, conteudos, binarios };
+}
+
 // Permissões que estão ATIVAS no manifest (fora de comentário).
 function lerPermissoesManifest(xml) {
   const m = mascararComentariosXml(xml);
@@ -4355,6 +4516,10 @@ function CindraStudioScreen({ visible, onClose }) {
   const [confirmandoNovo, setConfirmandoNovo] = useState(false);
   const [permissoesAberto, setPermissoesAberto] = useState(false); // folha de permissões (engrenagem do editor)
   const [buscaPermissao, setBuscaPermissao] = useState('');
+  const [abaConfig, setAbaConfig] = useState('permissoes'); // 'permissoes' | 'splash' (folha da engrenagem)
+  const [processandoSplash, setProcessandoSplash] = useState(null); // 'icone' | 'marca' | null
+  const [splashPrev, setSplashPrev] = useState({ icone: null, marca: null }); // prévias da sessão (arquivo novo a cada troca)
+  const [splashHex, setSplashHex] = useState(null); // texto digitado no campo de cor
   const { height: alturaTela } = useWindowDimensions();
   const [cardNo, setCardNo] = useState(null); // pasta/arquivo segurado (card de ação)
   const [confirmandoExclusao, setConfirmandoExclusao] = useState(null); // caminho do arquivo aguardando o 2º toque pra excluir
@@ -4999,6 +5164,73 @@ function CindraStudioScreen({ visible, onClose }) {
     });
     // o texto mudou "por fora" do teclado: o desfazer antigo do manifest não vale mais
     delete historicoRef.current[MANIFEST_PATH_STUDIO];
+  };
+
+  // ---------- Tela de abertura (aba da engrenagem) ----------
+  const ativarSplash = (ligar) => {
+    setProjeto((atual) => (atual ? aplicarSplashNoProjeto(atual, ligar ? {} : { desativar: true }) : atual));
+    if (!ligar) setSplashPrev({ icone: null, marca: null });
+    [SPLASH_STYLES_PATH, SPLASH_ICONE_XML].forEach((c) => { delete historicoRef.current[c]; });
+  };
+
+  const trocarCorSplash = (cor) => {
+    setProjeto((atual) => (atual ? aplicarSplashNoProjeto(atual, { cor }) : atual));
+    delete historicoRef.current[SPLASH_STYLES_PATH];
+  };
+
+  // tipo: 'icone' (quadrado, vira PNG 432) | 'marca' (largura até 480, mantém proporção)
+  const escolherImagemSplash = async (tipo) => {
+    if (!projeto) return;
+    if (!ImagePicker || !ImageManipulator) {
+      exibirAviso('Faltam pacotes', 'Instale expo-image-picker e expo-image-manipulator (npx expo install ...) e gere um build novo.', 'erro');
+      return;
+    }
+    try {
+      const r = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaType ? ['images'] : ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: tipo === 'icone',
+        aspect: [1, 1],
+        quality: 1,
+      });
+      if (r.canceled || !r.assets || !r.assets.length) return;
+      setProcessandoSplash(tipo);
+      const uri = r.assets[0].uri;
+      const base = await ImageManipulator.manipulateAsync(uri, [], {});
+      const acoes = [];
+      if (tipo === 'icone') {
+        const lado = Math.min(base.width, base.height);
+        if (base.width !== base.height) {
+          acoes.push({ crop: { originX: Math.floor((base.width - lado) / 2), originY: Math.floor((base.height - lado) / 2), width: lado, height: lado } });
+        }
+        const alvo = Math.min(432, lado);
+        acoes.push({ resize: { width: alvo, height: alvo } });
+      } else if (base.width > 480) {
+        acoes.push({ resize: { width: 480 } });
+      }
+      const saida = await ImageManipulator.manipulateAsync(uri, acoes, { format: ImageManipulator.SaveFormat.PNG, compress: 1 });
+      const caminho = tipo === 'icone' ? SPLASH_ICONE_IMG : SPLASH_MARCA_IMG;
+      const destino = pastaBinariosStudio(projeto.pacote) + caminho;
+      await FileSystem.makeDirectoryAsync(destino.split('/').slice(0, -1).join('/'), { intermediates: true });
+      await FileSystem.deleteAsync(destino, { idempotent: true });
+      await FileSystem.copyAsync({ from: saida.uri, to: destino });
+      const info = await FileSystem.getInfoAsync(destino);
+      setSplashPrev((a) => ({ ...a, [tipo]: saida.uri }));
+      setProjeto((atual) => (atual ? aplicarSplashNoProjeto(atual, { ops: [{ caminho, tamanho: info.size || 0 }] }) : atual));
+      delete historicoRef.current[SPLASH_STYLES_PATH];
+    } catch (e) {
+      exibirAviso('Não deu pra usar a imagem', String(e && e.message ? e.message : e), 'erro');
+    } finally {
+      setProcessandoSplash(null);
+    }
+  };
+
+  const removerImagemSplash = (tipo) => {
+    if (!projeto) return;
+    const caminho = tipo === 'icone' ? SPLASH_ICONE_IMG : SPLASH_MARCA_IMG;
+    FileSystem.deleteAsync(pastaBinariosStudio(projeto.pacote) + caminho, { idempotent: true }).catch(() => {});
+    setSplashPrev((a) => ({ ...a, [tipo]: null }));
+    setProjeto((atual) => (atual ? aplicarSplashNoProjeto(atual, { ops: [{ caminho, remover: true }] }) : atual));
+    delete historicoRef.current[SPLASH_STYLES_PATH];
   };
 
   // ▶ — grava, garante o android.jar e roda o pipeline nativo.
@@ -6202,6 +6434,9 @@ function CindraStudioScreen({ visible, onClose }) {
         const xml = projeto && projeto.conteudos ? projeto.conteudos[MANIFEST_PATH_STUDIO] : undefined;
         const ativas = xml !== undefined ? lerPermissoesManifest(xml) : new Set();
         const termo = buscaPermissao.trim().toLowerCase();
+        const sp = lerSplash(projeto);
+        const iconeUri = splashPrev.icone || (sp.temIcone && projeto ? pastaBinariosStudio(projeto.pacote) + SPLASH_ICONE_IMG : null);
+        const marcaUri = splashPrev.marca || (sp.temMarca && projeto ? pastaBinariosStudio(projeto.pacote) + SPLASH_MARCA_IMG : null);
         const casa = (pm) => !termo || pm.nome.toLowerCase().includes(termo) || pm.desc.toLowerCase().includes(termo) || pm.id.toLowerCase().includes(termo);
         const conhecidas = new Set(PERMISSOES_STUDIO.map((pm) => pm.id));
         const outras = [...ativas].filter((n) => !conhecidas.has(n) && (!termo || n.toLowerCase().includes(termo)));
@@ -6248,16 +6483,188 @@ function CindraStudioScreen({ visible, onClose }) {
                     <MaterialCommunityIcons name="shield-check-outline" size={24} color={COLORS.ember} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={studioStyles.folhaTitulo}>Permissões do app</Text>
+                    <Text style={studioStyles.folhaTitulo}>{abaConfig === 'splash' ? 'Tela de abertura' : 'Permissões do app'}</Text>
                     <Text style={studioStyles.folhaSub} numberOfLines={2}>
-                      {xml === undefined
-                        ? 'AndroidManifest.xml não encontrado'
-                        : `${ativas.size} ${ativas.size === 1 ? 'ativa' : 'ativas'} · escreve sozinho no AndroidManifest.xml`}
+                      {abaConfig === 'splash'
+                        ? (sp.ativa ? 'Escreve sozinho no tema do projeto' : 'Desligada · o app abre com a tela padrão')
+                        : xml === undefined
+                          ? 'AndroidManifest.xml não encontrado'
+                          : `${ativas.size} ${ativas.size === 1 ? 'ativa' : 'ativas'} · escreve sozinho no AndroidManifest.xml`}
                     </Text>
                   </View>
                 </View>
 
-                {xml !== undefined && (
+                <View style={studioStyles.cfgAbas}>
+                  {[
+                    { id: 'permissoes', rotulo: 'Permissões', icone: 'shield-check-outline' },
+                    { id: 'splash', rotulo: 'Tela de abertura', icone: 'cellphone-screenshot' },
+                  ].map((ab) => {
+                    const sel = abaConfig === ab.id;
+                    return (
+                      <TouchableOpacity
+                        key={ab.id}
+                        style={[studioStyles.cfgAba, sel && studioStyles.cfgAbaSel]}
+                        onPress={() => setAbaConfig(ab.id)}
+                        activeOpacity={0.85}
+                      >
+                        <MaterialCommunityIcons name={ab.icone} size={16} color={sel ? '#1a0806' : COLORS.dim} />
+                        <Text style={[studioStyles.cfgAbaTexto, sel && studioStyles.cfgAbaTextoSel]}>{ab.rotulo}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {abaConfig === 'splash' && projeto && (
+                  <ScrollView
+                    style={{ maxHeight: Math.round(alturaTela * 0.6) }}
+                    nestedScrollEnabled
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                  >
+                    <View style={studioStyles.permLinha}>
+                      <View style={studioStyles.nodoOpcaoIcone}>
+                        <MaterialCommunityIcons name="cellphone-screenshot" size={20} color={sp.ativa ? COLORS.ember : COLORS.dim} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={studioStyles.permNome}>Tela de abertura personalizada</Text>
+                        <Text style={studioStyles.nodoOpcaoDesc} numberOfLines={2}>Android 12 ou mais · fundo, ícone e marca</Text>
+                      </View>
+                      <Switch
+                        value={sp.ativa}
+                        onValueChange={ativarSplash}
+                        trackColor={{ false: 'rgba(255,255,255,0.15)', true: COLORS.ember }}
+                        thumbColor="#ffffff"
+                      />
+                    </View>
+
+                    {sp.ativa && (
+                      <>
+                        <View style={studioStyles.splashTopo}>
+                          <View>
+                            <View style={studioStyles.splashExemploMoldura}>
+                              <Image source={EXEMPLO_SPLASH} style={studioStyles.splashExemploImg} resizeMode="cover" />
+                              <View style={[studioStyles.splashBadge, { top: '34%', left: '41%' }]}><Text style={studioStyles.splashBadgeTexto}>1</Text></View>
+                              <View style={[studioStyles.splashBadge, { bottom: '5%', left: '41%' }]}><Text style={studioStyles.splashBadgeTexto}>2</Text></View>
+                              <View style={[studioStyles.splashBadge, { top: 8, right: 8 }]}><Text style={studioStyles.splashBadgeTexto}>3</Text></View>
+                            </View>
+                            <Text style={studioStyles.splashLegenda}>Exemplo</Text>
+                          </View>
+
+                          <View style={{ flex: 1, gap: 10 }}>
+                            <View style={studioStyles.splashItem}>
+                              <View style={studioStyles.splashItemTopo}>
+                                <View style={studioStyles.splashBadgeFixo}><Text style={studioStyles.splashBadgeTexto}>1</Text></View>
+                                <Text style={studioStyles.splashItemTitulo}>Ícone</Text>
+                              </View>
+                              <Text style={studioStyles.nodoOpcaoDesc}>A imagem do centro. Use PNG com fundo transparente.</Text>
+                              <View style={studioStyles.splashBotoes}>
+                                <TouchableOpacity style={studioStyles.splashBtn} onPress={() => escolherImagemSplash('icone')} activeOpacity={0.85} disabled={!!processandoSplash}>
+                                  {processandoSplash === 'icone'
+                                    ? <ActivityIndicator size="small" color={COLORS.ember} />
+                                    : <MaterialCommunityIcons name="image-plus" size={16} color={COLORS.ember} />}
+                                  <Text style={studioStyles.splashBtnTexto}>{sp.temIcone ? 'Trocar foto' : 'Subir foto'}</Text>
+                                </TouchableOpacity>
+                                {sp.temIcone && (
+                                  <TouchableOpacity style={studioStyles.splashBtnRemover} onPress={() => removerImagemSplash('icone')} activeOpacity={0.85}>
+                                    <MaterialCommunityIcons name="trash-can-outline" size={16} color={COLORS.dim} />
+                                  </TouchableOpacity>
+                                )}
+                              </View>
+                            </View>
+
+                            <View style={studioStyles.splashItem}>
+                              <View style={studioStyles.splashItemTopo}>
+                                <View style={studioStyles.splashBadgeFixo}><Text style={studioStyles.splashBadgeTexto}>2</Text></View>
+                                <Text style={studioStyles.splashItemTitulo}>Marca</Text>
+                              </View>
+                              <Text style={studioStyles.nodoOpcaoDesc}>Opcional. Fica embaixo, tipo o "from Meta".</Text>
+                              <View style={studioStyles.splashBotoes}>
+                                <TouchableOpacity style={studioStyles.splashBtn} onPress={() => escolherImagemSplash('marca')} activeOpacity={0.85} disabled={!!processandoSplash}>
+                                  {processandoSplash === 'marca'
+                                    ? <ActivityIndicator size="small" color={COLORS.ember} />
+                                    : <MaterialCommunityIcons name="image-plus" size={16} color={COLORS.ember} />}
+                                  <Text style={studioStyles.splashBtnTexto}>{sp.temMarca ? 'Trocar foto' : 'Subir foto'}</Text>
+                                </TouchableOpacity>
+                                {sp.temMarca && (
+                                  <TouchableOpacity style={studioStyles.splashBtnRemover} onPress={() => removerImagemSplash('marca')} activeOpacity={0.85}>
+                                    <MaterialCommunityIcons name="trash-can-outline" size={16} color={COLORS.dim} />
+                                  </TouchableOpacity>
+                                )}
+                              </View>
+                            </View>
+
+                            <View style={studioStyles.splashItem}>
+                              <View style={studioStyles.splashItemTopo}>
+                                <View style={studioStyles.splashBadgeFixo}><Text style={studioStyles.splashBadgeTexto}>3</Text></View>
+                                <Text style={studioStyles.splashItemTitulo}>Fundo</Text>
+                              </View>
+                              <View style={studioStyles.splashCores}>
+                                {SPLASH_CORES.map((c) => {
+                                  const sel = sp.cor.toLowerCase() === c;
+                                  return (
+                                    <TouchableOpacity
+                                      key={c}
+                                      onPress={() => { setSplashHex(null); trocarCorSplash(c); }}
+                                      activeOpacity={0.8}
+                                      style={[studioStyles.splashCor, { backgroundColor: c }, sel && studioStyles.splashCorSel]}
+                                    >
+                                      {sel && <MaterialCommunityIcons name="check" size={14} color={c === '#ffffff' || c === '#f5b301' ? '#000000' : '#ffffff'} />}
+                                    </TouchableOpacity>
+                                  );
+                                })}
+                              </View>
+                              <View style={[studioStyles.cfgCampo, { marginTop: 8, paddingHorizontal: 10 }]}>
+                                <MaterialCommunityIcons name="pound" size={15} color={COLORS.dim} />
+                                <TextInput
+                                  style={[studioStyles.cfgCampoInput, { paddingVertical: 7, fontSize: 13 }]}
+                                  value={splashHex !== null ? splashHex : sp.cor.replace('#', '')}
+                                  onChangeText={(t) => {
+                                    const limpo = t.replace(/[^0-9a-fA-F]/g, '').slice(0, 6);
+                                    setSplashHex(limpo);
+                                    if (limpo.length === 6) trocarCorSplash(`#${limpo.toLowerCase()}`);
+                                  }}
+                                  onBlur={() => setSplashHex(null)}
+                                  placeholder="03050a"
+                                  placeholderTextColor={COLORS.dim}
+                                  autoCapitalize="none"
+                                  autoCorrect={false}
+                                  maxLength={6}
+                                />
+                              </View>
+                            </View>
+                          </View>
+                        </View>
+
+                        <Text style={studioStyles.permGrupo}>Como vai abrir</Text>
+                        <View style={studioStyles.splashPrevLinha}>
+                          <View style={[studioStyles.splashPrevTela, { backgroundColor: sp.cor }]}>
+                            {iconeUri ? (
+                              <Image source={{ uri: iconeUri }} style={studioStyles.splashPrevIcone} resizeMode="contain" />
+                            ) : (
+                              <View style={studioStyles.splashPrevIconeVazio}>
+                                <MaterialCommunityIcons name="image-outline" size={22} color="rgba(255,255,255,0.35)" />
+                              </View>
+                            )}
+                            {marcaUri && <Image source={{ uri: marcaUri }} style={studioStyles.splashPrevMarca} resizeMode="contain" />}
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={studioStyles.nodoOpcaoDesc}>
+                              O Android corta o ícone num círculo, então o Studio já deixa uma margem em volta da sua foto.
+                            </Text>
+                            <Text style={[studioStyles.nodoOpcaoDesc, { marginTop: 8 }]}>
+                              A marca de baixo pode não aparecer em versões mais novas do Android. Teste no celular.
+                            </Text>
+                            <Text style={[studioStyles.nodoOpcaoDesc, { marginTop: 8 }]}>
+                              Vale pro app gerado. Entra no APK na hora de compilar.
+                            </Text>
+                          </View>
+                        </View>
+                      </>
+                    )}
+                  </ScrollView>
+                )}
+
+                {abaConfig === 'permissoes' && xml !== undefined && (
                   <>
                     <View style={[studioStyles.cfgCampo, { marginTop: 14, marginBottom: 6 }]}>
                       <MaterialCommunityIcons name="magnify" size={18} color={COLORS.dim} />
