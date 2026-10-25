@@ -1523,16 +1523,9 @@ async function lerSyncStudio(pacote) {
   try {
     const t = await FileSystem.readAsStringAsync(`${PASTA_SYNC_STUDIO}${pacote}.json`, { encoding: FileSystem.EncodingType.UTF8 });
     const o = JSON.parse(t) || {};
-    return {
-      ultimaSync: Number(o.ultimaSync) || 0,
-      pasta: o.pasta || '',
-      arquivos: Array.isArray(o.arquivos) ? o.arquivos : [],
-      hashes: o.hashes && typeof o.hashes === 'object' ? o.hashes : {},
-      tamanhos: o.tamanhos && typeof o.tamanhos === 'object' ? o.tamanhos : {},
-      pastas: Array.isArray(o.pastas) ? o.pastas : [],
-    };
+    return { ultimaSync: Number(o.ultimaSync) || 0, pasta: o.pasta || '', arquivos: Array.isArray(o.arquivos) ? o.arquivos : [] };
   } catch (e) {
-    return { ultimaSync: 0, pasta: '', arquivos: [], hashes: {}, tamanhos: {}, pastas: [] };
+    return { ultimaSync: 0, pasta: '', arquivos: [] };
   }
 }
 
@@ -1541,15 +1534,6 @@ async function gravarSyncStudio(pacote, dados) {
     await FileSystem.makeDirectoryAsync(PASTA_SYNC_STUDIO, { intermediates: true }).catch(() => {});
     await FileSystem.writeAsStringAsync(`${PASTA_SYNC_STUDIO}${pacote}.json`, JSON.stringify(dados), { encoding: FileSystem.EncodingType.UTF8 });
   } catch (e) { /* sem sync desta vez */ }
-}
-
-// Impressão digital barata de um texto (tamanho + hash), pra saber se o
-// arquivo na pasta é igual ao que o Studio gravou.
-function hashTextoStudio(t) {
-  const x = String(t);
-  let h = 5381;
-  for (let i = 0; i < x.length; i += 1) h = (((h << 5) + h) + x.charCodeAt(i)) | 0;
-  return `${x.length}:${h}`;
 }
 
 // Grava o projeto em cindra-studio/NomeApp/arquivos. Não sobrescreve o que
@@ -1564,26 +1548,10 @@ async function espelharProjetoNaPastaStudio(proj, nomeApp) {
   const conteudos = proj.conteudos || {};
   const binarios = Object.keys(proj.binarios || {});
   const r = await ApkBuilder.espelharProjeto(raiz, conteudos, pastaBinariosStudio(proj.pacote), binarios, ultima);
-  // pastas vazias do app também vão pra pasta arquivos
-  let pastasVazias = [];
-  if (ApkBuilder.temPastasNativas) {
-    pastasVazias = pastasVaziasDaArvore(proj.arvore || []);
-    if (pastasVazias.length) await ApkBuilder.criarPastas(raiz, pastasVazias).catch(() => {});
-  }
-  const hashes = {};
-  for (const rel of Object.keys(conteudos)) hashes[rel] = hashTextoStudio(conteudos[rel]);
-  const tamanhos = {};
-  for (const rel of binarios) {
-    const t = proj.binarios[rel] && proj.binarios[rel].tamanho;
-    if (t) tamanhos[rel] = t;
-  }
   await gravarSyncStudio(proj.pacote, {
     ultimaSync: r && r.agora ? r.agora : Date.now(),
     pasta,
     arquivos: Object.keys(conteudos).concat(binarios),
-    hashes,
-    tamanhos,
-    pastas: pastasVazias,
   });
   return true;
 }
@@ -1591,18 +1559,15 @@ async function espelharProjetoNaPastaStudio(proj, nomeApp) {
 // Compara a pasta "arquivos" com o projeto e devolve o que mudou por fora:
 // { textos: {caminho: texto}, binarios: {caminho: {tamanho}}, removidos: [caminho] }
 // (ou null se não tem nada novo / não dá pra checar).
-// Compara pelo CONTEÚDO (não pela data): arquivo vindo de zip/outro app costuma
-// manter a data antiga e mesmo assim tem que entrar. Se nunca houve sincronia
-// (pasta já existia antes), o que está na pasta vale e entra no app.
 async function lerAlteracoesDaPastaStudio(proj, nomeApp) {
   if (!ApkBuilder.temEspelhoNativo || !proj || !proj.pacote) return null;
   const pasta = nomePastaAppStudio(nomeApp, proj.pacote);
   const sync = await lerSyncStudio(proj.pacote);
-  const semSync = !sync.ultimaSync || sync.pasta !== pasta;
+  if (!sync.ultimaSync || sync.pasta !== pasta) return null;
   if (!(await testarAcessoPastaPublicaStudio())) return null;
   const raiz = `${PASTA_PUBLICA_TEXTO}/${pasta}/arquivos`;
   const lista = await ApkBuilder.listarPasta(raiz);
-  if (!Array.isArray(lista) || lista.length === 0) return null;
+  if (!Array.isArray(lista)) return null;
 
   const limite = sync.ultimaSync + 1000;
   const noDisco = new Map();
@@ -1613,63 +1578,43 @@ async function lerAlteracoesDaPastaStudio(proj, nomeApp) {
   }
   const conteudos = proj.conteudos || {};
   const binarios = proj.binarios || {};
-  const jaEspelhados = new Set(sync.arquivos);
   const delta = { textos: {}, binarios: {}, removidos: [] };
 
-  // 1) o que precisa ser lido como texto: tudo que o projeto já tem como
-  //    texto + arquivos novos que não são binários conhecidos.
-  const paraLer = [];
-  const novos = [];
+  // 1) alterados / novos (só o que foi mexido depois da última sincronia)
+  const lerComoTexto = [];
+  const novosSemTipo = [];
   for (const [rel, it] of noDisco) {
+    if (!(it.modificado > limite)) continue;
     const nome = rel.split('/').pop();
-    if (conteudos[rel] !== undefined) { paraLer.push(rel); continue; }
     if (binarios[rel]) {
-      const tam = it.tamanho || 0;
-      const gravado = sync.tamanhos[rel];
-      const mudou = semSync
-        ? tam !== (binarios[rel].tamanho || 0)
-        : (gravado ? tam !== gravado : it.modificado > limite);
-      if (mudou) delta.binarios[rel] = { tamanho: tam };
-      continue;
-    }
-    // arquivo que o Studio não tem: novo (se nunca foi espelhado e depois apagado no app)
-    if (!semSync && jaEspelhados.has(rel)) continue;
-    if (ehExtensaoBinaria(nome) || (it.tamanho || 0) > 2000000) {
+      delta.binarios[rel] = { tamanho: it.tamanho || 0 };
+    } else if (conteudos[rel] !== undefined) {
+      lerComoTexto.push(rel);
+    } else if (ehExtensaoTexto(nome)) {
+      lerComoTexto.push(rel);
+    } else if (ehExtensaoBinaria(nome) || (it.tamanho || 0) > 2000000) {
       delta.binarios[rel] = { tamanho: it.tamanho || 0 };
     } else {
-      novos.push(rel);
-      paraLer.push(rel);
+      novosSemTipo.push(rel);
     }
   }
-  const lidos = paraLer.length ? await ApkBuilder.lerTextos(raiz, paraLer) : {};
-
-  for (const rel of paraLer) {
+  const nomesParaLer = lerComoTexto.concat(novosSemTipo);
+  const lidos = nomesParaLer.length ? await ApkBuilder.lerTextos(raiz, nomesParaLer) : {};
+  for (const rel of lerComoTexto) {
+    if (typeof lidos[rel] === 'string' && lidos[rel] !== conteudos[rel]) delta.textos[rel] = lidos[rel];
+  }
+  for (const rel of novosSemTipo) {
     const t = typeof lidos[rel] === 'string' ? lidos[rel] : null;
     if (t === null) continue;
-    if (conteudos[rel] !== undefined) {
-      if (t === conteudos[rel]) continue;
-      const gravado = sync.hashes[rel];
-      const mudouFora = semSync
-        ? true
-        : (gravado ? hashTextoStudio(t) !== gravado : noDisco.get(rel).modificado > limite);
-      if (mudouFora) delta.textos[rel] = t;
-    } else if (novos.includes(rel)) {
-      // arquivo novo: texto ou binário (arquivo sem extensão conhecida: espia o conteúdo)
-      if (!ehExtensaoTexto(rel.split('/').pop())) {
-        const amostra = t.slice(0, 4096);
-        let estranhos = 0;
-        for (let i = 0; i < amostra.length; i += 1) {
-          const c = amostra.charCodeAt(i);
-          if (c === 0) { estranhos = amostra.length; break; }
-          if (c === 0xfffd) estranhos += 1;
-        }
-        if (amostra.length && estranhos / amostra.length > 0.01) {
-          delta.binarios[rel] = { tamanho: noDisco.get(rel).tamanho || 0 };
-          continue;
-        }
-      }
-      delta.textos[rel] = t;
+    const amostra = t.slice(0, 4096);
+    let estranhos = 0;
+    for (let i = 0; i < amostra.length; i += 1) {
+      const c = amostra.charCodeAt(i);
+      if (c === 0) { estranhos = amostra.length; break; }
+      if (c === 0xfffd) estranhos += 1;
     }
+    if (amostra.length && estranhos / amostra.length > 0.01) delta.binarios[rel] = { tamanho: (noDisco.get(rel).tamanho) || 0 };
+    else delta.textos[rel] = t;
   }
 
   // binários alterados/novos: copia pro lugar onde o Studio guarda
@@ -1681,8 +1626,8 @@ async function lerAlteracoesDaPastaStudio(proj, nomeApp) {
     }
   }
 
-  // 2) apagados / renomeados por fora: só os que o Studio tinha espelhado
-  if (!semSync) {
+  // 2) apagados / renomeados por fora: só os que a gente tinha espelhado
+  if (lista.length > 0) {
     for (const rel of sync.arquivos) {
       if (noDisco.has(rel)) continue;
       if (conteudos[rel] === undefined && !binarios[rel]) continue;
@@ -1691,47 +1636,8 @@ async function lerAlteracoesDaPastaStudio(proj, nomeApp) {
     }
   }
 
-  // 3) pastas (inclusive vazias): criadas por fora entram; apagadas por fora saem
-  delta.pastas = [];
-  delta.pastasRemovidas = [];
-  if (ApkBuilder.temPastasNativas) {
-    const dirs = await ApkBuilder.listarPastas(raiz).catch(() => null);
-    if (Array.isArray(dirs)) {
-      const dirSet = new Set(dirs.map((d) => String(d).replace(/\\/g, '/')));
-      for (const d of dirSet) {
-        if (d.split('/').pop().startsWith('.')) continue;
-        if (!arvoreTemCaminho(proj.arvore || [], d)) delta.pastas.push(d);
-      }
-      if (!semSync) {
-        const conhecidas = new Set(sync.pastas);
-        for (const rel of sync.arquivos) {
-          const partes = rel.split('/');
-          for (let i = 1; i < partes.length; i += 1) conhecidas.add(partes.slice(0, i).join('/'));
-        }
-        for (const d of conhecidas) {
-          if (dirSet.has(d) || d === ASSETS_STUDIO || ASSETS_STUDIO.startsWith(`${d}/`)) continue;
-          if (acharNoNaArvore(proj.arvore || [], d)) delta.pastasRemovidas.push(d);
-        }
-      }
-    }
-  }
-
-  const mudou = Object.keys(delta.textos).length + Object.keys(delta.binarios).length
-    + delta.removidos.length + delta.pastas.length + delta.pastasRemovidas.length > 0;
+  const mudou = Object.keys(delta.textos).length + Object.keys(delta.binarios).length + delta.removidos.length > 0;
   return mudou ? delta : null;
-}
-
-// Cria a pasta (e as de cima) na árvore, vazia.
-function garantirPastaNaArvore(arvore, caminho) {
-  const partes = caminho.split('/');
-  let nova = arvore;
-  for (let i = 0; i < partes.length; i += 1) {
-    const alvo = partes.slice(0, i + 1).join('/');
-    if (arvoreTemCaminho(nova, alvo)) continue;
-    const no = { nome: partes[i], caminho: alvo, tipo: 'pasta', filhos: [] };
-    nova = i === 0 ? nova.concat(no) : inserirNoNaArvore(nova, partes.slice(0, i).join('/'), no);
-  }
-  return nova;
 }
 
 function aplicarAlteracoesDaPastaStudio(proj, d) {
@@ -1753,13 +1659,6 @@ function aplicarAlteracoesDaPastaStudio(proj, d) {
     delete conteudos[rel];
     delete binarios[rel];
     arvore = removerNoDaArvore(arvore, rel);
-  }
-  for (const pasta of (d.pastas || [])) arvore = garantirPastaNaArvore(arvore, pasta);
-  // pasta apagada por fora: só some se ficou vazia (mais funda primeiro)
-  const apagar = (d.pastasRemovidas || []).slice().sort((a, b) => b.length - a.length);
-  for (const pasta of apagar) {
-    const no = acharNoNaArvore(arvore, pasta);
-    if (no && no.tipo === 'pasta' && no.filhos.length === 0) arvore = removerNoDaArvore(arvore, pasta);
   }
   return { ...proj, conteudos, binarios, arvore };
 }
@@ -5395,13 +5294,13 @@ function CindraStudioScreen({ visible, onClose }) {
         if (d) {
           proj = aplicarAlteracoesDaPastaStudio(proj, d);
           setProjeto((atual) => (atual && atual.pacote === proj.pacote ? aplicarAlteracoesDaPastaStudio(atual, d) : atual));
-          const mexidos = Object.keys(d.textos).concat(Object.keys(d.binarios), d.removidos, d.pastas || [], d.pastasRemovidas || []);
+          const mexidos = Object.keys(d.textos).concat(Object.keys(d.binarios), d.removidos);
           mexidos.forEach((c) => { delete historicoRef.current[c]; });
           if (d.removidos.length) {
             setAbasAbertas((a) => a.filter((c) => !d.removidos.includes(c)));
             setArquivoAtivo((a) => (a && d.removidos.includes(a) ? null : a));
           }
-          exibirAviso('Alterações da pasta', `${mexidos.length} ${mexidos.length === 1 ? 'item atualizado' : 'itens atualizados'} a partir de cindra-studio/${nomePastaAppStudio(nomeDoApp, proj.pacote)}/arquivos`, 'sucesso');
+          exibirAviso('Alterações da pasta', `${mexidos.length} ${mexidos.length === 1 ? 'arquivo atualizado' : 'arquivos atualizados'} a partir de cindra-studio/${nomePastaAppStudio(nomeDoApp, proj.pacote)}/arquivos`, 'sucesso');
         }
       }
       await espelharProjetoNaPastaStudio(proj, nomeDoApp);
