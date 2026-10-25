@@ -18,6 +18,7 @@ import {
   Keyboard,
   Image,
   Share,
+  BackHandler,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -4006,6 +4007,7 @@ function CindraStudioScreen({ visible, onClose }) {
   const [abaHome, setAbaHome] = useState('apps'); // barra de baixo da tela inicial: 'apps' | 'aprender'
   const [exemploAberto, setExemploAberto] = useState(null); // id do exemplo aberto na aba Aprender
   const [copiadoChave, setCopiadoChave] = useState(null); // bloco que acabou de ser copiado (mostra "Copiado!")
+  const [confirmarSaida, setConfirmarSaida] = useState(false); // folha "Sair do app?" (botão voltar na tela inicial)
   const [avisoRecuperarVisivel, setAvisoRecuperarVisivel] = useState(false); // só depois de ler as prefs
   const prefsRef = useRef({});
 
@@ -4925,6 +4927,35 @@ function CindraStudioScreen({ visible, onClose }) {
     gravarPrefsStudio(prefsRef.current);
   };
   const fecharBusca = () => { setBuscaProjeto(''); setBuscaAberta(false); };
+
+  // Botão voltar do celular: primeiro fecha o que estiver aberto por cima
+  // (cards, menus, painéis) e depois volta UMA tela por vez, em vez de
+  // jogar a pessoa pra fora do app. Na tela inicial, pergunta se quer sair.
+  const voltarCelularRef = useRef(null);
+  voltarCelularRef.current = () => {
+    if (confirmarSaida) { setConfirmarSaida(false); return; }
+    if (cardProjeto) { setCardProjeto(null); return; }
+    if (menuOrdenarAberto) { setMenuOrdenarAberto(false); return; }
+    if (cardNo) { setCardNo(null); setPastaEmCriacao(false); setNomeNovaPasta(''); return; }
+    if (menuProjetoAberto) { setMenuProjetoAberto(false); return; }
+    if (painelCompilacao) { if (!compilando) setPainelCompilacao(false); return; }
+    if (sidebarAberta) { setSidebarAberta(false); return; }
+    if (etapa === 'workspace') { voltarParaHome(); return; }
+    if (etapa === 'config') { setEtapa('home'); return; }
+    if (buscaAberta) { fecharBusca(); return; }
+    if (abaHome === 'aprender') {
+      if (exemploAberto) setExemploAberto(null); else setAbaHome('apps');
+      return;
+    }
+    setConfirmarSaida(true);
+  };
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (voltarCelularRef.current) voltarCelularRef.current();
+      return true; // sempre consome o botão: quem decide se sai é a folha "Sair do app?"
+    });
+    return () => sub.remove();
+  }, []);
   const alternarModoLista = () => {
     const novo = modoLista === 'lista' ? 'grade' : 'lista';
     setModoLista(novo);
@@ -5101,9 +5132,6 @@ function CindraStudioScreen({ visible, onClose }) {
             </View>
           ) : (
             <>
-              <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ marginRight: 4 }}>
-                <MaterialCommunityIcons name="arrow-left" size={24} color={COLORS.ink} />
-              </TouchableOpacity>
               <View style={{ flex: 1 }}>
                 <Text style={studioStyles.homeOverline}>CINDRA-STUDIO</Text>
                 <Text style={studioStyles.homeTitulo} numberOfLines={1}>Meus apps</Text>
@@ -5268,9 +5296,6 @@ function CindraStudioScreen({ visible, onClose }) {
   const renderAbaAprender = () => (
     <>
       <View style={studioStyles.homeHeader}>
-        <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ marginRight: 4 }}>
-          <MaterialCommunityIcons name="arrow-left" size={24} color={COLORS.ink} />
-        </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={studioStyles.homeOverline}>CINDRA-STUDIO</Text>
           <Text style={studioStyles.homeTitulo} numberOfLines={1}>Aprender</Text>
@@ -5379,6 +5404,31 @@ function CindraStudioScreen({ visible, onClose }) {
                   trackColor={{ false: 'rgba(255,255,255,0.15)', true: COLORS.ember }}
                   thumbColor="#ffffff"
                 />
+              </View>
+            </>
+          )}
+        </FolhaInferiorStudio>
+      )}
+
+      {confirmarSaida && (
+        <FolhaInferiorStudio onFechar={() => setConfirmarSaida(false)} insetBottom={insets.bottom}>
+          {(fechar) => (
+            <>
+              <Text style={[studioStyles.folhaTitulo, { marginBottom: 8 }]}>Sair do app?</Text>
+              <Text style={{ color: COLORS.dim, fontSize: 14, lineHeight: 20, marginBottom: 16 }}>
+                Você tem certeza que quer sair?
+              </Text>
+              <View style={studioStyles.folhaConfirmaBotoes}>
+                <TouchableOpacity style={studioStyles.folhaBtn} onPress={fechar} activeOpacity={0.8}>
+                  <Text style={studioStyles.folhaBtnTexto}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[studioStyles.folhaBtn, studioStyles.folhaBtnPerigo]}
+                  onPress={() => BackHandler.exitApp()}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[studioStyles.folhaBtnTexto, { color: '#1a0806' }]}>Sair</Text>
+                </TouchableOpacity>
               </View>
             </>
           )}
