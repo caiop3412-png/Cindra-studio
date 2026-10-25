@@ -1212,6 +1212,119 @@ async function removerDaListaProjetosStudio(pacote) {
   return nova;
 }
 
+// ─────────────────────────────────────────────────────────
+// Histórico de APKs gerados (aba "Gerados"). Cada compilação com sucesso
+// vira um registro em _builds.json e o APK fica guardado com nome único em
+// _out/<pacote>/ (antes cada build sobrescrevia o anterior). O ícone do app
+// no momento do build é copiado pra _builds/ pra não sumir se a pessoa
+// trocar a foto do app depois.
+// ─────────────────────────────────────────────────────────
+const ARQUIVO_BUILDS_STUDIO = `${FileSystem.documentDirectory}cindrastudio/_builds.json`;
+const PASTA_ICONES_BUILDS_STUDIO = `${FileSystem.documentDirectory}cindrastudio/_builds/`;
+
+async function lerBuildsStudio() {
+  try {
+    const info = await FileSystem.getInfoAsync(ARQUIVO_BUILDS_STUDIO);
+    if (!info.exists) return [];
+    const texto = await FileSystem.readAsStringAsync(ARQUIVO_BUILDS_STUDIO, { encoding: FileSystem.EncodingType.UTF8 });
+    const lista = JSON.parse(texto);
+    return Array.isArray(lista) ? lista : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+async function gravarBuildsStudio(lista) {
+  await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}cindrastudio/`, { intermediates: true });
+  await FileSystem.writeAsStringAsync(ARQUIVO_BUILDS_STUDIO, JSON.stringify(lista), { encoding: FileSystem.EncodingType.UTF8 });
+}
+
+// Varre a pasta _out/ e inclui no histórico os APKs que já estavam salvos
+// no celular e ainda não estão registrados: os das versões antigas (um
+// arquivo <pacote>.apk / <pacote>-release.apk por app, sobrescrito a cada
+// build) e qualquer APK solto nas subpastas. Não move nem apaga nada; usa
+// a data de modificação do arquivo e pega nome/ícone do projeto na lista.
+async function importarApksExistentesStudio(builds, projetos) {
+  const raiz = `${FileSystem.documentDirectory}cindrastudio/_out/`;
+  let nomes = [];
+  try {
+    const info = await FileSystem.getInfoAsync(raiz);
+    if (!info.exists) return builds;
+    nomes = await FileSystem.readDirectoryAsync(raiz);
+  } catch (e) {
+    return builds;
+  }
+  const jaTem = new Set(builds.map((b) => b.apk));
+  const novos = [];
+
+  const acharProjeto = (pacote) => (projetos || []).find((x) => x.pacote === pacote) || null;
+  const adicionar = async (uri, pacote, release, nomeArq) => {
+    if (jaTem.has(uri)) return;
+    let info;
+    try { info = await FileSystem.getInfoAsync(uri); } catch (e) { return; }
+    if (!info || !info.exists || info.isDirectory) return;
+    const proj = acharProjeto(pacote);
+    const ultimoTrecho = String(pacote).split('.').pop() || pacote;
+    novos.push({
+      id: `disco_${pacote}_${nomeArq}`,
+      pacote,
+      nomeApp: (proj && proj.nomeApp) || ultimoTrecho,
+      tipo: release ? 'release' : 'debug',
+      versaoNome: proj && proj.versaoNome ? proj.versaoNome : null,
+      versaoCodigo: null,
+      criadoEm: info.modificationTime ? Math.round(info.modificationTime * 1000) : Date.now(),
+      apk: uri,
+      tamanho: info.size || 0,
+      fotoIcone: (proj && proj.fotoIcone) || null,
+      corIcone: (proj && proj.corIcone) || CORES_ICONE_STUDIO[0],
+      iconeEscolhido: (proj && proj.iconeEscolhido) || ICONES_APP_STUDIO[0],
+      antigo: true,
+    });
+    jaTem.add(uri);
+  };
+
+  for (const nome of nomes) {
+    if (/\.apk$/i.test(nome)) {
+      const base = nome.replace(/\.apk$/i, '');
+      const release = /-release$/.test(base);
+      await adicionar(`${raiz}${nome}`, release ? base.replace(/-release$/, '') : base, release, nome);
+    } else {
+      // subpasta <pacote>/ com APKs soltos (build que não chegou a ser registrado)
+      let filhos = [];
+      try { filhos = await FileSystem.readDirectoryAsync(`${raiz}${nome}`); } catch (e) { filhos = []; }
+      for (const f of filhos) {
+        if (!/\.apk$/i.test(f)) continue;
+        await adicionar(`${raiz}${nome}/${f}`, nome, /-release\.apk$/i.test(f), f);
+      }
+    }
+  }
+  return novos.length ? novos.concat(builds) : builds;
+}
+
+// Agrupa os builds por app (pacote). Grupos e builds ficam do mais novo pro
+// mais antigo; o "ultimo" dá nome e ícone do cabeçalho do grupo.
+function agruparBuildsStudio(builds) {
+  const mapa = {};
+  (builds || []).forEach((b) => {
+    if (!mapa[b.pacote]) mapa[b.pacote] = [];
+    mapa[b.pacote].push(b);
+  });
+  return Object.keys(mapa)
+    .map((pacote) => {
+      const itens = mapa[pacote].slice().sort((a, b) => b.criadoEm - a.criadoEm);
+      return { pacote, itens, ultimo: itens[0] };
+    })
+    .sort((a, b) => b.ultimo.criadoEm - a.ultimo.criadoEm);
+}
+
+// "25/10/2026 às 14:32" — manual, sem depender de Intl do Hermes.
+function formatarDataBuildStudio(ms) {
+  if (!ms) return '';
+  const d = new Date(ms);
+  const dois = (n) => String(n).padStart(2, '0');
+  return `${dois(d.getDate())}/${dois(d.getMonth() + 1)}/${d.getFullYear()} às ${dois(d.getHours())}:${dois(d.getMinutes())}`;
+}
+
 async function lerEstadoStudio(pacote) {
   try {
     const caminho = caminhoEstadoProjeto(pacote);
@@ -2140,9 +2253,106 @@ function NoArvoreArquivo({ no, pastasAbertas, alternarPasta, arquivoAtivo, onAbr
 // aviso "em breve" ao tocar; coloque a URL (site, Instagram, Pix...) pra abrir.
 const STUDIO_LINK_APOIO = '';
 
-// Barra de baixo da tela inicial: abas "Meus apps" e "Aprender" + botão "Criar".
+// Estilos da aba "Gerados" (apps compilados + histórico de APKs).
+const geradosStyles = StyleSheet.create({
+  lista: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24 },
+  grupo: {
+    backgroundColor: COLORS.panel,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.lineSoft,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  grupoTopo: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  grupoNome: { color: COLORS.ink, fontSize: 16, fontWeight: '700', flexShrink: 1 },
+  grupoPacote: { color: COLORS.dim, fontSize: 12, marginTop: 2 },
+  grupoMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5 },
+  grupoBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,82,39,0.16)',
+  },
+  grupoBadgeTexto: { color: '#ff8a68', fontSize: 11, fontWeight: '800' },
+  grupoData: { color: COLORS.dim, fontSize: 11.5 },
+  seta: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buildsWrap: { borderTopWidth: 1, borderTopColor: COLORS.lineSoft, paddingHorizontal: 14, paddingVertical: 6 },
+  buildLinha: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.lineSoft,
+  },
+  buildTitulo: { color: COLORS.ink, fontSize: 14, fontWeight: '700' },
+  buildData: { color: COLORS.dim, fontSize: 12, marginTop: 3 },
+  buildTipo: { fontSize: 10.5, fontWeight: '800', letterSpacing: 0.6 },
+  buildAcao: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  vazio: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 36 },
+  vazioIcone: {
+    width: 76,
+    height: 76,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,82,39,0.12)',
+    marginBottom: 14,
+  },
+  apagarGrupo: { alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10 },
+  apagarGrupoTexto: { color: COLORS.error, fontSize: 12.5, fontWeight: '700' },
+  barraSelecao: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.lineSoft,
+    backgroundColor: COLORS.sheet,
+  },
+  barraBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 46,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  barraBtnTexto: { color: COLORS.ink, fontSize: 14, fontWeight: '700' },
+  barraApagar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 46,
+    borderRadius: 16,
+    backgroundColor: COLORS.ember,
+  },
+  barraApagarTexto: { color: '#1a0806', fontSize: 14.5, fontWeight: '800' },
+});
+
+// Barra de baixo da tela inicial: abas "Meus apps", "Gerados" e "Aprender" + botão "Criar".
 const ABAS_HOME_STUDIO = [
   { id: 'apps', rotulo: 'Meus apps', icone: 'view-dashboard-outline', iconeAtivo: 'view-dashboard' },
+  { id: 'gerados', rotulo: 'Gerados', icone: 'package-variant-closed', iconeAtivo: 'package-variant' },
   { id: 'aprender', rotulo: 'Aprender', icone: 'school-outline', iconeAtivo: 'school' },
   { id: 'criar', rotulo: 'Criar', especial: true },
 ];
@@ -4501,7 +4711,14 @@ function CindraStudioScreen({ visible, onClose }) {
   const [favoritosNoTopo, setFavoritosNoTopo] = useState(true);
   const [modoLista, setModoLista] = useState('lista'); // 'lista' | 'grade'
   const [menuOrdenarAberto, setMenuOrdenarAberto] = useState(false); // folha "Ordenar por"
-  const [abaHome, setAbaHome] = useState('apps'); // barra de baixo da tela inicial: 'apps' | 'aprender'
+  const [builds, setBuilds] = useState([]); // histórico de APKs gerados (aba "Gerados")
+  const [gruposAbertos, setGruposAbertos] = useState({}); // { [pacote]: true } — setinha expandida
+  const [confirmarApagarBuild, setConfirmarApagarBuild] = useState(null); // id do build com "apagar?" armado
+  const [confirmarApagarGrupo, setConfirmarApagarGrupo] = useState(null); // pacote com "apagar todos?" armado
+  const [modoSelecaoBuilds, setModoSelecaoBuilds] = useState(false); // seleção múltipla na aba Gerados
+  const [selecionadosBuilds, setSelecionadosBuilds] = useState({}); // { [idBuild]: true }
+  const [confirmarApagarLote, setConfirmarApagarLote] = useState(false);
+  const [abaHome, setAbaHome] = useState('apps'); // barra de baixo da tela inicial: 'apps' | 'gerados' | 'aprender'
   const [exemploAberto, setExemploAberto] = useState(null); // id do exemplo aberto na aba Aprender
   const [copiadoChave, setCopiadoChave] = useState(null); // bloco que acabou de ser copiado (mostra "Copiado!")
   const [confirmarSaida, setConfirmarSaida] = useState(false); // folha "Sair do app?" (botão voltar na tela inicial)
@@ -4543,6 +4760,14 @@ function CindraStudioScreen({ visible, onClose }) {
   const [logCompilacao, setLogCompilacao] = useState([]);
   const [errosCompilacao, setErrosCompilacao] = useState([]);
   const [apkGerado, setApkGerado] = useState(null);
+  // Assinatura do APK: debug (chave interna) ou release (keystore do usuário).
+  // As senhas ficam só na memória; keystore (cópia no app) + alias ficam salvos.
+  const [folhaBuildAberta, setFolhaBuildAberta] = useState(false);
+  const [tipoBuild, setTipoBuild] = useState('debug'); // 'debug' | 'release'
+  const [keystoreInfo, setKeystoreInfo] = useState(null); // { nome, caminho }
+  const [aliasKeystore, setAliasKeystore] = useState('');
+  const [senhaKeystore, setSenhaKeystore] = useState('');
+  const [senhaChave, setSenhaChave] = useState('');
   // Progresso animado do stepper (0 a 6) + pulso do ícone central do painel.
   const progressoCompilacao = useRef(new Animated.Value(0)).current;
   const pulsoCompilacao = useRef(new Animated.Value(1)).current;
@@ -4571,6 +4796,14 @@ function CindraStudioScreen({ visible, onClose }) {
       if (prefs.modoLista === 'grade' || prefs.modoLista === 'lista') setModoLista(prefs.modoLista);
       if (Object.prototype.hasOwnProperty.call(ROTULOS_ORDEM_STUDIO, prefs.ordenacao)) setOrdenacao(prefs.ordenacao);
       if (typeof prefs.favoritosNoTopo === 'boolean') setFavoritosNoTopo(prefs.favoritosNoTopo);
+      if (prefs.keystore && prefs.keystore.caminho) {
+        // só reaproveita se a cópia do keystore ainda existe no aparelho
+        FileSystem.getInfoAsync(prefs.keystore.caminho).then((info) => {
+          if (vivo && info.exists) setKeystoreInfo({ nome: prefs.keystore.nome, caminho: prefs.keystore.caminho });
+        }).catch(() => {});
+      }
+      if (typeof prefs.aliasKeystore === 'string') setAliasKeystore(prefs.aliasKeystore);
+      if (prefs.tipoBuild === 'release' || prefs.tipoBuild === 'debug') setTipoBuild(prefs.tipoBuild);
     });
     return () => { vivo = false; };
   }, []);
@@ -4587,6 +4820,15 @@ function CindraStudioScreen({ visible, onClose }) {
         setListaProjetos(lista);
         setEstadoCarregado(true);
       });
+    // Histórico de APKs: lê o registro e já inclui os APKs que estão
+    // guardados no celular de antes da aba existir.
+    (async () => {
+      const registrados = await lerBuildsStudio();
+      const projetos = await lerListaProjetosStudio();
+      const completo = await importarApksExistentesStudio(registrados, projetos);
+      if (completo.length !== registrados.length) gravarBuildsStudio(completo).catch(() => {});
+      if (vivo) setBuilds(completo);
+    })().catch(() => {});
     return () => { vivo = false; };
   }, []);
 
@@ -5233,8 +5475,39 @@ function CindraStudioScreen({ visible, onClose }) {
   };
 
   // ▶ — grava, garante o android.jar e roda o pipeline nativo.
-  const compilarProjeto = async () => {
+  // Escolhe o .keystore/.p12 no celular e guarda uma cópia dentro do app
+  // (o seletor devolve um arquivo temporário de cache).
+  const escolherKeystore = async () => {
+    try {
+      const r = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true, multiple: false });
+      if (r.canceled || !r.assets || !r.assets.length) return;
+      const arq = r.assets[0];
+      const nome = String(arq.name || 'release.keystore').replace(/[^A-Za-z0-9._-]/g, '_');
+      const pastaKeys = `${FileSystem.documentDirectory}cindrastudio/_keys/`;
+      await FileSystem.makeDirectoryAsync(pastaKeys, { intermediates: true });
+      const destino = `${pastaKeys}${nome}`;
+      const antigo = await FileSystem.getInfoAsync(destino);
+      if (antigo.exists) await FileSystem.deleteAsync(destino, { idempotent: true });
+      await FileSystem.copyAsync({ from: arq.uri, to: destino });
+      const info = { nome, caminho: destino };
+      setKeystoreInfo(info);
+      salvarPref('keystore', info);
+      if (/\.jks$/i.test(nome)) {
+        exibirAviso('Keystore .jks', 'O Android não abre .jks. Converta pra .p12 no PC (keytool -importkeystore ... -deststoretype PKCS12).', 'aviso');
+      }
+    } catch (e) {
+      exibirAviso('Erro ao escolher o keystore', String(e && e.message ? e.message : e), 'erro');
+    }
+  };
+
+  // modo: 'debug' (chave interna do Cindra) ou 'release' (keystore escolhido).
+  const compilarProjeto = async (modo = 'debug') => {
     if (compilando) return;
+    const release = modo === 'release';
+    if (release) {
+      if (!keystoreInfo) { exibirAviso('Falta o keystore', 'Escolha o arquivo .keystore / .p12 pra assinar o release.', 'aviso'); return; }
+      if (!senhaKeystore) { exibirAviso('Falta a senha', 'Digite a senha do keystore.', 'aviso'); return; }
+    }
     if (!ApkBuilder.disponivel) {
       exibirAviso('Precisa de rebuild', 'O módulo nativo apk-builder ainda não está neste app. Faça o eas build uma vez (veja o LEIAME do módulo).', 'aviso');
       return;
@@ -5266,12 +5539,26 @@ function CindraStudioScreen({ visible, onClose }) {
         if (pct !== ultimoPct) { ultimoPct = pct; add(`Baixando android.jar: ${pct}%`); }
       });
 
-      const pastaSaida = `${FileSystem.documentDirectory}cindrastudio/_out/`;
+      // Um arquivo por build (carimbo de data/hora) — assim o histórico da
+      // aba "Gerados" guarda todos os APKs, não só o último.
+      const idBuild = `${Date.now()}`;
+      const pastaSaida = `${FileSystem.documentDirectory}cindrastudio/_out/${projeto.pacote}/`;
       await FileSystem.makeDirectoryAsync(pastaSaida, { intermediates: true });
-      const apkUri = `${pastaSaida}${projeto.pacote}.apk`;
-      const r = await ApkBuilder.compilar(caminhoLocalStudio(pasta), jar, caminhoLocalStudio(apkUri));
+      const apkUri = `${pastaSaida}${idBuild}${release ? '-release' : ''}.apk`;
+      const opcoesBuild = release
+        ? {
+            release: true,
+            keystore: caminhoLocalStudio(keystoreInfo.caminho),
+            senhaKeystore,
+            alias: aliasKeystore.trim(),
+            senhaChave,
+          }
+        : undefined;
+      if (release) add(`Build release com o keystore ${keystoreInfo.nome}`);
+      const r = await ApkBuilder.compilar(caminhoLocalStudio(pasta), jar, caminhoLocalStudio(apkUri), opcoesBuild);
       if (r.ok) {
         setApkGerado(caminhoLocalStudio(apkUri));
+        registrarBuild({ id: idBuild, apkUri, release });
       } else {
         setErrosCompilacao(r.erros || []);
         add(`Falhou na etapa: ${r.etapa}`);
@@ -5282,6 +5569,127 @@ function CindraStudioScreen({ visible, onClose }) {
       assinatura.remove();
       setCompilando(false);
     }
+  };
+
+  // Grava o build bem-sucedido no histórico (aba "Gerados"). Falha aqui
+  // nunca atrapalha a compilação: o APK já está pronto de qualquer jeito.
+  const registrarBuild = async ({ id, apkUri, release }) => {
+    try {
+      let tamanho = 0;
+      try {
+        const info = await FileSystem.getInfoAsync(apkUri);
+        tamanho = info && info.size ? info.size : 0;
+      } catch (e) { /* tamanho é só enfeite */ }
+      let fotoCopia = null;
+      if (fotoIcone) {
+        try {
+          await FileSystem.makeDirectoryAsync(PASTA_ICONES_BUILDS_STUDIO, { intermediates: true });
+          fotoCopia = `${PASTA_ICONES_BUILDS_STUDIO}${projeto.pacote}_${id}.png`;
+          await FileSystem.copyAsync({ from: fotoIcone, to: fotoCopia });
+        } catch (e) { fotoCopia = null; }
+      }
+      const versao = lerVersaoProjeto(projeto);
+      const registro = {
+        id,
+        pacote: projeto.pacote,
+        nomeApp,
+        tipo: release ? 'release' : 'debug',
+        versaoNome: versao.nome,
+        versaoCodigo: versao.codigo,
+        criadoEm: Number(id) || Date.now(),
+        apk: apkUri,
+        tamanho,
+        fotoIcone: fotoCopia,
+        corIcone,
+        iconeEscolhido,
+      };
+      const atual = await lerBuildsStudio();
+      const nova = [registro, ...atual];
+      await gravarBuildsStudio(nova);
+      setBuilds(nova);
+    } catch (e) {
+      // sem histórico desta vez, mas o APK existe.
+    }
+  };
+
+  const instalarBuild = async (b) => {
+    try {
+      const info = await FileSystem.getInfoAsync(b.apk);
+      if (!info.exists) {
+        exibirAviso('APK não encontrado', 'Esse arquivo foi apagado do celular. Compile de novo pra gerar outro.', 'aviso');
+        return;
+      }
+      const r = await ApkBuilder.instalar(caminhoLocalStudio(b.apk));
+      if (r === 'permissao') {
+        exibirAviso('Libere a instalação', 'Ative "Permitir desta fonte" pro Cindra na tela que abriu e toque em Instalar de novo.', 'aviso');
+      }
+    } catch (e) {
+      exibirAviso('Erro ao instalar', String(e && e.message ? e.message : e), 'erro');
+    }
+  };
+
+  const apagarBuilds = async (ids) => {
+    const alvo = builds.filter((b) => ids.includes(b.id));
+    alvo.forEach((b) => {
+      FileSystem.deleteAsync(b.apk, { idempotent: true }).catch(() => {});
+      if (b.fotoIcone) FileSystem.deleteAsync(b.fotoIcone, { idempotent: true }).catch(() => {});
+    });
+    const nova = builds.filter((b) => !ids.includes(b.id));
+    setBuilds(nova);
+    setConfirmarApagarBuild(null);
+    gravarBuildsStudio(nova).catch(() => {});
+  };
+
+  // Primeiro toque na lixeira arma ("apagar?"), o segundo apaga de fato.
+  const tocarLixeiraBuild = (b) => {
+    if (confirmarApagarBuild === b.id) { apagarBuilds([b.id]); return; }
+    setConfirmarApagarBuild(b.id);
+  };
+
+  const sairSelecaoBuilds = () => {
+    setModoSelecaoBuilds(false);
+    setSelecionadosBuilds({});
+    setConfirmarApagarLote(false);
+  };
+  const iniciarSelecaoBuilds = (id) => {
+    setConfirmarApagarBuild(null);
+    setConfirmarApagarGrupo(null);
+    setConfirmarApagarLote(false);
+    setModoSelecaoBuilds(true);
+    setSelecionadosBuilds(id ? { [id]: true } : {});
+  };
+  const alternarSelecaoBuild = (id) => {
+    setConfirmarApagarLote(false);
+    setSelecionadosBuilds((a) => {
+      const n = { ...a };
+      if (n[id]) delete n[id]; else n[id] = true;
+      return n;
+    });
+  };
+  const selecionarTodosBuilds = () => {
+    setConfirmarApagarLote(false);
+    setSelecionadosBuilds((a) => {
+      if (builds.length > 0 && Object.keys(a).length === builds.length) return {};
+      const n = {};
+      builds.forEach((b) => { n[b.id] = true; });
+      return n;
+    });
+  };
+  // 1º toque arma ("Confirmar"), 2º toque apaga os marcados.
+  const apagarSelecionadosBuilds = async () => {
+    const ids = Object.keys(selecionadosBuilds);
+    if (!ids.length) return;
+    if (!confirmarApagarLote) { setConfirmarApagarLote(true); return; }
+    await apagarBuilds(ids);
+    sairSelecaoBuilds();
+  };
+  const tocarApagarGrupo = (g) => {
+    if (confirmarApagarGrupo === g.pacote) {
+      setConfirmarApagarGrupo(null);
+      apagarBuilds(g.itens.map((b) => b.id));
+      return;
+    }
+    setConfirmarApagarGrupo(g.pacote);
   };
 
   const instalarApk = async () => {
@@ -5517,6 +5925,11 @@ function CindraStudioScreen({ visible, onClose }) {
     if (etapa === 'workspace') { voltarParaHome(); return; }
     if (etapa === 'config') { setEtapa('home'); return; }
     if (buscaAberta) { fecharBusca(); return; }
+    if (abaHome === 'gerados') {
+      if (modoSelecaoBuilds) { sairSelecaoBuilds(); return; }
+      setAbaHome('apps');
+      return;
+    }
     if (abaHome === 'aprender') {
       if (exemploAberto) setExemploAberto(null); else setAbaHome('apps');
       return;
@@ -5867,6 +6280,200 @@ function CindraStudioScreen({ visible, onClose }) {
     );
   };
 
+  // Aba "Gerados": um cartão por app compilado; a setinha abre todos os
+  // APKs já gerados dele (ícone, versão, tipo, data e tamanho). Dá pra
+  // apagar um a um (lixeira), todos de um app, ou vários de uma vez no modo
+  // de seleção (botão do topo ou segurando o dedo num APK).
+  const renderAbaGerados = () => {
+    const grupos = agruparBuildsStudio(builds);
+    const qtdSel = Object.keys(selecionadosBuilds).length;
+    return (
+      <>
+        <View style={studioStyles.homeHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={studioStyles.homeOverline}>CINDRA-STUDIO</Text>
+            <Text style={studioStyles.homeTitulo} numberOfLines={1}>
+              {modoSelecaoBuilds ? (qtdSel ? `${qtdSel} selecionado${qtdSel > 1 ? 's' : ''}` : 'Selecionar APKs') : 'Apps gerados'}
+            </Text>
+          </View>
+          {grupos.length > 0 && (
+            <TouchableOpacity
+              style={studioStyles.homeIconBtn}
+              onPress={() => (modoSelecaoBuilds ? sairSelecaoBuilds() : iniciarSelecaoBuilds(null))}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons
+                name={modoSelecaoBuilds ? 'close' : 'checkbox-multiple-marked-outline'}
+                size={22}
+                color={COLORS.ink}
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+        {grupos.length === 0 ? (
+          <View style={geradosStyles.vazio}>
+            <View style={geradosStyles.vazioIcone}>
+              <MaterialCommunityIcons name="package-variant-closed" size={36} color={COLORS.ember} />
+            </View>
+            <Text style={studioStyles.homeVazioTitulo}>Nenhum APK gerado ainda</Text>
+            <Text style={studioStyles.homeVazioTexto}>
+              Abra um app e toque em ▶ pra compilar. Cada APK gerado aparece aqui, agrupado por app.
+            </Text>
+          </View>
+        ) : (
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={geradosStyles.lista} showsVerticalScrollIndicator={false}>
+            {grupos.map((g, i) => {
+              const aberto = modoSelecaoBuilds || !!gruposAbertos[g.pacote];
+              const qtdGrupoSel = g.itens.filter((b) => selecionadosBuilds[b.id]).length;
+              const grupoTodoSel = qtdGrupoSel === g.itens.length;
+              const grupoArmado = confirmarApagarGrupo === g.pacote;
+              return (
+                <ItemAnimadoStudio key={g.pacote} indice={i}>
+                  <View style={geradosStyles.grupo}>
+                    <TouchableOpacity
+                      style={geradosStyles.grupoTopo}
+                      activeOpacity={0.8}
+                      onPress={() => {
+                        if (modoSelecaoBuilds) {
+                          // toca no app inteiro: marca/desmarca todos os APKs dele
+                          setConfirmarApagarLote(false);
+                          setSelecionadosBuilds((a) => {
+                            const n = { ...a };
+                            g.itens.forEach((b) => { if (grupoTodoSel) delete n[b.id]; else n[b.id] = true; });
+                            return n;
+                          });
+                        } else {
+                          setConfirmarApagarGrupo(null);
+                          setGruposAbertos((a) => ({ ...a, [g.pacote]: !a[g.pacote] }));
+                        }
+                      }}
+                    >
+                      <IconeAppStudio dados={g.ultimo} lado={52} icone={28} raio={16} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={geradosStyles.grupoNome} numberOfLines={1}>{g.ultimo.nomeApp}</Text>
+                        <Text style={geradosStyles.grupoPacote} numberOfLines={1}>{g.pacote}</Text>
+                        <View style={geradosStyles.grupoMeta}>
+                          <View style={geradosStyles.grupoBadge}>
+                            <Text style={geradosStyles.grupoBadgeTexto}>{g.itens.length} {g.itens.length === 1 ? 'APK' : 'APKs'}</Text>
+                          </View>
+                          <Text style={geradosStyles.grupoData} numberOfLines={1}>{formatarDataBuildStudio(g.ultimo.criadoEm)}</Text>
+                        </View>
+                      </View>
+                      <View style={geradosStyles.seta}>
+                        {modoSelecaoBuilds ? (
+                          <MaterialCommunityIcons
+                            name={grupoTodoSel ? 'checkbox-multiple-marked' : qtdGrupoSel ? 'minus-box-multiple' : 'checkbox-multiple-blank-outline'}
+                            size={20}
+                            color={qtdGrupoSel ? COLORS.ember : COLORS.dim}
+                          />
+                        ) : (
+                          <MaterialCommunityIcons name={aberto ? 'chevron-up' : 'chevron-down'} size={22} color={COLORS.ink} />
+                        )}
+                      </View>
+                    </TouchableOpacity>
+
+                    {aberto && (
+                      <View style={geradosStyles.buildsWrap}>
+                        {g.itens.map((b) => {
+                          const armado = confirmarApagarBuild === b.id;
+                          const ehRelease = b.tipo === 'release';
+                          const marcado = !!selecionadosBuilds[b.id];
+                          return (
+                            <TouchableOpacity
+                              key={b.id}
+                              style={[geradosStyles.buildLinha, marcado && { backgroundColor: 'rgba(255,82,39,0.10)' }]}
+                              activeOpacity={modoSelecaoBuilds ? 0.7 : 1}
+                              onPress={() => { if (modoSelecaoBuilds) alternarSelecaoBuild(b.id); }}
+                              onLongPress={() => { if (!modoSelecaoBuilds) iniciarSelecaoBuilds(b.id); }}
+                              delayLongPress={350}
+                            >
+                              {modoSelecaoBuilds && (
+                                <MaterialCommunityIcons
+                                  name={marcado ? 'checkbox-marked' : 'checkbox-blank-outline'}
+                                  size={24}
+                                  color={marcado ? COLORS.ember : COLORS.dim}
+                                />
+                              )}
+                              <IconeAppStudio dados={b} lado={40} icone={22} raio={12} />
+                              <View style={{ flex: 1 }}>
+                                <Text style={geradosStyles.buildTitulo} numberOfLines={1}>
+                                  {b.versaoNome ? `v${b.versaoNome}` : 'APK'}{b.versaoCodigo ? ` (${b.versaoCodigo})` : ''}
+                                  {'  '}
+                                  <Text style={[geradosStyles.buildTipo, { color: ehRelease ? '#8bd450' : COLORS.gold }]}>
+                                    {ehRelease ? 'RELEASE' : 'DEBUG'}
+                                  </Text>
+                                </Text>
+                                <Text style={geradosStyles.buildData} numberOfLines={1}>
+                                  {formatarDataBuildStudio(b.criadoEm)}{b.tamanho ? `  ·  ${formatarTamanhoStudio(b.tamanho)}` : ''}
+                                </Text>
+                              </View>
+                              {!modoSelecaoBuilds && (
+                                <>
+                                  <TouchableOpacity style={geradosStyles.buildAcao} onPress={() => instalarBuild(b)} activeOpacity={0.8}>
+                                    <MaterialCommunityIcons name="cellphone-arrow-down" size={20} color="#8bd450" />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={[geradosStyles.buildAcao, armado && { backgroundColor: COLORS.error }]}
+                                    onPress={() => tocarLixeiraBuild(b)}
+                                    activeOpacity={0.8}
+                                  >
+                                    <MaterialCommunityIcons name={armado ? 'check' : 'trash-can-outline'} size={20} color={armado ? '#1a0806' : COLORS.error} />
+                                  </TouchableOpacity>
+                                </>
+                              )}
+                            </TouchableOpacity>
+                          );
+                        })}
+                        {!modoSelecaoBuilds && (
+                          <TouchableOpacity style={geradosStyles.apagarGrupo} onPress={() => tocarApagarGrupo(g)} activeOpacity={0.8}>
+                            <MaterialCommunityIcons name="delete-sweep-outline" size={16} color={COLORS.error} />
+                            <Text style={geradosStyles.apagarGrupoTexto}>
+                              {grupoArmado
+                                ? `Toque de novo pra apagar ${g.itens.length} ${g.itens.length === 1 ? 'APK' : 'APKs'}`
+                                : 'Apagar todos deste app'}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                </ItemAnimadoStudio>
+              );
+            })}
+          </ScrollView>
+        )}
+
+        {modoSelecaoBuilds && (
+          <View style={geradosStyles.barraSelecao}>
+            <TouchableOpacity style={geradosStyles.barraBtn} onPress={selecionarTodosBuilds} activeOpacity={0.8}>
+              <MaterialCommunityIcons
+                name={builds.length > 0 && qtdSel === builds.length ? 'checkbox-multiple-marked' : 'checkbox-multiple-blank-outline'}
+                size={18}
+                color={COLORS.ink}
+              />
+              <Text style={geradosStyles.barraBtnTexto}>Todos</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                geradosStyles.barraApagar,
+                !qtdSel && { opacity: 0.4 },
+                confirmarApagarLote && { backgroundColor: COLORS.error },
+              ]}
+              onPress={apagarSelecionadosBuilds}
+              disabled={!qtdSel}
+              activeOpacity={0.85}
+            >
+              <MaterialCommunityIcons name="trash-can-outline" size={18} color="#1a0806" />
+              <Text style={geradosStyles.barraApagarTexto} numberOfLines={1}>
+                {confirmarApagarLote ? `Confirmar: apagar ${qtdSel}` : qtdSel ? `Apagar ${qtdSel}` : 'Apagar'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </>
+    );
+  };
+
   const renderAbaAprender = () => (
     <>
       <View style={studioStyles.homeHeader}>
@@ -5945,7 +6552,7 @@ function CindraStudioScreen({ visible, onClose }) {
       <View pointerEvents="none" style={studioStyles.homeGlowTop} />
       <View pointerEvents="none" style={studioStyles.homeGlowBottom} />
 
-      {abaHome === 'aprender' ? renderAbaAprender() : renderAbaApps()}
+      {abaHome === 'aprender' ? renderAbaAprender() : abaHome === 'gerados' ? renderAbaGerados() : renderAbaApps()}
 
       {renderNavHome()}
 
@@ -6246,7 +6853,15 @@ function CindraStudioScreen({ visible, onClose }) {
             <View style={studioStyles.topBarDivider} />
             <TouchableOpacity
               style={studioStyles.topBarIconBtn}
-              onPress={compilarProjeto}
+              onPress={() => setFolhaBuildAberta(true)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.75}
+            >
+              <MaterialCommunityIcons name={tipoBuild === 'release' ? 'shield-key' : 'shield-key-outline'} size={19} color={tipoBuild === 'release' ? '#8bd450' : COLORS.dim} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={studioStyles.topBarIconBtn}
+              onPress={() => compilarProjeto(tipoBuild)}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.75}
             >
@@ -6750,6 +7365,99 @@ function CindraStudioScreen({ visible, onClose }) {
               </>
             );
           }}
+        </FolhaInferiorStudio>
+      )}
+
+      {folhaBuildAberta && (
+        <FolhaInferiorStudio onFechar={() => setFolhaBuildAberta(false)} insetBottom={alturaTeclado > 0 ? alturaTeclado + 12 : insets.bottom}>
+          {(fechar) => (
+            <>
+              <Text style={[studioStyles.folhaTitulo, { marginBottom: 14 }]}>Tipo de build</Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6 }}>
+                {[
+                  { id: 'debug', rotulo: 'Debug', icone: 'bug-outline' },
+                  { id: 'release', rotulo: 'Release', icone: 'rocket-launch-outline' },
+                ].map((op) => {
+                  const ativo = tipoBuild === op.id;
+                  return (
+                    <TouchableOpacity
+                      key={op.id}
+                      style={[studioStyles.folhaLinha, { flex: 1, marginBottom: 0, justifyContent: 'center' }, ativo && { backgroundColor: 'rgba(139,212,80,0.16)' }]}
+                      onPress={() => { setTipoBuild(op.id); salvarPref('tipoBuild', op.id); }}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialCommunityIcons name={op.icone} size={19} color={ativo ? '#8bd450' : COLORS.dim} />
+                      <Text style={[studioStyles.folhaLinhaTexto, { flex: 0 }, ativo && { color: '#8bd450' }]}>{op.rotulo}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {tipoBuild === 'debug' ? (
+                <Text style={[studioStyles.cfgHint, { marginTop: 12 }]}>
+                  Assina com a chave interna do Cindra. Serve pra testar neste aparelho.
+                </Text>
+              ) : (
+                <>
+                  <Text style={[studioStyles.cfgLabel, { marginTop: 16 }]}>Keystore</Text>
+                  <TouchableOpacity style={[studioStyles.folhaLinha, { marginBottom: 0 }]} onPress={escolherKeystore} activeOpacity={0.8}>
+                    <MaterialCommunityIcons name="key-chain-variant" size={20} color={keystoreInfo ? '#8bd450' : COLORS.dim} />
+                    <Text style={studioStyles.folhaLinhaTexto} numberOfLines={1}>
+                      {keystoreInfo ? keystoreInfo.nome : 'Escolher arquivo (.keystore, .p12)'}
+                    </Text>
+                    <MaterialCommunityIcons name="folder-open-outline" size={18} color={COLORS.dim} />
+                  </TouchableOpacity>
+
+                  <Text style={studioStyles.cfgLabel}>Alias</Text>
+                  <TextInput
+                    style={studioStyles.cfgInput}
+                    value={aliasKeystore}
+                    onChangeText={(t) => { setAliasKeystore(t); salvarPref('aliasKeystore', t); }}
+                    placeholder="ex: key0 (vazio se só tem um)"
+                    placeholderTextColor={COLORS.dim}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+
+                  <Text style={studioStyles.cfgLabel}>Senha do keystore</Text>
+                  <TextInput
+                    style={studioStyles.cfgInput}
+                    value={senhaKeystore}
+                    onChangeText={setSenhaKeystore}
+                    placeholder="obrigatória"
+                    placeholderTextColor={COLORS.dim}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+
+                  <Text style={studioStyles.cfgLabel}>Senha da chave</Text>
+                  <TextInput
+                    style={studioStyles.cfgInput}
+                    value={senhaChave}
+                    onChangeText={setSenhaChave}
+                    placeholder="vazio = mesma do keystore"
+                    placeholderTextColor={COLORS.dim}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <Text style={studioStyles.cfgHint}>
+                    As senhas não ficam salvas: digite de novo quando reabrir o Cindra. O app assinado com release não instala por cima de um debug (desinstale o outro antes).
+                  </Text>
+                </>
+              )}
+
+              <TouchableOpacity
+                style={[studioStyles.instalarBtn, { marginHorizontal: 0, marginTop: 18 }]}
+                onPress={() => { fechar(); setTimeout(() => compilarProjeto(tipoBuild), 260); }}
+                activeOpacity={0.85}
+              >
+                <MaterialCommunityIcons name="play-circle-outline" size={18} color="#1a0806" />
+                <Text style={studioStyles.instalarBtnText}>{tipoBuild === 'release' ? 'Compilar release' : 'Compilar debug'}</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </FolhaInferiorStudio>
       )}
 
