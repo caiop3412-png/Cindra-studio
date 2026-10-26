@@ -70,7 +70,7 @@ const COLORS = {
   lineSoft: 'rgba(255,255,255,0.07)',
   panel: 'rgba(24,16,52,0.6)',
   panel2: '#1a1236',
-  sheet: '#0e0a1f',
+  sheet: '#000000',
   ember: '#b43cff',
   emberDeep: '#4f46ff',
   emberGlow: 'rgba(180,60,255,0.55)',
@@ -139,6 +139,121 @@ function Grad({ cores = GRAD_LOGO }) {
     <View style={[StyleSheet.absoluteFill, { flexDirection: 'row' }]} pointerEvents="none">
       {faixas.map((c, k) => (
         <View key={k} style={{ flex: 1, backgroundColor: c, marginRight: k < FAIXAS_DEGRADE - 1 ? -0.5 : 0 }} />
+      ))}
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+// Fundo vivo (home/config): 1) aurora azul/rosa que respira devagar e
+// 2) estrelinhas coloridas piscando. Tudo em View + Animated (sem pacote
+// nativo), com driver nativo pra não pesar.
+// ─────────────────────────────────────────────────────────
+function BrilhoSuave({ cor, tam }) {
+  // sem blur no RN: empilha círculos concêntricos bem transparentes
+  const camadas = 9;
+  return (
+    <View style={{ width: tam, height: tam, alignItems: 'center', justifyContent: 'center' }}>
+      {Array.from({ length: camadas }, (_, k) => {
+        const d = tam * (1 - k / camadas);
+        return (
+          <View
+            key={k}
+            style={{
+              position: 'absolute',
+              width: d,
+              height: d,
+              borderRadius: d / 2,
+              backgroundColor: cor,
+              opacity: 0.045,
+            }}
+          />
+        );
+      })}
+    </View>
+  );
+}
+
+const CORES_ESTRELA = ['#6f7bff', '#c06bff', '#ff6bd6', '#ffffff'];
+
+function FundoVivo() {
+  const { width, height } = useWindowDimensions();
+  const estrelas = useMemo(() => {
+    let semente = 7;
+    const rnd = () => { semente = (semente * 16807) % 2147483647; return semente / 2147483647; };
+    return Array.from({ length: 28 }, () => ({
+      x: rnd(), y: rnd(), r: 1 + rnd() * 1.6,
+      cor: CORES_ESTRELA[Math.floor(rnd() * CORES_ESTRELA.length)],
+      atraso: Math.round(rnd() * 2600), dur: Math.round(1300 + rnd() * 2200),
+    }));
+  }, []);
+  const brilhos = useRef(estrelas.map(() => new Animated.Value(0.12))).current;
+  const aurora = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loops = brilhos.map((v, i) => Animated.loop(Animated.sequence([
+      Animated.delay(estrelas[i].atraso),
+      Animated.timing(v, { toValue: 1, duration: estrelas[i].dur, useNativeDriver: true }),
+      Animated.timing(v, { toValue: 0.12, duration: estrelas[i].dur, useNativeDriver: true }),
+    ])));
+    loops.forEach((l) => l.start());
+    const lenta = Animated.loop(Animated.sequence([
+      Animated.timing(aurora, { toValue: 1, duration: 7000, useNativeDriver: true }),
+      Animated.timing(aurora, { toValue: 0, duration: 7000, useNativeDriver: true }),
+    ]));
+    lenta.start();
+    return () => { loops.forEach((l) => l.stop()); lenta.stop(); };
+  }, []);
+
+  const tamAzul = Math.max(width, 320) * 1.15;
+  const tamRosa = Math.max(width, 320) * 1.0;
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Animated.View
+        style={{
+          position: 'absolute',
+          top: -tamAzul * 0.45,
+          left: -tamAzul * 0.35,
+          opacity: aurora.interpolate({ inputRange: [0, 1], outputRange: [0.75, 1] }),
+          transform: [
+            { translateX: aurora.interpolate({ inputRange: [0, 1], outputRange: [0, 40] }) },
+            { scale: aurora.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] }) },
+          ],
+        }}
+      >
+        <BrilhoSuave cor="#3b4bff" tam={tamAzul} />
+      </Animated.View>
+      <Animated.View
+        style={{
+          position: 'absolute',
+          bottom: -tamRosa * 0.4,
+          right: -tamRosa * 0.35,
+          opacity: aurora.interpolate({ inputRange: [0, 1], outputRange: [1, 0.7] }),
+          transform: [
+            { translateX: aurora.interpolate({ inputRange: [0, 1], outputRange: [0, -40] }) },
+            { scale: aurora.interpolate({ inputRange: [0, 1], outputRange: [1.15, 1] }) },
+          ],
+        }}
+      >
+        <BrilhoSuave cor="#ff2fc6" tam={tamRosa} />
+      </Animated.View>
+      {estrelas.map((e, i) => (
+        <Animated.View
+          key={i}
+          style={{
+            position: 'absolute',
+            left: e.x * width,
+            top: e.y * height,
+            width: e.r * 5,
+            height: e.r * 5,
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: brilhos[i],
+          }}
+        >
+          <View style={{ position: 'absolute', width: e.r * 5, height: e.r * 5, borderRadius: e.r * 2.5, backgroundColor: e.cor, opacity: 0.18 }} />
+          <View style={{ width: e.r * 2, height: e.r * 2, borderRadius: e.r, backgroundColor: e.cor }} />
+        </Animated.View>
       ))}
     </View>
   );
@@ -2294,7 +2409,7 @@ const studioStyles = StyleSheet.create({
   cfgIconeWrap: { width: 116, height: 116, marginBottom: 14 },
   cfgIconeBase: { width: 116, height: 116, borderRadius: 30, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   cfgIconeFoto: { width: 116, height: 116, borderRadius: 30, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.18)', backgroundColor: '#140d28' },
-  cfgIconeBadge: { position: 'absolute', right: -6, bottom: -6, width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.ember, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#0e0a1f' },
+  cfgIconeBadge: { position: 'absolute', right: -6, bottom: -6, width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.ember, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#000000' },
   cfgCard: { backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', borderRadius: 20, padding: 16, marginBottom: 14 },
   cfgCampo: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(0,0,0,0.28)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', borderRadius: 14, paddingHorizontal: 14 },
   cfgCampoFoco: { borderColor: 'rgba(180,60,255,0.65)', backgroundColor: 'rgba(180,60,255,0.06)' },
@@ -9793,7 +9908,8 @@ function CindraStudioScreen({ visible, onClose }) {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: etapa === 'workspace' ? '#000000' : COLORS.sheet, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: '#000000', paddingTop: insets.top }}>
+      {etapa !== 'workspace' && <FundoVivo />}
       {etapa === 'home' ? renderHome() : etapa === 'config' ? renderConfig() : renderWorkspace()}
     </View>
   );
