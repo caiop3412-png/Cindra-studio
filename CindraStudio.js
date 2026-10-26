@@ -6049,7 +6049,26 @@ function AtualizacaoForcada() {
       if (estadoApp === 'active') verificar();
     });
     const rel = setInterval(verificar, 5000);
-    return () => { sub.remove(); clearInterval(rel); };
+    // também pega o caso do update já ter sido baixado sozinho em segundo plano
+    // (disponível ou pendente): bloqueia do mesmo jeito.
+    let ouvinte = null;
+    if (Updates && typeof Updates.addUpdatesStateChangeListener === 'function') {
+      try {
+        ouvinte = Updates.addUpdatesStateChangeListener((ev) => {
+          const c = ev && ev.context;
+          if (c && (c.isUpdateAvailable || c.isUpdatePending) && !pendenteRef.current) {
+            pendenteRef.current = true;
+            setPendente(true);
+            notificar();
+          }
+        });
+      } catch (e) { ouvinte = null; }
+    }
+    return () => {
+      sub.remove();
+      clearInterval(rel);
+      if (ouvinte && ouvinte.remove) ouvinte.remove();
+    };
   }, []);
 
   // enquanto tiver atualização pendente, o botão voltar não fecha o bloqueio
