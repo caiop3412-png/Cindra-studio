@@ -47,6 +47,15 @@ try { Clipboard = require('expo-clipboard'); } catch (e) { Clipboard = null; }
 let Sharing = null;
 try { Sharing = require('expo-sharing'); } catch (e) { Sharing = null; }
 
+// Notificação de "tem atualização": opcional (precisa do expo-notifications).
+// Sem ele o bloqueio de atualização funciona do mesmo jeito, só não notifica.
+let Notifications = null;
+try { Notifications = require('expo-notifications'); } catch (e) { Notifications = null; }
+
+// Atualização OTA (a que você já usa pra atualizar sem gerar APK novo).
+let Updates = null;
+try { Updates = require('expo-updates'); } catch (e) { Updates = null; }
+
 const SUGESTOES_AUTO_DESLIGADAS = [];
 const CODIGO_FONTE = 13; // fonte do editor (também usada pra calcular a largura do código)
 
@@ -5987,6 +5996,111 @@ function montarSugestoesEditor(ling, palavra, palavrasArquivo) {
   return saida;
 }
 
+// ─────────────────────────────────────────────────────────
+// Atualização forçada (OTA): toda vez que o app abre (ou volta pro primeiro
+// plano) ele pergunta se tem update novo publicado (e repete a cada 5 segundos com o app aberto). Se tiver, bloqueia o app
+// com a tela "Atualizar agora" e manda uma notificação. Ao tocar, baixa o
+// update e reinicia o app já atualizado. Sem gerar APK novo.
+// ─────────────────────────────────────────────────────────
+function AtualizacaoForcada() {
+  const [pendente, setPendente] = useState(false);
+  const [baixando, setBaixando] = useState(false);
+  const [erro, setErro] = useState('');
+  const avisadaRef = useRef(false);
+  const verificandoRef = useRef(false);
+  const pendenteRef = useRef(false);
+
+  const notificar = async () => {
+    if (!Notifications || avisadaRef.current) return;
+    avisadaRef.current = true;
+    try {
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({ shouldShowAlert: true, shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }),
+      });
+      const perm = await Notifications.requestPermissionsAsync();
+      if (perm && perm.status !== 'granted') return;
+      await Notifications.scheduleNotificationAsync({
+        content: { title: 'Atualização disponível', body: 'Tem uma versão nova do Cindra Studio. Toque para atualizar.' },
+        trigger: null,
+      });
+    } catch (e) {}
+  };
+
+  const verificar = async () => {
+    if (!Updates || !Updates.isEnabled || verificandoRef.current || pendenteRef.current) return;
+    verificandoRef.current = true;
+    try {
+      const r = await Updates.checkForUpdateAsync();
+      if (r && r.isAvailable) {
+        pendenteRef.current = true;
+        setPendente(true);
+        notificar();
+      }
+    } catch (e) {
+      // sem internet: não bloqueia
+    } finally {
+      verificandoRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    verificar();
+    const sub = AppState.addEventListener('change', (estadoApp) => {
+      if (estadoApp === 'active') verificar();
+    });
+    const rel = setInterval(verificar, 5000);
+    return () => { sub.remove(); clearInterval(rel); };
+  }, []);
+
+  // enquanto tiver atualização pendente, o botão voltar não fecha o bloqueio
+  useEffect(() => {
+    if (!pendente) return undefined;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => sub.remove();
+  }, [pendente]);
+
+  const atualizar = async () => {
+    if (baixando) return;
+    setErro('');
+    setBaixando(true);
+    try {
+      await Updates.fetchUpdateAsync();
+      await Updates.reloadAsync();
+    } catch (e) {
+      setErro('Não foi possível atualizar agora. Confira a internet e tente de novo.');
+      setBaixando(false);
+    }
+  };
+
+  if (!pendente) return null;
+  return (
+    <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 9999, elevation: 9999, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 }}>
+      <View style={{ width: 84, height: 84, borderRadius: 26, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', marginBottom: 22 }}>
+        <Grad />
+        <MaterialCommunityIcons name="cellphone-arrow-down" size={42} color="#ffffff" />
+      </View>
+      <Text style={{ color: '#ffffff', fontSize: 22, fontWeight: '800', textAlign: 'center' }}>Atualização obrigatória</Text>
+      <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 14, lineHeight: 20, textAlign: 'center', marginTop: 10 }}>
+        Tem uma versão nova do Cindra Studio. Atualize para continuar usando o app.
+      </Text>
+      {!!erro && (
+        <Text style={{ color: COLORS.error, fontSize: 12.5, lineHeight: 18, textAlign: 'center', marginTop: 14 }}>{erro}</Text>
+      )}
+      <TouchableOpacity
+        onPress={atualizar}
+        disabled={baixando}
+        activeOpacity={0.85}
+        style={{ alignSelf: 'stretch', height: 52, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', marginTop: 24, opacity: baixando ? 0.7 : 1 }}
+      >
+        <Grad />
+        <Text style={{ color: '#ffffff', fontSize: 15.5, fontWeight: '800' }}>
+          {baixando ? 'Atualizando...' : 'Atualizar agora'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 function CindraStudioScreen({ visible, onClose }) {
   const insets = useSafeAreaInsets();
 
@@ -10010,6 +10124,7 @@ function CindraStudioScreen({ visible, onClose }) {
       <EntradaAleatoria key={etapa} style={{ flex: 1 }}>
         {etapa === 'home' ? renderHome() : etapa === 'config' ? renderConfig() : renderWorkspace()}
       </EntradaAleatoria>
+      <AtualizacaoForcada />
     </View>
   );
 }
