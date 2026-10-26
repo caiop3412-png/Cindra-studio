@@ -47,7 +47,21 @@ try { Clipboard = require('expo-clipboard'); } catch (e) { Clipboard = null; }
 let Sharing = null;
 try { Sharing = require('expo-sharing'); } catch (e) { Sharing = null; }
 
+const SUGESTOES_AUTO_DESLIGADAS = [];
 const CODIGO_FONTE = 13; // fonte do editor (também usada pra calcular a largura do código)
+
+// Altura de linha do editor em número INTEIRO de pixels reais. O Android
+// arredonda a altura de linha do TextInput pra cima em pixels; as linhas
+// coloridas, os números e os realces são posicionados por fora em dp
+// (linha × altura). Com 20dp numa tela de densidade 2.625 (=52,5px) o
+// TextInput usava 53px por linha e o resto 52,5px — a diferença de 0,5px
+// por linha acumula e lá pelas linhas 40+ o cursor já estava uma linha
+// abaixo da letra colorida ("escrevo embaixo e sai em cima"). Aqui todo
+// mundo passa a usar o mesmo valor, que fecha em pixel inteiro.
+function linhaSemDrift(dp) {
+  const r = PixelRatio.get() || 1;
+  return (Math.max(1, Math.round(dp * r)) - 0.001) / r;
+}
 
 const COLORS = {
   ink: '#ffffff',
@@ -2864,25 +2878,166 @@ async function gravarPrefsStudio(prefs) {
 }
 
 // Item que entra com fade + subida suave (o atraso cresce com a posição na lista).
-function ItemAnimadoStudio({ indice = 0, style, children }) {
+// `leve`: só um fade curtinho, sem subir e sem atraso — usado no editor de
+// código, onde mover o TextInput durante a animação fazia o cursor e as cores
+// ficarem "pulando" por um instante.
+function ItemAnimadoStudio({ indice = 0, style, children, leve = false }) {
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(anim, {
       toValue: 1,
-      duration: 320,
-      delay: Math.min(indice, 8) * 50,
+      duration: leve ? 140 : 320,
+      delay: leve ? 0 : Math.min(indice, 8) * 50,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
   }, []);
   return (
     <Animated.View
-      style={[style, { opacity: anim, transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }]}
+      style={[
+        style,
+        leve
+          ? { opacity: anim }
+          : { opacity: anim, transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] },
+      ]}
     >
       {children}
     </Animated.View>
   );
 }
+
+// ─────────────────────────────────────────────────────────
+// Editor liso: cada linha colorida e a coluna de números são componentes
+// memoizados. Antes, TODA tecla refazia a cor das ~100 linhas da janela
+// (regex + dezenas de <Text> aninhados) e só depois a camada colorida
+// alcançava o TextInput nativo — era isso que deixava o "|" na frente da
+// letra. Agora só a linha que mudou é refeita; o resto nem re-renderiza.
+// ─────────────────────────────────────────────────────────
+const LIMITE_CACHE_TOKENS = 4000;
+function tokenizarLinhaCache(linha, regex) {
+  if (!regex || !linha) return [{ t: linha || '', c: null }];
+  let cache = regex.__cacheTokens;
+  if (!cache) { cache = new Map(); regex.__cacheTokens = cache; }
+  let r = cache.get(linha);
+  if (r) return r;
+  r = tokenizarLinha(linha, regex);
+  if (cache.size >= LIMITE_CACHE_TOKENS) cache.clear();
+  cache.set(linha, r);
+  return r;
+}
+
+const LinhaCodigoStudio = React.memo(function LinhaCodigoStudio({ texto, top, fonte, altura, regex }) {
+  return (
+    <Text
+      numberOfLines={1}
+      allowFontScaling={false}
+      style={[studioStyles.codeHighlightLine, { top, fontSize: fonte, lineHeight: altura }]}
+    >
+      {texto === ''
+        ? ' '
+        : tokenizarLinhaCache(texto, regex).map((p, idx) => (
+          <Text key={idx} allowFontScaling={false} style={p.c ? { color: p.c } : null}>{p.t}</Text>
+        ))}
+    </Text>
+  );
+});
+
+// A "janela" (quais linhas estão desenhadas) vive num mini-store fora do
+// estado da tela. Antes, cada vez que a rolagem andava ~15 linhas, o
+// setState refazia a tela INTEIRA do Studio (9 mil linhas de JSX) — era o
+// travamento ao descer rápido, e o código vazio aparecia porque a janela
+// chegava atrasada. Agora só os 3 componentes abaixo re-renderizam.
+function criarStoreJanela(inicial) {
+  let v = inicial;
+  const subs = new Set();
+  return {
+    get: () => v,
+    set: (n) => {
+      if (n.inicio === v.inicio && n.fim === v.fim) return;
+      v = n;
+      subs.forEach((f) => f(n));
+    },
+    sub: (f) => { subs.add(f); return () => subs.delete(f); },
+  };
+}
+function useJanelaStore(store, total) {
+  const [j, setJ] = useState(store.get());
+  useEffect(() => {
+    setJ(store.get());
+    return store.sub(setJ);
+  }, [store]);
+  const inicio = Math.max(0, Math.min(j.inicio, total));
+  const fim = Math.max(inicio, Math.min(j.fim, total));
+  return { inicio, fim };
+}
+
+const NumerosJanelaStudio = React.memo(function NumerosJanelaStudio({ store, total, altura, larguraTexto, zoom, errosSet, mostrarErros }) {
+  const { inicio, fim } = useJanelaStore(store, total);
+  return (
+    <NumerosLinhasStudio inicio={inicio} fim={fim} altura={altura} larguraTexto={larguraTexto} zoom={zoom} errosSet={errosSet} mostrarErros={mostrarErros} />
+  );
+});
+
+const LinhasCoresJanelaStudio = React.memo(function LinhasCoresJanelaStudio({ store, linhas, altura, zoom, regex }) {
+  const { inicio, fim } = useJanelaStore(store, linhas.length);
+  const itens = [];
+  for (let i = inicio; i < fim; i++) {
+    itens.push(
+      <LinhaCodigoStudio
+        key={i}
+        texto={linhas[i] !== undefined ? linhas[i] : ''}
+        top={14 + i * altura}
+        fonte={CODIGO_FONTE * zoom}
+        altura={altura}
+        regex={regex}
+      />
+    );
+  }
+  return <>{itens}</>;
+});
+
+const MarcasBuscaJanelaStudio = React.memo(function MarcasBuscaJanelaStudio({ store, total, marcas, idxBusca, altura, zoom }) {
+  const { inicio, fim } = useJanelaStore(store, total);
+  return (
+    <>
+      {marcas.filter((m) => m.i >= inicio && m.i < fim).map((m) => (
+        <View
+          key={`bm${m.k}`}
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: 12 + m.col * CODIGO_FONTE * 0.6 * zoom,
+            top: 14 + m.i * altura + 1,
+            width: m.len * CODIGO_FONTE * 0.6 * zoom,
+            height: altura - 2,
+            borderRadius: 3,
+            backgroundColor: m.k === idxBusca ? 'rgba(255,170,0,0.55)' : 'rgba(255,214,10,0.22)',
+          }}
+        />
+      ))}
+    </>
+  );
+});
+
+const NumerosLinhasStudio = React.memo(function NumerosLinhasStudio({ inicio, fim, altura, larguraTexto, zoom, errosSet, mostrarErros }) {
+  const itens = [];
+  for (let i = inicio; i < fim; i++) {
+    itens.push(
+      <Text
+        key={i}
+        allowFontScaling={false}
+        style={[
+          studioStyles.lineNumberText,
+          { position: 'absolute', top: 14 + i * altura, right: 8, width: larguraTexto, fontSize: 13 * zoom, lineHeight: altura },
+          mostrarErros && errosSet.has(i + 1) && { color: COLORS.error, fontWeight: '800' },
+        ]}
+      >
+        {i + 1}
+      </Text>
+    );
+  }
+  return <>{itens}</>;
+});
 
 // Folha que sobe do rodapé (com fundo escurecendo). "children" recebe a
 // função fechar(), que anima a saída e só depois chama onFechar.
@@ -5647,7 +5802,32 @@ function CindraStudioScreen({ visible, onClose }) {
   const historicoRef = useRef({}); // { [caminho]: { undo: [], redo: [] } }
   const conteudoAtivoRef = useRef(''); // texto mais recente do arquivo ativo (síncrono, antes do re-render)
   const [selecaoForcada, setSelecaoForcada] = useState(null); // posiciona o cursor depois de desfazer/refazer
-  const [alturaTeclado, setAlturaTeclado] = useState(0); // teclado aberto → editor encolhe pra ficar acima dele
+  // alturaTeclado = quanto do teclado REALMENTE cobre a tela do app (medido pela
+  // borda de cima do teclado, não só pela altura que o Android informa — em
+  // edge-to-edge essa altura não conta a barra de navegação e a barra de
+  // símbolos ficava escondida atrás do teclado). tecladoVisivel = teclado aberto.
+  const [alturaTeclado, setAlturaTeclado] = useState(0);
+  const [tecladoVisivel, setTecladoVisivel] = useState(false);
+  const caixaEditorRef = useRef(null);
+  const tecladoInfoRef = useRef(null);
+  const recalcularTecladoRef = useRef(() => {});
+  recalcularTecladoRef.current = () => {
+    const info = tecladoInfoRef.current;
+    if (!info) return;
+    const caixa = caixaEditorRef.current;
+    if (caixa && caixa.measureInWindow && info.screenY !== null) {
+      caixa.measureInWindow((x, y, w, alt) => {
+        const atual = tecladoInfoRef.current;
+        if (!atual) return;
+        const sobra = Math.round(y + alt - atual.screenY);
+        // medida maluca (NaN, negativa demais ou maior que o teclado+barra) → cai pra altura informada
+        if (!isFinite(sobra)) { setAlturaTeclado(atual.h); return; }
+        setAlturaTeclado(Math.max(0, Math.min(sobra, atual.h + 160)));
+      });
+    } else {
+      setAlturaTeclado(info.h);
+    }
+  };
   const [caretPos, setCaretPos] = useState(0); // posição do cursor no texto (pra rolar até ele)
   const scrollEditorRef = useRef(null);
   const scrollYEditorRef = useRef(0);
@@ -5678,6 +5858,8 @@ function CindraStudioScreen({ visible, onClose }) {
   const [linhaDigitada, setLinhaDigitada] = useState('');
   const [destaqueLinha, setDestaqueLinha] = useState(-1); // linha piscando depois de "ir para"
   const destaqueTimerRef = useRef(null);
+  const destaqueAnim = useRef(new Animated.Value(0)).current; // fade do destaque da linha (sem liga/desliga seco)
+  const caretTimerRef = useRef(null);
   const [snippetsAberto, setSnippetsAberto] = useState(false);
   const [filtroSnippet, setFiltroSnippet] = useState('');
   const [erroIdx, setErroIdx] = useState(0);
@@ -5688,9 +5870,12 @@ function CindraStudioScreen({ visible, onClose }) {
   // arquivo grande), só desenha as linhas perto do que está visível na tela
   // — o resto vira espaço em branco do tamanho certo, então a rolagem não
   // "pula" nada.
-  const [janelaEditor, setJanelaEditor] = useState({ inicio: 0, fim: 120 });
-  const janelaEditorRef = useRef(janelaEditor);
-  janelaEditorRef.current = janelaEditor;
+  const janelaStoreRef = useRef(null);
+  if (!janelaStoreRef.current) janelaStoreRef.current = criarStoreJanela({ inicio: 0, fim: 120 });
+  const setJanelaEditor = useCallback((n) => janelaStoreRef.current.set(n), []);
+  const ultimoYJanelaRef = useRef(0);
+  const alturaLinhaAnteriorRef = useRef(null);
+  const trechoTimerRef = useRef(null);
   // Trecho (em linhas) que está de fato dentro do TextInput.
   const [trecho, setTrecho] = useState({ ini: 0, fim: 150 });
   const trechoInfoRef = useRef({ ini: 0, fim: 1, offset: 0, tamanho: 0, quebras: 0, total: 1 });
@@ -6373,24 +6558,49 @@ function CindraStudioScreen({ visible, onClose }) {
   // pra cada lado) evita que apareça um flash em branco ao rolar rápido.
   // Só atualiza o estado quando a janela realmente muda de posição, pra não
   // gerar um re-render a cada pixel de rolagem.
-  const OVERSCAN_LINHAS_EDITOR = 30;
-  const atualizarJanelaEditor = useCallback((offsetY, alturaVisivel, alturaLinha) => {
-    const linha = Math.max(0, Math.floor((offsetY || 0) / (alturaLinha || 20)));
-    const linhasNaTela = Math.ceil((alturaVisivel || 700) / (alturaLinha || 20));
-    const novoInicio = Math.max(0, linha - OVERSCAN_LINHAS_EDITOR);
-    const novoFim = linha + linhasNaTela + OVERSCAN_LINHAS_EDITOR;
-    const info = trechoInfoRef.current;
+  const OVERSCAN_LINHAS_EDITOR = 40;
+  const BORDA_JANELA_EDITOR = 15; // chegou a menos disso da borda da janela → move a janela
+  const atualizarJanelaEditor = useCallback(function atualizar(offsetY, alturaVisivel, alturaLinha) {
+    const alt = alturaLinha || 20;
+    const y = offsetY || 0;
+    const linha = Math.max(0, Math.floor(y / alt));
+    const linhasNaTela = Math.ceil((alturaVisivel || 700) / alt);
     const base = linha + linhasNaTela;
+    const dy = y - ultimoYJanelaRef.current;
+    ultimoYJanelaRef.current = y;
+    const info = trechoInfoRef.current;
+
+    // Trecho do TextInput (só importa pra tocar/digitar): durante um arrasto
+    // rápido NÃO troca o texto do input a cada passo — espera a rolagem
+    // assentar (140ms parado) e recentra uma vez só.
     if (
       (linha - info.ini < TRECHO_MARGEM_LINHAS && info.ini > 0) ||
       (info.fim - base < TRECHO_MARGEM_LINHAS && info.fim < info.total)
     ) {
-      ignorarSelecaoAteRef.current = Date.now() + 250;
-      setTrecho({ ini: Math.max(0, linha - TRECHO_FOLGA_LINHAS), fim: base + TRECHO_FOLGA_LINHAS });
+      if (Math.abs(dy) > alt * 1.5) {
+        clearTimeout(trechoTimerRef.current);
+        trechoTimerRef.current = setTimeout(() => {
+          atualizar(scrollYEditorRef.current, alturaAreaEditorRef.current, alturaLinhaRef.current);
+        }, 140);
+      } else {
+        clearTimeout(trechoTimerRef.current);
+        ignorarSelecaoAteRef.current = Date.now() + 250;
+        setTrecho({ ini: Math.max(0, linha - TRECHO_FOLGA_LINHAS), fim: base + TRECHO_FOLGA_LINHAS });
+      }
     }
-    const atual = janelaEditorRef.current;
-    if (Math.abs(atual.inicio - novoInicio) < 15 && Math.abs(atual.fim - novoFim) < 15) return;
-    setJanelaEditor({ inicio: novoInicio, fim: novoFim });
+
+    // Janela de linhas desenhadas: só mexe quando a tela chega perto da
+    // borda, e quando mexe já leva linhas a mais pro lado pra onde a
+    // rolagem está indo (rápido = mais linhas à frente) — nunca fica em branco.
+    const atual = janelaStoreRef.current.get();
+    const seguroTopo = atual.inicio === 0 || linha - atual.inicio >= BORDA_JANELA_EDITOR;
+    const seguroBase = atual.fim >= info.total || atual.fim - base >= BORDA_JANELA_EDITOR;
+    if (seguroTopo && seguroBase) return;
+    const extra = Math.min(80, Math.round(Math.abs(dy) / alt) * 4);
+    setJanelaEditor({
+      inicio: Math.max(0, linha - OVERSCAN_LINHAS_EDITOR - (dy < 0 ? extra : 0)),
+      fim: base + OVERSCAN_LINHAS_EDITOR + (dy > 0 ? extra : 0),
+    });
   }, []);
 
   const abrirArquivo = (caminho) => {
@@ -6449,8 +6659,18 @@ function CindraStudioScreen({ visible, onClose }) {
     if (delta !== 0) setTrecho((t) => ({ ini: t.ini, fim: t.fim + delta }));
   };
 
+  // O TextInput nativo já move o cursor sozinho; o React só precisa saber
+  // onde ele está pra rolar/sugerir. Atualizar esse estado a cada tecla
+  // gerava um 2º render da tela inteira colado no do texto e deixava a
+  // digitação pesada — agora espera ~80ms parado.
+  const agendarCaret = (pos) => {
+    clearTimeout(caretTimerRef.current);
+    caretTimerRef.current = setTimeout(() => setCaretPos(pos), 80);
+  };
+
   const posicionarCursor = (pos) => {
     selecaoRef.current = { start: pos, end: pos };
+    clearTimeout(caretTimerRef.current);
     setCaretPos(pos);
     setSelecaoForcada({ start: pos, end: pos });
     setTimeout(() => setSelecaoForcada(null), 80);
@@ -6888,8 +7108,12 @@ function CindraStudioScreen({ visible, onClose }) {
   const hist = arquivoAtivo ? historicoRef.current[arquivoAtivo] : null;
   const podeDesfazer = !!(hist && hist.undo.length > 0);
   const podeRefazer = !!(hist && hist.redo.length > 0);
-  const escalaFonte = PixelRatio.getFontScale();
-  const alturaLinhaEditor = 20 * escalaFonte * zoomEditor;
+  // O TextInput e a camada colorida usam allowFontScaling={false}, então a
+  // escala de fonte do sistema NÃO muda o tamanho das letras nem a altura da
+  // linha. Multiplicar por ela aqui fazia as linhas/colunas calculadas por
+  // fora (cor, números, busca) descolarem do cursor linha por linha quando a
+  // fonte do Android não era 100%.
+  const alturaLinhaEditor = linhaSemDrift(20 * zoomEditor);
 
   // Só recalcula (split da string inteira + varredura pra achar a linha mais
   // comprida) quando o TEXTO muda de verdade. Antes isso rodava em TODO
@@ -6907,18 +7131,16 @@ function CindraStudioScreen({ visible, onClose }) {
     // rolam na horizontal. Largura do código = maior linha × largura do
     // caractere monoespaçado (~0,6em, corrigida pela escala de fonte do
     // sistema) + folga, nunca menor que a área visível.
-    const larguraCaractere = CODIGO_FONTE * 0.6 * escalaFonte * zoomEditor;
+    const larguraCaractere = CODIGO_FONTE * 0.6 * zoomEditor;
     const largura = Math.max(larguraVisivelCodigo, Math.ceil((maior + 4) * larguraCaractere) + 24);
     return { linhasAtivas: linhas, numeroDeLinhas: linhas.length, larguraCodigo: largura };
-  }, [conteudoAtivo, larguraVisivelCodigo, escalaFonte, zoomEditor]);
+  }, [conteudoAtivo, larguraVisivelCodigo, zoomEditor]);
 
   // Recorte de linhas que a janela do editor manda desenhar agora, já
   // limitado ao tamanho real do arquivo (o arquivo pode ter menos linhas
   // que a janela pedida, ex.: arquivo pequeno ou acabou de abrir).
-  const janelaInicio = Math.max(0, Math.min(janelaEditor.inicio, numeroDeLinhas));
-  const janelaFim = Math.max(janelaInicio, Math.min(janelaEditor.fim, numeroDeLinhas));
   const digitosNumeroLinhas = String(numeroDeLinhas).length;
-  const larguraGutter = Math.ceil(digitosNumeroLinhas * 13 * 0.6 * escalaFonte * zoomEditor) + 16;
+  const larguraGutter = Math.ceil(digitosNumeroLinhas * 13 * 0.6 * zoomEditor) + 16;
   const alturaTotalCodigo = 28 + numeroDeLinhas * alturaLinhaEditor;
 
   // Trecho carregado no TextInput (sempre com pelo menos 1 linha).
@@ -6959,14 +7181,6 @@ function CindraStudioScreen({ visible, onClose }) {
   // cor de uma janela antiga colada numa linha errada enquanto o novo
   // cálculo não chega (a causa mais comum de highlight bugado/dessincronizado
   // nesse tipo de overlay).
-  const linhasDestacadas = useMemo(() => {
-    const resultado = [];
-    for (let i = janelaInicio; i < janelaFim; i++) {
-      const texto = linhasAtivas[i] !== undefined ? linhasAtivas[i] : '';
-      resultado.push({ i, texto, partes: tokenizarLinha(texto, regexLinguagemAtiva) });
-    }
-    return resultado;
-  }, [linhasAtivas, janelaInicio, janelaFim, regexLinguagemAtiva]);
 
   // Trocou de tela (home ↔ workspace): começa com histórico limpo, pra um
   // projeto novo nunca herdar passos de outro que tenha os mesmos caminhos.
@@ -6977,6 +7191,7 @@ function CindraStudioScreen({ visible, onClose }) {
   // as linhas de onde o arquivo anterior estava rolado.
   useEffect(() => {
     scrollYEditorRef.current = 0;
+    ultimoYJanelaRef.current = 0;
     setJanelaEditor({ inicio: 0, fim: 120 });
     setTrecho({ ini: 0, fim: 150 });
   }, [arquivoAtivo]);
@@ -7000,15 +7215,25 @@ function CindraStudioScreen({ visible, onClose }) {
     const [evMostrar, evEsconder] = Platform.OS === 'ios'
       ? ['keyboardWillShow', 'keyboardWillHide']
       : ['keyboardDidShow', 'keyboardDidHide'];
-    const a = Keyboard.addListener(evMostrar, (e) => setAlturaTeclado((e && e.endCoordinates && e.endCoordinates.height) || 0));
-    const b = Keyboard.addListener(evEsconder, () => setAlturaTeclado(0));
+    const a = Keyboard.addListener(evMostrar, (e) => {
+      const kb = e && e.endCoordinates;
+      const h = (kb && kb.height) || 0;
+      tecladoInfoRef.current = h > 0 ? { h, screenY: kb && typeof kb.screenY === 'number' ? kb.screenY : null } : null;
+      setTecladoVisivel(h > 0);
+      recalcularTecladoRef.current();
+    });
+    const b = Keyboard.addListener(evEsconder, () => {
+      tecladoInfoRef.current = null;
+      setTecladoVisivel(false);
+      setAlturaTeclado(0);
+    });
     return () => { a.remove(); b.remove(); };
   }, []);
 
   // Com o teclado aberto, rola o editor pra linha do cursor nunca ficar
   // escondida (TextInput multiline dentro de ScrollView não faz isso sozinho).
   useEffect(() => {
-    if (!arquivoAtivo || alturaTeclado === 0) return undefined;
+    if (!arquivoAtivo || !tecladoVisivel) return undefined;
     const t = setTimeout(() => {
       const rolagem = scrollEditorRef.current;
       const visivel = alturaAreaEditorRef.current;
@@ -7019,9 +7244,9 @@ function CindraStudioScreen({ visible, onClose }) {
       const y = scrollYEditorRef.current;
       if (base + 12 > y + visivel) rolagem.scrollTo({ y: base + 12 - visivel, animated: true });
       else if (topo - 12 < y) rolagem.scrollTo({ y: Math.max(0, topo - 12), animated: true });
-    }, 140);
+    }, 60);
     return () => clearTimeout(t);
-  }, [caretPos, alturaTeclado, conteudoAtivo, arquivoAtivo, alturaLinhaEditor]);
+  }, [caretPos, alturaTeclado, tecladoVisivel, arquivoAtivo, alturaLinhaEditor]);
 
   // Garante que a linha onde o cursor está sempre faz parte da janela
   // desenhada — assim, ao digitar rápido ou pular de linha, o trecho atual
@@ -7034,7 +7259,7 @@ function CindraStudioScreen({ visible, onClose }) {
       ignorarSelecaoAteRef.current = Date.now() + 250;
       setTrecho({ ini: Math.max(0, linha - TRECHO_FOLGA_LINHAS), fim: linha + TRECHO_FOLGA_LINHAS });
     }
-    const atual = janelaEditorRef.current;
+    const atual = janelaStoreRef.current.get();
     if (linha < atual.inicio + 5 || linha > atual.fim - 5) {
       setJanelaEditor({
         inicio: Math.max(0, linha - OVERSCAN_LINHAS_EDITOR),
@@ -7050,9 +7275,41 @@ function CindraStudioScreen({ visible, onClose }) {
   linhasAtivasRef.current = linhasAtivas;
   alturaLinhaRef.current = alturaLinhaEditor;
 
+  // Mudou o zoom: a altura de cada linha muda, mas a rolagem continua no
+  // mesmo número de pixels — então o que estava na tela "pulava" pra outra
+  // linha (zoom in jogava pra cima, zoom out pra baixo). Aqui a rolagem é
+  // reescalada pra manter a MESMA linha no mesmo lugar da tela: a linha do
+  // cursor, se ela está visível; senão a linha do meio da tela.
+  useEffect(() => {
+    const antes = alturaLinhaAnteriorRef.current;
+    alturaLinhaAnteriorRef.current = alturaLinhaEditor;
+    if (!antes || Math.abs(antes - alturaLinhaEditor) < 0.0001) return undefined;
+    const visivel = alturaAreaEditorRef.current || 0;
+    if (!visivel) return undefined;
+    const y = scrollYEditorRef.current || 0;
+    const linhaCursor = linhaDoOffset(linhasAtivasRef.current, selecaoRef.current.end || 0);
+    const posCursorNaTela = 14 + linhaCursor * antes - y;
+    let novoY;
+    if (posCursorNaTela >= 0 && posCursorNaTela <= visivel) {
+      novoY = 14 + linhaCursor * alturaLinhaEditor - posCursorNaTela; // cursor fica parado na tela
+    } else {
+      const linhaMeio = (y + visivel / 2 - 14) / antes;               // linha (fracionada) do meio da tela
+      novoY = 14 + linhaMeio * alturaLinhaEditor - visivel / 2;
+    }
+    novoY = Math.max(0, novoY);
+    scrollYEditorRef.current = novoY;
+    const id = requestAnimationFrame(() => {
+      if (scrollEditorRef.current) scrollEditorRef.current.scrollTo({ y: novoY, animated: false });
+      atualizarJanelaEditor(novoY, visivel, alturaLinhaEditor);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [alturaLinhaEditor]);
+
   useEffect(() => () => {
     clearTimeout(zoomTimerRef.current);
     clearTimeout(destaqueTimerRef.current);
+    clearTimeout(caretTimerRef.current);
+    clearTimeout(trechoTimerRef.current);
   }, []);
 
   // ---------- Zoom (dois dedos ou botões − / +) ----------
@@ -7118,8 +7375,13 @@ function CindraStudioScreen({ visible, onClose }) {
       scrollHorizRef.current.scrollTo({ x, animated: false });
     }
     setDestaqueLinha(idx);
-    clearTimeout(destaqueTimerRef.current);
-    destaqueTimerRef.current = setTimeout(() => setDestaqueLinha(-1), 1400);
+    destaqueAnim.stopAnimation();
+    destaqueAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(destaqueAnim, { toValue: 1, duration: 160, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.delay(420),
+      Animated.timing(destaqueAnim, { toValue: 0, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+    ]).start(({ finished }) => { if (finished) setDestaqueLinha(-1); });
   };
 
   const irParaLinha = (numero, coluna = 0) => {
@@ -7194,19 +7456,10 @@ function CindraStudioScreen({ visible, onClose }) {
     }
   };
 
-  // Sugestões da barra do teclado (só calcula com o teclado do código aberto).
-  const sugestoesAuto = useMemo(() => {
-    if (!editorFocado || alturaTeclado === 0 || !arquivoAtivo) return [];
-    const { palavra } = palavraAntesDoCursor(conteudoAtivo, caretPos);
-    if (palavra.length < 2) return [];
-    const cache = palavrasCacheRef.current;
-    if (palavra.length >= 3 && (cache.arquivo !== arquivoAtivo || Date.now() - cache.t > 1500)) {
-      cache.arquivo = arquivoAtivo;
-      cache.t = Date.now();
-      cache.lista = extrairPalavrasUnicas(conteudoAtivo);
-    }
-    return montarSugestoesEditor(linguagemAtiva, palavra, cache.arquivo === arquivoAtivo ? cache.lista : []);
-  }, [editorFocado, alturaTeclado, arquivoAtivo, linguagemAtiva, caretPos, conteudoAtivo]);
+  // Sugestões de palavra em cima do teclado: DESLIGADAS (a faixa com a palavra
+  // que aparecia ao tocar numa palavra). Fica sempre vazio, então a faixa não
+  // aparece e também não gasta processamento a cada tecla/toque.
+  const sugestoesAuto = SUGESTOES_AUTO_DESLIGADAS;
 
   const listaSnippets = linguagemAtiva === 'xml' ? SNIPPETS_XML_STUDIO : linguagemAtiva === 'java' ? SNIPPETS_JAVA_STUDIO : [];
 
@@ -8354,7 +8607,7 @@ function CindraStudioScreen({ visible, onClose }) {
         </View>
       </ScrollView>
 
-      {alturaTeclado === 0 && (
+      {!tecladoVisivel && (
         <View style={[studioStyles.cfgFooter, { paddingBottom: Math.max(insets.bottom, 12) + 4 }]}>
           <TouchableOpacity style={[studioStyles.criarBtn, criandoProjeto && { opacity: 0.7 }]} onPress={criarProjeto} activeOpacity={0.85} disabled={criandoProjeto}>
             {criandoProjeto
@@ -8472,7 +8725,11 @@ function CindraStudioScreen({ visible, onClose }) {
       </View>
 
       {arquivoAtivo ? (
-        <View style={{ flex: 1, paddingBottom: alturaTeclado }}>
+        <View
+          ref={caixaEditorRef}
+          style={{ flex: 1, paddingBottom: alturaTeclado }}
+          onLayout={() => recalcularTecladoRef.current()}
+        >
           <View style={studioStyles.pathBar}>
             <MaterialCommunityIcons name="folder-outline" size={12} color={COLORS.dim} />
             <Text style={studioStyles.pathBarText} numberOfLines={1} ellipsizeMode="head" maxFontSizeMultiplier={1.1}>{arquivoAtivo.split('/').join(' \u203a ')}</Text>
@@ -8481,15 +8738,6 @@ function CindraStudioScreen({ visible, onClose }) {
             </TouchableOpacity>
             <TouchableOpacity style={[studioStyles.pathBtn, barraEditor === 'linha' && studioStyles.pathBtnAtivo]} onPress={abrirBarraLinha} hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }} activeOpacity={0.7}>
               <MaterialCommunityIcons name="format-list-numbered" size={17} color={barraEditor === 'linha' ? COLORS.ember : COLORS.dim} />
-            </TouchableOpacity>
-            <TouchableOpacity style={studioStyles.pathBtn} onPress={() => setSnippetsAberto(true)} hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }} activeOpacity={0.7}>
-              <MaterialCommunityIcons name="lightning-bolt-outline" size={17} color={COLORS.dim} />
-            </TouchableOpacity>
-            <TouchableOpacity style={studioStyles.pathBtn} onPress={() => definirZoom(zoomRef.current - 0.1, true)} hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }} activeOpacity={0.7}>
-              <MaterialCommunityIcons name="magnify-minus-outline" size={17} color={COLORS.dim} />
-            </TouchableOpacity>
-            <TouchableOpacity style={studioStyles.pathBtn} onPress={() => definirZoom(zoomRef.current + 0.1, true)} hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }} activeOpacity={0.7}>
-              <MaterialCommunityIcons name="magnify-plus-outline" size={17} color={COLORS.dim} />
             </TouchableOpacity>
           </View>
 
@@ -8665,13 +8913,13 @@ function CindraStudioScreen({ visible, onClose }) {
               </View>
             );
           })()}
-          <ItemAnimadoStudio key={arquivoAtivo} indice={0} style={{ flex: 1 }}>
+          <ItemAnimadoStudio key={arquivoAtivo} indice={0} style={{ flex: 1 }} leve>
             <View style={{ flex: 1 }} onTouchStart={aoTocarInicio} onTouchMove={aoTocarMover} onTouchEnd={aoTocarFim} onTouchCancel={aoTocarFim}>
             <ScrollView
               ref={scrollEditorRef}
               scrollEnabled={!pinchAtivo}
               style={{ flex: 1, backgroundColor: '#0a0a0c' }}
-              contentContainerStyle={{ paddingBottom: alturaTeclado > 0 ? 24 : Math.max(insets.bottom, 0) + 24 }}
+              contentContainerStyle={{ paddingBottom: tecladoVisivel ? 24 : Math.max(insets.bottom, 0) + 24 }}
               keyboardShouldPersistTaps="handled"
               scrollEventThrottle={16}
               onScroll={(e) => {
@@ -8690,17 +8938,15 @@ function CindraStudioScreen({ visible, onClose }) {
                     resto é só a altura certa em branco, então a barra de
                     rolagem continua do tamanho certo mesmo sem desenhar tudo. */}
                 <View style={[studioStyles.lineNumbers, { width: larguraGutter, height: alturaTotalCodigo, paddingVertical: 0, paddingHorizontal: 0 }]}>
-                  {Array.from({ length: janelaFim - janelaInicio }).map((_, idx) => {
-                    const i = janelaInicio + idx;
-                    return (
-                      <Text
-                        key={i}
-                        style={[studioStyles.lineNumberText, { position: 'absolute', top: 14 + i * alturaLinhaEditor, right: 8, width: larguraGutter - 16, fontSize: 13 * zoomEditor, lineHeight: 20 * zoomEditor }, !marcasErroOcultas && linhasComErro.has(i + 1) && { color: COLORS.error, fontWeight: '800' }]}
-                      >
-                        {i + 1}
-                      </Text>
-                    );
-                  })}
+                  <NumerosJanelaStudio
+                    store={janelaStoreRef.current}
+                    total={numeroDeLinhas}
+                    altura={alturaLinhaEditor}
+                    larguraTexto={larguraGutter - 16}
+                    zoom={zoomEditor}
+                    errosSet={linhasComErro}
+                    mostrarErros={!marcasErroOcultas}
+                  />
                 </View>
                 <ScrollView
                   ref={scrollHorizRef}
@@ -8717,9 +8963,9 @@ function CindraStudioScreen({ visible, onClose }) {
                         linha pra onde acabou de pular, linhas com erro da
                         compilação e ocorrências da busca. */}
                     {destaqueLinha >= 0 && destaqueLinha < numeroDeLinhas && (
-                      <View
+                      <Animated.View
                         pointerEvents="none"
-                        style={{ position: 'absolute', left: 0, width: larguraCodigo, top: 14 + destaqueLinha * alturaLinhaEditor, height: alturaLinhaEditor, backgroundColor: 'rgba(255,182,72,0.16)' }}
+                        style={{ position: 'absolute', left: 0, width: larguraCodigo, top: 14 + destaqueLinha * alturaLinhaEditor, height: alturaLinhaEditor, backgroundColor: 'rgba(255,182,72,0.16)', opacity: destaqueAnim }}
                       />
                     )}
                     {!marcasErroOcultas && errosArquivo.map((e, k) => {
@@ -8733,25 +8979,18 @@ function CindraStudioScreen({ visible, onClose }) {
                         />
                       );
                     })}
-                    {barraEditor === 'buscar' && marcasBusca
-                      .filter((m) => m.i >= janelaInicio && m.i < janelaFim)
-                      .map((m) => (
-                        <View
-                          key={`bm${m.k}`}
-                          pointerEvents="none"
-                          style={{
-                            position: 'absolute',
-                            left: 12 + m.col * CODIGO_FONTE * 0.6 * zoomEditor,
-                            top: 14 + m.i * alturaLinhaEditor + 1,
-                            width: m.len * CODIGO_FONTE * 0.6 * zoomEditor,
-                            height: alturaLinhaEditor - 2,
-                            borderRadius: 3,
-                            backgroundColor: m.k === idxBusca ? 'rgba(255,170,0,0.55)' : 'rgba(255,214,10,0.22)',
-                          }}
-                        />
-                      ))}
+                    {barraEditor === 'buscar' && (
+                      <MarcasBuscaJanelaStudio
+                        store={janelaStoreRef.current}
+                        total={numeroDeLinhas}
+                        marcas={marcasBusca}
+                        idxBusca={idxBusca}
+                        altura={alturaLinhaEditor}
+                        zoom={zoomEditor}
+                      />
+                    )}
                     <TextInput
-                      style={[studioStyles.codeInput, { position: 'absolute', left: 0, top: trechoIni * alturaLinhaEditor, width: larguraCodigo, fontSize: CODIGO_FONTE * zoomEditor, lineHeight: 20 * zoomEditor }]}
+                      style={[studioStyles.codeInput, { position: 'absolute', left: 0, top: trechoIni * alturaLinhaEditor, width: larguraCodigo, fontSize: CODIGO_FONTE * zoomEditor, lineHeight: alturaLinhaEditor }]}
                       value={textoTrecho}
                       onChangeText={alterarTrecho}
                       onSelectionChange={(e) => {
@@ -8759,7 +8998,7 @@ function CindraStudioScreen({ visible, onClose }) {
                         const sel = e.nativeEvent.selection;
                         const off = trechoInfoRef.current.offset;
                         selecaoRef.current = { start: off + sel.start, end: off + sel.end };
-                        setCaretPos(off + sel.end);
+                        agendarCaret(off + sel.end);
                       }}
                       onFocus={() => setEditorFocado(true)}
                       onBlur={() => setEditorFocado(false)}
@@ -8787,20 +9026,13 @@ function CindraStudioScreen({ visible, onClose }) {
                       pointerEvents="none"
                       style={[studioStyles.codeHighlightOverlay, { width: larguraCodigo, height: alturaTotalCodigo }]}
                     >
-                      {linhasDestacadas.map(({ i, texto, partes }) => (
-                        <Text
-                          key={i}
-                          numberOfLines={1}
-                          allowFontScaling={false}
-                          style={[studioStyles.codeHighlightLine, { top: 14 + i * alturaLinhaEditor, fontSize: CODIGO_FONTE * zoomEditor, lineHeight: 20 * zoomEditor }]}
-                        >
-                          {texto === ''
-                            ? ' '
-                            : partes.map((p, idx) => (
-                              <Text key={idx} allowFontScaling={false} style={p.c ? { color: p.c } : null}>{p.t}</Text>
-                            ))}
-                        </Text>
-                      ))}
+                      <LinhasCoresJanelaStudio
+                        store={janelaStoreRef.current}
+                        linhas={linhasAtivas}
+                        altura={alturaLinhaEditor}
+                        zoom={zoomEditor}
+                        regex={regexLinguagemAtiva}
+                      />
                     </View>
                   </View>
                 </ScrollView>
@@ -8814,7 +9046,7 @@ function CindraStudioScreen({ visible, onClose }) {
             </View>
           </ItemAnimadoStudio>
 
-          {editorFocado && alturaTeclado > 0 && (
+          {editorFocado && tecladoVisivel && (
             <View style={studioStyles.symBarra}>
               {sugestoesAuto.length > 0 && (
                 <ScrollView
