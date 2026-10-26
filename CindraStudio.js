@@ -119,26 +119,30 @@ const TouchableAnimado = Animated.createAnimatedComponent(TouchableOpacityBase);
 function TouchableOpacity({ style, onPress, onPressIn, onPressOut, ...resto }) {
   const escala = useRef(new Animated.Value(1)).current;
   const subida = useRef(new Animated.Value(0)).current;
+  const estiloAnim = useMemo(
+    () => [style, { transform: [{ translateY: subida }, { scale: escala }] }],
+    [style]
+  );
   const apertar = (e) => {
-    Animated.spring(escala, { toValue: 0.94, speed: 60, bounciness: 0, useNativeDriver: true }).start();
+    Animated.timing(escala, { toValue: 0.95, duration: 110, useNativeDriver: true }).start();
     if (onPressIn) onPressIn(e);
   };
   const soltar = (e) => {
-    Animated.spring(escala, { toValue: 1, speed: 18, bounciness: 16, useNativeDriver: true }).start();
+    Animated.spring(escala, { toValue: 1, stiffness: 160, damping: 11, mass: 1, useNativeDriver: true }).start();
     if (onPressOut) onPressOut(e);
   };
   const clicar = (e) => {
     subida.stopAnimation();
     Animated.sequence([
-      Animated.timing(subida, { toValue: -7, duration: 90, useNativeDriver: true }),
-      Animated.spring(subida, { toValue: 0, speed: 14, bounciness: 18, useNativeDriver: true }),
+      Animated.timing(subida, { toValue: -6, duration: 140, useNativeDriver: true }),
+      Animated.spring(subida, { toValue: 0, stiffness: 130, damping: 10, mass: 1, useNativeDriver: true }),
     ]).start();
     if (onPress) onPress(e);
   };
   return (
     <TouchableAnimado
       {...resto}
-      style={[style, { transform: [{ translateY: subida }, { scale: escala }] }]}
+      style={estiloAnim}
       onPress={clicar}
       onPressIn={apertar}
       onPressOut={soltar}
@@ -244,6 +248,7 @@ function FundoVivo() {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <Animated.View
+        renderToHardwareTextureAndroid
         style={{
           position: 'absolute',
           top: -tamAzul * 0.45,
@@ -258,6 +263,7 @@ function FundoVivo() {
         <BrilhoSuave cor="#3b4bff" tam={tamAzul} />
       </Animated.View>
       <Animated.View
+        renderToHardwareTextureAndroid
         style={{
           position: 'absolute',
           bottom: -tamRosa * 0.4,
@@ -302,31 +308,47 @@ function FundoVivo() {
 function EntradaAleatoria({ children, animar = true, style }) {
   const { width, height } = useWindowDimensions();
   const [tipo] = useState(() => Math.floor(Math.random() * 6));
+  const [animando, setAnimando] = useState(animar);
   const t = useRef(new Animated.Value(animar ? 0 : 1)).current;
 
   useEffect(() => {
     if (!animar) return undefined;
-    const anim = Animated.spring(t, { toValue: 1, friction: 5.5, tension: 42, useNativeDriver: true });
-    anim.start();
+    // mola mais mole e amortecida: chega devagar, passa um tiquinho do ponto e assenta
+    const anim = Animated.spring(t, {
+      toValue: 1,
+      stiffness: 38,
+      damping: 7.5,
+      mass: 1,
+      useNativeDriver: true,
+    });
+    anim.start(({ finished }) => { if (finished) setAnimando(false); });
     return () => anim.stop();
   }, []);
 
   const de = (inicio) => t.interpolate({ inputRange: [0, 1], outputRange: [inicio, 0] });
-  const opacidade = t.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0, 1, 1], extrapolate: 'clamp' });
+  const opacidade = t.interpolate({ inputRange: [0, 0.55, 1], outputRange: [0, 1, 1], extrapolate: 'clamp' });
   let transform;
-  if (tipo === 0) transform = [{ translateY: de(height * 0.7) }]; // de baixo
-  else if (tipo === 1) transform = [{ translateX: de(-width) }]; // da esquerda
-  else if (tipo === 2) transform = [{ translateX: de(width) }]; // da direita
+  if (tipo === 0) transform = [{ translateY: de(height * 0.3) }]; // de baixo
+  else if (tipo === 1) transform = [{ translateX: de(-width * 0.55) }]; // da esquerda
+  else if (tipo === 2) transform = [{ translateX: de(width * 0.55) }]; // da direita
   else if (tipo === 3) {
-    // balançando: sobe girando e vai balançando até parar
+    // balançando: sobe girando de leve e vai balançando até parar
     transform = [
-      { translateY: de(height * 0.25) },
-      { rotate: t.interpolate({ inputRange: [0, 1], outputRange: ['-9deg', '0deg'] }) },
+      { translateY: de(height * 0.12) },
+      { rotate: t.interpolate({ inputRange: [0, 1], outputRange: ['-5deg', '0deg'] }) },
     ];
-  } else if (tipo === 4) transform = [{ scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }]; // zoom
-  else transform = [{ translateY: de(-height * 0.4) }]; // de cima
+  } else if (tipo === 4) transform = [{ scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1] }) }]; // zoom
+  else transform = [{ translateY: de(-height * 0.2) }]; // de cima
 
-  return <Animated.View style={[style, { opacity: opacidade, transform }]}>{children}</Animated.View>;
+  return (
+    <Animated.View
+      renderToHardwareTextureAndroid={animando}
+      shouldRasterizeIOS={animando}
+      style={[style, { opacity: opacidade, transform }]}
+    >
+      {children}
+    </Animated.View>
+  );
 }
 
 // ─────────────────────────────────────────────────────────
