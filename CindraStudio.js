@@ -5978,13 +5978,15 @@ function CindraStudioScreen({ visible, onClose }) {
     ? { versao: 1, nomeApp, nomePacote, iconeEscolhido, corIcone, fotoIcone, projeto, pastasAbertas, abasAbertas, arquivoAtivo }
     : null;
 
-  // Salva sozinho, meio segundo depois da última mudança (digitar, abrir
-  // aba, criar projeto...).
+  // Salva sozinho, 4 s depois da última mudança (digitar, abrir aba, criar
+  // projeto...). Antes era 0,5 s: o JSON.stringify do projeto INTEIRO rodava
+  // na mesma thread da digitação a cada pausinha e travava a próxima letra.
+  // Ao ir pro segundo plano ele salva na hora (efeito logo abaixo).
   useEffect(() => {
     if (!estadoRef.current) return undefined;
     const t = setTimeout(() => {
       if (estadoRef.current) gravarEstadoStudio(estadoRef.current).catch(() => {});
-    }, 500);
+    }, 4000);
     return () => clearTimeout(t);
   }, [estadoCarregado, projeto, pastasAbertas, abasAbertas, arquivoAtivo, nomeApp, nomePacote, iconeEscolhido, corIcone, fotoIcone]);
 
@@ -6065,7 +6067,7 @@ function CindraStudioScreen({ visible, onClose }) {
   // Depois de mexer no projeto (1,5 s parado), atualiza a pasta arquivos.
   useEffect(() => {
     if (etapa !== 'workspace' || !projeto) return undefined;
-    const t = setTimeout(() => { sincronizarPastaApp(false).catch(() => {}); }, 1500);
+    const t = setTimeout(() => { sincronizarPastaApp(false).catch(() => {}); }, 6000);
     return () => clearTimeout(t);
   }, [projeto, nomeApp, etapa]);
 
@@ -7132,7 +7134,7 @@ function CindraStudioScreen({ visible, onClose }) {
     // caractere monoespaçado (~0,6em, corrigida pela escala de fonte do
     // sistema) + folga, nunca menor que a área visível.
     const larguraCaractere = CODIGO_FONTE * 0.6 * zoomEditor;
-    const largura = Math.max(larguraVisivelCodigo, Math.ceil((maior + 4) * larguraCaractere) + 24);
+    const largura = Math.max(larguraVisivelCodigo, Math.ceil((maior + 8) * larguraCaractere) + 24);
     return { linhasAtivas: linhas, numeroDeLinhas: linhas.length, larguraCodigo: largura };
   }, [conteudoAtivo, larguraVisivelCodigo, zoomEditor]);
 
@@ -7329,6 +7331,10 @@ function CindraStudioScreen({ visible, onClose }) {
     const t = e.nativeEvent.touches;
     if (t && t.length >= 2) {
       pinchRef.current = { ativo: true, d0: distanciaDedos(t), z0: zoomRef.current };
+      // Dedos em cima do TextInput fazem o Android mover o cursor pra onde
+      // tocaram (e a tela rola até lá) — era isso que "ia pra linha errada"
+      // ao dar zoom. Durante a pinça a seleção é ignorada.
+      ignorarSelecaoAteRef.current = Date.now() + 600000;
       setPinchAtivo(true);
     }
   };
@@ -7346,6 +7352,9 @@ function CindraStudioScreen({ visible, onClose }) {
       pinchRef.current = { ...p, ativo: false };
       setPinchAtivo(false);
       salvarPref('zoomEditor', zoomRef.current);
+      // Acabou: volta a ouvir a seleção e devolve o cursor pra onde estava.
+      ignorarSelecaoAteRef.current = Date.now() + 400;
+      posicionarCursor(selecaoRef.current.end);
     }
   };
 
@@ -9006,6 +9015,9 @@ function CindraStudioScreen({ visible, onClose }) {
                       multiline
                       autoCapitalize="none"
                       autoCorrect={false}
+                      autoComplete="off"
+                      importantForAutofill="no"
+                      keyboardType={Platform.OS === 'android' ? 'visible-password' : 'default'}
                       spellCheck={false}
                       scrollEnabled={false}
                       selectionColor={COLORS.ember}
