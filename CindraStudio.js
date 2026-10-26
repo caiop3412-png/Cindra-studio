@@ -68,25 +68,25 @@ const COLORS = {
   dim: 'rgba(255,255,255,0.6)',
   line: 'rgba(255,255,255,0.14)',
   lineSoft: 'rgba(255,255,255,0.07)',
-  panel: 'rgba(32,14,16,0.6)',
-  panel2: '#26100f',
-  sheet: '#170c0b',
-  ember: '#ff5227',
-  emberDeep: '#c81e50',
-  emberGlow: 'rgba(255,82,39,0.55)',
+  panel: 'rgba(24,16,52,0.6)',
+  panel2: '#1a1236',
+  sheet: '#0e0a1f',
+  ember: '#b43cff',
+  emberDeep: '#4f46ff',
+  emberGlow: 'rgba(180,60,255,0.55)',
   // Núcleo quente do brasido — usado com moderação, só em detalhes de
   // assinatura (contorno do avatar, cursor, badge de destaque), pra dar
   // a sensação de "brasa" (vermelho -> laranja -> dourado) em vez de um
   // laranja chapado só.
-  gold: '#ffb648',
-  goldGlow: 'rgba(255,182,72,0.35)',
-  pink: '#ff2e7e',
-  pinkGlow: 'rgba(255,46,126,0.5)',
+  gold: '#ff7ad9',
+  goldGlow: 'rgba(255,122,217,0.35)',
+  pink: '#ff2fc6',
+  pinkGlow: 'rgba(255,47,198,0.5)',
   error: '#ff6b6b',
   // Mantidos por compatibilidade com estilos que ainda referenciam
   // "blue" — agora apontam pro tom ember pra tudo ficar consistente.
-  blue: '#ff5227',
-  blueGlow: 'rgba(255,82,39,0.55)',
+  blue: '#b43cff',
+  blueGlow: 'rgba(180,60,255,0.55)',
   // Roxo do "modo dev" — o MESMO tom já usado nos cards/ícones de
   // arquivo de código da Área Dev (#8b5cf6/#a78bfa), reaproveitado aqui
   // pra marcar visualmente qualquer resposta que veio do modo dev
@@ -104,13 +104,45 @@ const COLORS = {
   pensamentoBlueSoft: 'rgba(79,163,247,0.10)',
   // Cores do destaque de sintaxe do editor (Studio) — paleta própria pra
   // não colidir com os selos/badges que já usam ember/roxo/azul acima.
-  syntaxKeyword: '#ff9d6b',
+  syntaxKeyword: '#ff7ad9',
   syntaxString: '#ffd479',
   syntaxComment: 'rgba(255,255,255,0.32)',
   syntaxNumber: '#8fd6ff',
   syntaxTag: '#8fd6ff',
   syntaxAttr: '#c9a7ff',
 };
+
+// Cores misturadas do logo da Cindra (azul -> roxo -> rosa).
+const GRAD_LOGO = ['#3b4bff', '#8b3dff', '#ff2fc6'];
+const GRAD_LOGO_ESCURO = ['#2b2fb8', '#6a2fd0', '#b02fb5'];
+// Degradê feito só com Views (sem pacote nativo, sem precisar gerar outro APK):
+// várias faixas finas lado a lado, cada uma com a cor interpolada.
+function hexParaRgb(h) {
+  const n = parseInt(h.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function corNoDegrade(cores, t) {
+  const pos = t * (cores.length - 1);
+  const i = Math.min(cores.length - 2, Math.floor(pos));
+  const f = pos - i;
+  const a = hexParaRgb(cores[i]);
+  const b = hexParaRgb(cores[i + 1]);
+  return 'rgb(' + a.map((v, k) => Math.round(v + (b[k] - v) * f)).join(',') + ')';
+}
+const FAIXAS_DEGRADE = 28;
+function Grad({ cores = GRAD_LOGO }) {
+  const faixas = useMemo(
+    () => Array.from({ length: FAIXAS_DEGRADE }, (_, k) => corNoDegrade(cores, k / (FAIXAS_DEGRADE - 1))),
+    [cores]
+  );
+  return (
+    <View style={[StyleSheet.absoluteFill, { flexDirection: 'row' }]} pointerEvents="none">
+      {faixas.map((c, k) => (
+        <View key={k} style={{ flex: 1, backgroundColor: c, marginRight: k < FAIXAS_DEGRADE - 1 ? -0.5 : 0 }} />
+      ))}
+    </View>
+  );
+}
 
 // ─────────────────────────────────────────────────────────
 // Destaque de sintaxe do editor (Studio) — leve de propósito: roda só nas
@@ -357,8 +389,8 @@ function NoticeCardHost() {
   // "aviso" em dourado neutro (bloqueios, permissão, validação).
   const ESTILO_POR_TIPO = {
     erro: { icon: 'alert-circle', cor: COLORS.error, badge: 'rgba(255,107,107,0.14)' },
-    sucesso: { icon: 'check-circle', cor: COLORS.gold, badge: 'rgba(255,182,72,0.14)' },
-    aviso: { icon: 'information', cor: COLORS.gold, badge: 'rgba(255,182,72,0.14)' },
+    sucesso: { icon: 'check-circle', cor: COLORS.gold, badge: 'rgba(255,122,217,0.14)' },
+    aviso: { icon: 'information', cor: COLORS.gold, badge: 'rgba(255,122,217,0.14)' },
   };
   const est = ESTILO_POR_TIPO[aviso.tipo] || ESTILO_POR_TIPO.aviso;
 
@@ -420,7 +452,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 10,
     width: '100%',
-    backgroundColor: '#211412',
+    backgroundColor: '#1a1430',
     borderWidth: 1,
     borderColor: COLORS.line,
     borderRadius: 16,
@@ -472,7 +504,7 @@ const ICONES_APP_STUDIO = ['android'];
 // recurso duplicado no aapt2).
 const ICONE_FOTO_CAMINHO = 'app/src/main/res/drawable/ic_launcher.png';
 const PASTA_ICONES_STUDIO = `${FileSystem.documentDirectory}cindrastudio/_icones/`;
-const CORES_ICONE_STUDIO = ['#ff5227', '#8b5cf6', '#38bdf8', '#34d399', '#ffb648', '#ff2e7e', '#eab308', '#60a5fa'];
+const CORES_ICONE_STUDIO = ['#b43cff', '#4f46ff', '#38bdf8', '#34d399', '#ff7ad9', '#ff2fc6', '#8b5cf6', '#60a5fa'];
 
 // Ícone + cor por extensão de arquivo, pro explorador do CindraStudio
 // (parecido com iconeArquivo(), só que cobrindo extensões de projeto
@@ -483,7 +515,7 @@ function iconeArquivoStudio(nome) {
     java: { icon: 'language-java', color: '#f89820' },
     kt: { icon: 'language-kotlin', color: '#7f52ff' },
     xml: { icon: 'code-tags', color: '#00acc1' },
-    html: { icon: 'language-html5', color: '#ff6b4a' },
+    html: { icon: 'language-html5', color: '#ff6bd6' },
     glb: { icon: 'cube-outline', color: '#38bdf8' },
     gltf: { icon: 'cube-outline', color: '#38bdf8' },
     obj: { icon: 'cube-outline', color: '#38bdf8' },
@@ -622,7 +654,7 @@ function escaparStringAndroid(texto) {
 // <uses-sdk>), senão o aapt2 recusa o projeto na hora de compilar.
 function montarProjetoNovo(nomeApp, nomePacoteBruto, corIcone, comFoto = false) {
   const nomePacote = normalizarPacote(nomePacoteBruto);
-  const cor = /^#[0-9a-fA-F]{6}$/.test(corIcone || '') ? corIcone : '#ff5227';
+  const cor = /^#[0-9a-fA-F]{6}$/.test(corIcone || '') ? corIcone : '#b43cff';
   const pkgPath = pacotePraCaminho(nomePacote);
   const manifestPath = 'app/src/main/AndroidManifest.xml';
   const mainActivityPath = `app/src/main/java/${pkgPath}/MainActivity.java`;
@@ -1822,7 +1854,7 @@ const studioStyles = StyleSheet.create({
     marginHorizontal: 14,
     marginTop: 4,
   },
-  instalarBtnText: { color: '#1a0806', fontSize: 14.5, fontWeight: '700' },
+  instalarBtnText: { color: '#ffffff', fontSize: 14.5, fontWeight: '700' },
   // ---- Painel de compilação (redesenho) ----
   compileHeaderWrap: {
     paddingTop: 18,
@@ -1893,7 +1925,7 @@ const studioStyles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.04)',
   },
   stepDotFeita: { borderColor: 'rgba(139,214,255,0.0)', backgroundColor: COLORS.ember },
-  stepDotAtiva: { borderColor: COLORS.ember, backgroundColor: 'rgba(255,82,39,0.14)' },
+  stepDotAtiva: { borderColor: COLORS.ember, backgroundColor: 'rgba(180,60,255,0.14)' },
   stepDotErro: { borderColor: '#ff6b6b', backgroundColor: 'rgba(255,107,107,0.14)' },
   stepLinha: {
     position: 'absolute',
@@ -2006,8 +2038,8 @@ const studioStyles = StyleSheet.create({
     maxWidth: 168,
   },
   tabAtiva: {
-    backgroundColor: 'rgba(255,82,39,0.14)',
-    borderColor: 'rgba(255,82,39,0.45)',
+    backgroundColor: 'rgba(180,60,255,0.14)',
+    borderColor: 'rgba(180,60,255,0.45)',
   },
   tabText: { color: COLORS.dim, fontSize: 12.5, maxWidth: 96 },
   tabTextAtiva: { color: COLORS.ink, fontWeight: '700' },
@@ -2026,7 +2058,7 @@ const studioStyles = StyleSheet.create({
   pathBarText: { flex: 1, color: COLORS.dim, fontSize: 11 },
   // ---- Ferramentas do editor: buscar/substituir, ir para linha, símbolos ----
   pathBtn: { width: 28, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  pathBtnAtivo: { backgroundColor: 'rgba(255,82,39,0.18)' },
+  pathBtnAtivo: { backgroundColor: 'rgba(180,60,255,0.18)' },
   edBarra: {
     backgroundColor: '#111113',
     borderBottomWidth: 1,
@@ -2062,11 +2094,11 @@ const studioStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'transparent',
   },
-  edChipAtivo: { backgroundColor: 'rgba(255,82,39,0.16)', borderColor: 'rgba(255,82,39,0.5)' },
+  edChipAtivo: { backgroundColor: 'rgba(180,60,255,0.16)', borderColor: 'rgba(180,60,255,0.5)' },
   edChipTexto: { color: COLORS.dim, fontSize: 12.5, fontWeight: '700' },
   edChipTextoAtivo: { color: COLORS.ink },
   edBotaoAcao: { paddingHorizontal: 12, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.ember },
-  edBotaoAcaoTexto: { color: '#1a0806', fontSize: 12.5, fontWeight: '800' },
+  edBotaoAcaoTexto: { color: '#ffffff', fontSize: 12.5, fontWeight: '800' },
   edBotaoPerigo: { backgroundColor: '#ff6b6b' },
   edResultados: { maxHeight: 190, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.04)' },
   edResResumo: { color: COLORS.dim, fontSize: 11.5, paddingHorizontal: 10, paddingVertical: 7 },
@@ -2101,7 +2133,7 @@ const studioStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'transparent',
   },
-  symTeclaDestaque: { backgroundColor: 'rgba(255,82,39,0.16)', borderColor: 'rgba(255,82,39,0.5)' },
+  symTeclaDestaque: { backgroundColor: 'rgba(180,60,255,0.16)', borderColor: 'rgba(180,60,255,0.5)' },
   symTeclaTexto: { color: COLORS.ink, fontSize: 16, fontWeight: '600', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
   zoomBadge: {
     position: 'absolute',
@@ -2124,7 +2156,7 @@ const studioStyles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.06)',
   },
-  snipIcone: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,82,39,0.14)' },
+  snipIcone: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(180,60,255,0.14)' },
   snipNome: { color: COLORS.ink, fontSize: 14, fontWeight: '700' },
   snipDesc: { color: COLORS.dim, fontSize: 12, marginTop: 1 },
   snipGatilho: { color: COLORS.dim, fontSize: 11.5, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
@@ -2183,7 +2215,7 @@ const studioStyles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,82,39,0.12)',
+    backgroundColor: 'rgba(180,60,255,0.12)',
     marginBottom: 16,
   },
   emptyEditorTitulo: { color: COLORS.ink, fontSize: 15.5, fontWeight: '700', marginBottom: 6, textAlign: 'center' },
@@ -2197,7 +2229,7 @@ const studioStyles = StyleSheet.create({
     borderRadius: 13,
     backgroundColor: COLORS.ember,
   },
-  emptyEditorBtnText: { color: '#1a0806', fontSize: 13.5, fontWeight: '700' },
+  emptyEditorBtnText: { color: '#ffffff', fontSize: 13.5, fontWeight: '700' },
   sidebarBackdrop: { position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)' },
   sidebarPanel: { position: 'absolute', top: 0, bottom: 0, left: 0, width: '86%', maxWidth: 380, backgroundColor: '#0d0d0f', borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.08)', overflow: 'hidden', elevation: 24, shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 18, shadowOffset: { width: 6, height: 0 } },
   overlayRaiz: { zIndex: 50, elevation: 50 },
@@ -2218,7 +2250,7 @@ const studioStyles = StyleSheet.create({
     borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,82,39,0.14)',
+    backgroundColor: 'rgba(180,60,255,0.14)',
     marginRight: 2,
   },
   sidebarHeaderBtn: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.05)' },
@@ -2229,7 +2261,7 @@ const studioStyles = StyleSheet.create({
   treeRow: { flexDirection: 'row', alignItems: 'center', minHeight: 40, paddingVertical: 8, paddingRight: 10, borderRadius: 11, marginBottom: 2, borderWidth: 1, borderColor: 'transparent' },
   treeRowPasta: { paddingLeft: 6, backgroundColor: 'rgba(255,255,255,0.035)' },
   treeRowArquivo: { paddingLeft: 24 },
-  treeRowArquivoAtiva: { backgroundColor: 'rgba(255,82,39,0.15)', borderColor: 'rgba(255,82,39,0.42)' },
+  treeRowArquivoAtiva: { backgroundColor: 'rgba(180,60,255,0.15)', borderColor: 'rgba(180,60,255,0.42)' },
   treeIndent: {
     marginLeft: 13,
     marginBottom: 2,
@@ -2261,21 +2293,22 @@ const studioStyles = StyleSheet.create({
   cfgHeroGlow: { position: 'absolute', top: -10, width: 170, height: 170, borderRadius: 85, opacity: 0.16 },
   cfgIconeWrap: { width: 116, height: 116, marginBottom: 14 },
   cfgIconeBase: { width: 116, height: 116, borderRadius: 30, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  cfgIconeFoto: { width: 116, height: 116, borderRadius: 30, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.18)', backgroundColor: '#1a0f0e' },
-  cfgIconeBadge: { position: 'absolute', right: -6, bottom: -6, width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.ember, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#170c0b' },
+  cfgIconeFoto: { width: 116, height: 116, borderRadius: 30, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.18)', backgroundColor: '#140d28' },
+  cfgIconeBadge: { position: 'absolute', right: -6, bottom: -6, width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.ember, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#0e0a1f' },
   cfgCard: { backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', borderRadius: 20, padding: 16, marginBottom: 14 },
   cfgCampo: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(0,0,0,0.28)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', borderRadius: 14, paddingHorizontal: 14 },
-  cfgCampoFoco: { borderColor: 'rgba(255,82,39,0.65)', backgroundColor: 'rgba(255,82,39,0.06)' },
+  cfgCampoFoco: { borderColor: 'rgba(180,60,255,0.65)', backgroundColor: 'rgba(180,60,255,0.06)' },
   cfgCampoInput: { flex: 1, color: COLORS.ink, fontSize: 15, paddingVertical: 13 },
   cfgBtnRow: { flexDirection: 'row', gap: 10 },
-  cfgBtnPrimario: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, borderRadius: 14, backgroundColor: 'rgba(255,82,39,0.13)', borderWidth: 1, borderColor: 'rgba(255,82,39,0.4)' },
-  cfgBtnPrimarioTexto: { color: '#ff8a68', fontSize: 14, fontWeight: '700' },
+  cfgBtnPrimario: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, borderRadius: 14, backgroundColor: 'rgba(180,60,255,0.13)', borderWidth: 1, borderColor: 'rgba(180,60,255,0.4)' },
+  cfgBtnPrimarioTexto: { color: '#d9a2ff', fontSize: 14, fontWeight: '700' },
   cfgBtnSecundario: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, paddingHorizontal: 14, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' },
   cfgBtnSecundarioTexto: { color: COLORS.ink, fontSize: 13.5, fontWeight: '600' },
   cfgFooter: { paddingHorizontal: 18, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.07)', backgroundColor: COLORS.sheet },
   previewName: { color: COLORS.ink, fontSize: 18, fontWeight: '800' },
   previewPkg: { color: COLORS.dim, fontSize: 12.5, marginTop: 3 },
   criarBtn: {
+    overflow: 'hidden',
     flexDirection: 'row',
     gap: 9,
     backgroundColor: COLORS.ember,
@@ -2289,7 +2322,7 @@ const studioStyles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
   },
-  criarBtnText: { color: '#1a0806', fontSize: 15.5, fontWeight: '800' },
+  criarBtnText: { color: '#ffffff', fontSize: 15.5, fontWeight: '800' },
   // Tela inicial (lista de projetos)
   homeGlowTop: {
     position: 'absolute',
@@ -2316,7 +2349,7 @@ const studioStyles = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: 24,
-    backgroundColor: 'rgba(255,82,39,0.12)',
+    backgroundColor: 'rgba(180,60,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
@@ -2355,23 +2388,23 @@ const studioStyles = StyleSheet.create({
   },
   buscaInput: { flex: 1, color: COLORS.ink, fontSize: 13, paddingVertical: 0 },
   // Card "Retomar"
-  heroCard: { backgroundColor: '#4a1a26', borderRadius: 28, padding: 18, marginTop: 14, overflow: 'hidden' },
+  heroCard: { backgroundColor: '#3a1d7a', borderRadius: 28, padding: 18, marginTop: 14, overflow: 'hidden' },
   heroMarcaDagua: { position: 'absolute', right: -26, top: -22, opacity: 0.07 },
   heroTopo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   heroSelo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(255,220,210,0.14)',
+    backgroundColor: 'rgba(233,213,255,0.14)',
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  heroSeloTexto: { color: '#ffdcd2', fontSize: 10.5, fontWeight: '800', letterSpacing: 1 },
-  heroTempo: { color: 'rgba(255,220,210,0.7)', fontSize: 11 },
+  heroSeloTexto: { color: '#e9d5ff', fontSize: 10.5, fontWeight: '800', letterSpacing: 1 },
+  heroTempo: { color: 'rgba(233,213,255,0.7)', fontSize: 11 },
   heroCorpo: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
   heroNome: { color: '#ffffff', fontSize: 17.5, fontWeight: '800' },
-  heroPacote: { color: 'rgba(255,220,210,0.7)', fontSize: 11.5, marginTop: 2 },
+  heroPacote: { color: 'rgba(233,213,255,0.7)', fontSize: 11.5, marginTop: 2 },
   heroBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2379,9 +2412,9 @@ const studioStyles = StyleSheet.create({
     gap: 8,
     height: 48,
     borderRadius: 16,
-    backgroundColor: '#ffdcd2',
+    backgroundColor: '#e9d5ff',
   },
-  heroBtnText: { color: '#4a1a26', fontSize: 13, fontWeight: '800' },
+  heroBtnText: { color: '#3a1d7a', fontSize: 13, fontWeight: '800' },
   // Blocos de filtro (Apps / Favoritos / Esta semana)
   tilesLinha: { flexDirection: 'row', gap: 10, marginTop: 14 },
   tile: {
@@ -2392,7 +2425,7 @@ const studioStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'transparent',
   },
-  tileAtivo: { backgroundColor: 'rgba(255,82,39,0.16)', borderColor: 'rgba(255,82,39,0.45)' },
+  tileAtivo: { backgroundColor: 'rgba(180,60,255,0.16)', borderColor: 'rgba(180,60,255,0.45)' },
   tileTopo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   tileNumero: { color: COLORS.ink, fontSize: 23, fontWeight: '800' },
   tileRotulo: { color: COLORS.dim, fontSize: 11, fontWeight: '600', marginTop: 2 },
@@ -2444,26 +2477,26 @@ const studioStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: 'rgba(255,82,39,0.10)',
+    backgroundColor: 'rgba(180,60,255,0.10)',
     borderRadius: 16,
     paddingVertical: 10,
     paddingHorizontal: 14,
     marginBottom: 12,
   },
   avisoTexto: { flex: 1, color: COLORS.ink, fontSize: 11.5, lineHeight: 16 },
-  avisoBtnText: { color: '#ff8a68', fontSize: 11.5, fontWeight: '800' },
+  avisoBtnText: { color: '#d9a2ff', fontSize: 11.5, fontWeight: '800' },
   // Card de apoio
   apoioCard: {
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: 'rgba(255,182,72,0.45)',
+    borderColor: 'rgba(255,122,217,0.45)',
     borderRadius: 22,
     padding: 14,
     marginTop: 8,
   },
   apoioTag: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,182,72,0.14)',
+    backgroundColor: 'rgba(255,122,217,0.14)',
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 3,
@@ -2475,7 +2508,7 @@ const studioStyles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,182,72,0.14)',
+    backgroundColor: 'rgba(255,122,217,0.14)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2483,6 +2516,7 @@ const studioStyles = StyleSheet.create({
   apoioSub: { color: COLORS.dim, fontSize: 11.5, marginTop: 2 },
   // Estado vazio
   vazioBtn: {
+    overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -2492,7 +2526,7 @@ const studioStyles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: COLORS.ember,
   },
-  vazioBtnText: { color: '#1a0806', fontSize: 13, fontWeight: '800' },
+  vazioBtnText: { color: '#ffffff', fontSize: 13, fontWeight: '800' },
   // Barra de baixo
   navHome: {
     flexDirection: 'row',
@@ -2501,7 +2535,7 @@ const studioStyles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 14,
     paddingTop: 8,
-    backgroundColor: '#211210',
+    backgroundColor: '#1a1230',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(255,255,255,0.10)',
   },
@@ -2517,10 +2551,11 @@ const studioStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
   },
-  navAbaAtiva: { backgroundColor: 'rgba(255,82,39,0.20)', borderColor: 'rgba(255,82,39,0.45)' },
+  navAbaAtiva: { backgroundColor: 'rgba(180,60,255,0.20)', borderColor: 'rgba(180,60,255,0.45)' },
   navAbaTexto: { color: COLORS.dim, fontSize: 10.5, fontWeight: '600' },
   navAbaTextoAtivo: { color: COLORS.ink, fontWeight: '700' },
   navBotaoCriar: {
+    overflow: 'hidden',
     flex: 1,
     height: 50,
     borderRadius: 16,
@@ -2535,14 +2570,14 @@ const studioStyles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 6,
   },
-  navBotaoCriarTexto: { color: '#1a0806', fontSize: 12, fontWeight: '800' },
+  navBotaoCriarTexto: { color: '#ffffff', fontSize: 12, fontWeight: '800' },
   // Folha que sobe do rodapé
   folha: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#1e1110',
+    backgroundColor: '#18102e',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderTopWidth: 1,
@@ -2600,12 +2635,12 @@ const studioStyles = StyleSheet.create({
   cfgAba: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, borderRadius: 12 },
   cfgAbaSel: { backgroundColor: COLORS.ember },
   cfgAbaTexto: { color: COLORS.dim, fontSize: 13, fontWeight: '700' },
-  cfgAbaTextoSel: { color: '#1a0806' },
+  cfgAbaTextoSel: { color: '#ffffff' },
   spLiga: {
     flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
   },
-  spLigaIcone: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,82,39,0.12)' },
+  spLigaIcone: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(180,60,255,0.12)' },
   spCelulares: { flexDirection: 'row', justifyContent: 'center', gap: 14, marginTop: 14 },
   spCelular: {
     borderRadius: 26, borderWidth: 3, borderColor: '#34343a', overflow: 'hidden', backgroundColor: '#000',
@@ -2634,7 +2669,7 @@ const studioStyles = StyleSheet.create({
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 11, borderRadius: 14,
     backgroundColor: COLORS.ember,
   },
-  spBtnPrimTexto: { color: '#1a0806', fontSize: 14.5, fontWeight: '800' },
+  spBtnPrimTexto: { color: '#ffffff', fontSize: 14.5, fontWeight: '800' },
   spBtnSec: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.07)' },
   spContador: { color: COLORS.dim, fontSize: 11.5, fontWeight: '700' },
   spCores: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginTop: 12 },
@@ -2645,9 +2680,9 @@ const studioStyles = StyleSheet.create({
   nodoBtnSec: { backgroundColor: 'rgba(255,255,255,0.07)' },
   nodoBtnSecTexto: { color: COLORS.ink, fontSize: 15, fontWeight: '700' },
   nodoBtnPrim: { backgroundColor: COLORS.ember, flexDirection: 'row', gap: 6 },
-  nodoBtnPrimTexto: { color: '#1a0806', fontSize: 15, fontWeight: '800' },
+  nodoBtnPrimTexto: { color: '#ffffff', fontSize: 15, fontWeight: '800' },
   folhaConfirma: { backgroundColor: 'rgba(255,107,107,0.10)', borderRadius: 16, padding: 14 },
-  folhaConfirmaTexto: { color: '#ffb4a8', fontSize: 13.5, lineHeight: 19, marginBottom: 14 },
+  folhaConfirmaTexto: { color: '#e0c3ff', fontSize: 13.5, lineHeight: 19, marginBottom: 14 },
   folhaConfirmaBotoes: { flexDirection: 'row', gap: 10 },
   folhaBtn: {
     flex: 1,
@@ -2753,9 +2788,9 @@ const geradosStyles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 1,
     borderRadius: 7,
-    backgroundColor: 'rgba(255,82,39,0.16)',
+    backgroundColor: 'rgba(180,60,255,0.16)',
   },
-  grupoBadgeTexto: { color: '#ff8a68', fontSize: 10.5, fontWeight: '800' },
+  grupoBadgeTexto: { color: '#d9a2ff', fontSize: 10.5, fontWeight: '800' },
   grupoData: { color: COLORS.dim, fontSize: 10.5 },
   seta: {
     width: 28,
@@ -2792,7 +2827,7 @@ const geradosStyles = StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,82,39,0.12)',
+    backgroundColor: 'rgba(180,60,255,0.12)',
     marginBottom: 14,
   },
   apagarGrupo: { alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8 },
@@ -2827,7 +2862,7 @@ const geradosStyles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: COLORS.ember,
   },
-  barraApagarTexto: { color: '#1a0806', fontSize: 12, fontWeight: '800' },
+  barraApagarTexto: { color: '#ffffff', fontSize: 12, fontWeight: '800' },
 });
 
 // Barra de baixo da tela inicial: abas "Meus apps", "Gerados" e "Aprender" + botão "Criar".
@@ -3199,8 +3234,8 @@ function ConteudoFolhaProjeto({ projeto, onAbrir, onFavoritar, onExcluir, onCanc
               disabled={carregandoVersao || salvandoVersao}
             >
               {salvandoVersao
-                ? <ActivityIndicator size="small" color="#1a0806" />
-                : <Text style={[studioStyles.folhaBtnTexto, { color: '#1a0806', fontWeight: '800' }]}>Salvar</Text>}
+                ? <ActivityIndicator size="small" color="#ffffff" />
+                : <Text style={[studioStyles.folhaBtnTexto, { color: '#ffffff', fontWeight: '800' }]}>Salvar</Text>}
             </TouchableOpacity>
           </View>
         </View>
@@ -3214,7 +3249,7 @@ function ConteudoFolhaProjeto({ projeto, onAbrir, onFavoritar, onExcluir, onCanc
               <Text style={studioStyles.folhaBtnTexto}>Cancelar</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[studioStyles.folhaBtn, studioStyles.folhaBtnPerigo]} onPress={onExcluir} activeOpacity={0.85}>
-              <Text style={[studioStyles.folhaBtnTexto, { color: '#1a0806' }]}>Excluir</Text>
+              <Text style={[studioStyles.folhaBtnTexto, { color: '#ffffff' }]}>Excluir</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -3259,7 +3294,7 @@ function IconeAppStudio({ dados, lado = 52, icone = 28, raio = 16 }) {
       <Image
         source={{ uri: uriFoto }}
         onError={() => setFalhou(true)}
-        style={{ width: lado, height: lado, borderRadius: raio, backgroundColor: '#1a0f0e' }}
+        style={{ width: lado, height: lado, borderRadius: raio, backgroundColor: '#140d28' }}
       />
     );
   }
@@ -3274,7 +3309,7 @@ function IconeAppStudio({ dados, lado = 52, icone = 28, raio = 16 }) {
         justifyContent: 'center',
       }}
     >
-      <MaterialCommunityIcons name={(dados && dados.iconeEscolhido) || ICONES_APP_STUDIO[0]} size={icone} color="#1a0806" />
+      <MaterialCommunityIcons name={(dados && dados.iconeEscolhido) || ICONES_APP_STUDIO[0]} size={icone} color="#ffffff" />
     </View>
   );
 }
@@ -5021,7 +5056,7 @@ const aprenderStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.10)',
   },
-  chipAtivo: { backgroundColor: 'rgba(255,82,39,0.20)', borderColor: 'rgba(255,82,39,0.55)' },
+  chipAtivo: { backgroundColor: 'rgba(180,60,255,0.20)', borderColor: 'rgba(180,60,255,0.55)' },
   chipTexto: { color: COLORS.dim, fontSize: 11.5, fontWeight: '600' },
   chipTextoAtivo: { color: COLORS.ink, fontWeight: '700' },
   painel: {
@@ -5038,9 +5073,9 @@ const aprenderStyles = StyleSheet.create({
     marginTop: 10,
     padding: 10,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,182,72,0.10)',
+    backgroundColor: 'rgba(255,122,217,0.10)',
     borderWidth: 1,
-    borderColor: 'rgba(255,182,72,0.25)',
+    borderColor: 'rgba(255,122,217,0.25)',
     color: COLORS.gold,
     fontSize: 11,
     lineHeight: 16,
@@ -5057,15 +5092,15 @@ const aprenderStyles = StyleSheet.create({
     backgroundColor: COLORS.ember,
   },
   copiarBtnOk: { backgroundColor: COLORS.gold },
-  copiarTexto: { color: '#1a0806', fontSize: 11.5, fontWeight: '800' },
+  copiarTexto: { color: '#ffffff', fontSize: 11.5, fontWeight: '800' },
   codigoCaixa: {
     borderRadius: 12,
-    backgroundColor: '#0d0707',
+    backgroundColor: '#0a0618',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
   codigoTexto: {
-    color: '#e8dcd9',
+    color: '#e2d9f3',
     fontSize: 10.5,
     lineHeight: 16,
     fontFamily: FONTE_MONO,
@@ -7803,8 +7838,8 @@ function CindraStudioScreen({ visible, onClose }) {
         activeOpacity={0.85}
       >
         <View style={studioStyles.tileTopo}>
-          <Text style={[studioStyles.tileNumero, ativo && { color: '#ff8a68' }]}>{numero}</Text>
-          <MaterialCommunityIcons name={icone} size={20} color={ativo ? '#ff8a68' : COLORS.dim} />
+          <Text style={[studioStyles.tileNumero, ativo && { color: '#d9a2ff' }]}>{numero}</Text>
+          <MaterialCommunityIcons name={icone} size={20} color={ativo ? '#d9a2ff' : COLORS.dim} />
         </View>
         <Text style={[studioStyles.tileRotulo, ativo && { color: COLORS.ink }]}>{rotulo}</Text>
       </TouchableOpacity>
@@ -7813,6 +7848,7 @@ function CindraStudioScreen({ visible, onClose }) {
 
   const renderHero = () => (
     <View style={studioStyles.heroCard}>
+      <Grad cores={GRAD_LOGO_ESCURO} />
       <MaterialCommunityIcons
         name={ultimoProjeto.iconeEscolhido || ICONES_APP_STUDIO[0]}
         size={170}
@@ -7821,7 +7857,7 @@ function CindraStudioScreen({ visible, onClose }) {
       />
       <View style={studioStyles.heroTopo}>
         <View style={studioStyles.heroSelo}>
-          <MaterialCommunityIcons name="lightning-bolt" size={13} color="#ffdcd2" />
+          <MaterialCommunityIcons name="lightning-bolt" size={13} color="#e9d5ff" />
           <Text style={studioStyles.heroSeloTexto}>RETOMAR</Text>
         </View>
         {!!ultimoProjeto.atualizadoEm && (
@@ -7840,7 +7876,7 @@ function CindraStudioScreen({ visible, onClose }) {
         onPress={() => abrirProjetoDaLista(ultimoProjeto.pacote)}
         activeOpacity={0.85}
       >
-        <MaterialCommunityIcons name="play" size={20} color="#4a1a26" />
+        <MaterialCommunityIcons name="play" size={20} color="#3a1d7a" />
         <Text style={studioStyles.heroBtnText}>Continuar editando</Text>
       </TouchableOpacity>
     </View>
@@ -7913,7 +7949,8 @@ function CindraStudioScreen({ visible, onClose }) {
               Crie um projeto Android, edite o código e gere o APK direto do celular.
             </Text>
             <TouchableOpacity style={studioStyles.vazioBtn} onPress={abrirTelaConfigNova} activeOpacity={0.85}>
-              <MaterialCommunityIcons name="plus" size={22} color="#1a0806" />
+              <Grad />
+              <MaterialCommunityIcons name="plus" size={22} color="#ffffff" />
               <Text style={studioStyles.vazioBtnText}>Criar app</Text>
             </TouchableOpacity>
           </View>
@@ -7953,7 +7990,7 @@ function CindraStudioScreen({ visible, onClose }) {
 
             {!buscando && avisoRecuperarVisivel && (
               <View style={studioStyles.avisoCard}>
-                <MaterialCommunityIcons name="history" size={22} color="#ff8a68" />
+                <MaterialCommunityIcons name="history" size={22} color="#d9a2ff" />
                 <Text style={studioStyles.avisoTexto}>Tem projetos de uma versão anterior? Eles podem ser recuperados.</Text>
                 <TouchableOpacity onPress={dispensarAvisoRecuperar} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                   <Text style={studioStyles.avisoBtnText}>Dispensar</Text>
@@ -8028,7 +8065,7 @@ function CindraStudioScreen({ visible, onClose }) {
                   onPress={() => copiarBloco(chave, bloco.codigo)}
                   activeOpacity={0.85}
                 >
-                  <MaterialCommunityIcons name={copiado ? 'check' : 'content-copy'} size={16} color="#1a0806" />
+                  <MaterialCommunityIcons name={copiado ? 'check' : 'content-copy'} size={16} color="#ffffff" />
                   <Text style={aprenderStyles.copiarTexto}>{copiado ? 'Copiado!' : 'Copiar'}</Text>
                 </TouchableOpacity>
               </View>
@@ -8159,7 +8196,7 @@ function CindraStudioScreen({ visible, onClose }) {
                           return (
                             <TouchableOpacity
                               key={b.id}
-                              style={[geradosStyles.buildLinha, marcado && { backgroundColor: 'rgba(255,82,39,0.10)' }]}
+                              style={[geradosStyles.buildLinha, marcado && { backgroundColor: 'rgba(180,60,255,0.10)' }]}
                               activeOpacity={modoSelecaoBuilds ? 0.7 : 1}
                               onPress={() => { if (modoSelecaoBuilds) alternarSelecaoBuild(b.id); }}
                               onLongPress={() => { if (!modoSelecaoBuilds) iniciarSelecaoBuilds(b.id); }}
@@ -8198,7 +8235,7 @@ function CindraStudioScreen({ visible, onClose }) {
                                     onPress={() => tocarLixeiraBuild(b)}
                                     activeOpacity={0.8}
                                   >
-                                    <MaterialCommunityIcons name={armado ? 'check' : 'trash-can-outline'} size={17} color={armado ? '#1a0806' : COLORS.error} />
+                                    <MaterialCommunityIcons name={armado ? 'check' : 'trash-can-outline'} size={17} color={armado ? '#ffffff' : COLORS.error} />
                                   </TouchableOpacity>
                                 </>
                               )}
@@ -8244,7 +8281,7 @@ function CindraStudioScreen({ visible, onClose }) {
               disabled={!qtdSel}
               activeOpacity={0.85}
             >
-              <MaterialCommunityIcons name="trash-can-outline" size={18} color="#1a0806" />
+              <MaterialCommunityIcons name="trash-can-outline" size={18} color="#ffffff" />
               <Text style={geradosStyles.barraApagarTexto} numberOfLines={1}>
                 {confirmarApagarLote ? `Confirmar: apagar ${qtdSel}` : qtdSel ? `Apagar ${qtdSel}` : 'Apagar'}
               </Text>
@@ -8288,7 +8325,7 @@ function CindraStudioScreen({ visible, onClose }) {
                     onPress={() => setExemploAberto(ativo ? null : item.id)}
                     activeOpacity={0.8}
                   >
-                    <MaterialCommunityIcons name={item.icone} size={16} color={ativo ? '#ff8a68' : COLORS.dim} />
+                    <MaterialCommunityIcons name={item.icone} size={16} color={ativo ? '#d9a2ff' : COLORS.dim} />
                     <Text style={[aprenderStyles.chipTexto, ativo && aprenderStyles.chipTextoAtivo]}>{item.titulo}</Text>
                   </TouchableOpacity>
                 );
@@ -8308,7 +8345,8 @@ function CindraStudioScreen({ visible, onClose }) {
         if (a.especial) {
           return (
             <TouchableOpacity key={a.id} style={studioStyles.navBotaoCriar} onPress={abrirTelaConfigNova} activeOpacity={0.85}>
-              <MaterialCommunityIcons name="plus" size={20} color="#1a0806" />
+              <Grad />
+              <MaterialCommunityIcons name="plus" size={20} color="#ffffff" />
               <Text style={studioStyles.navBotaoCriarTexto} numberOfLines={1}>{a.rotulo}</Text>
             </TouchableOpacity>
           );
@@ -8319,7 +8357,7 @@ function CindraStudioScreen({ visible, onClose }) {
             <MaterialCommunityIcons
               name={ativo ? a.iconeAtivo : a.icone}
               size={20}
-              color={ativo ? '#ff8a68' : COLORS.dim}
+              color={ativo ? '#d9a2ff' : COLORS.dim}
             />
             <Text style={[studioStyles.navAbaTexto, ativo && studioStyles.navAbaTextoAtivo]} numberOfLines={1}>{a.rotulo}</Text>
           </TouchableOpacity>
@@ -8387,7 +8425,7 @@ function CindraStudioScreen({ visible, onClose }) {
                   onPress={() => BackHandler.exitApp()}
                   activeOpacity={0.85}
                 >
-                  <Text style={[studioStyles.folhaBtnTexto, { color: '#1a0806' }]}>Sair</Text>
+                  <Text style={[studioStyles.folhaBtnTexto, { color: '#ffffff' }]}>Sair</Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -8420,7 +8458,7 @@ function CindraStudioScreen({ visible, onClose }) {
                   onPress={() => { abrirConfigAcessoArquivos(); }}
                   activeOpacity={0.85}
                 >
-                  <Text style={[studioStyles.folhaBtnTexto, { color: '#1a0806' }]}>Liberar</Text>
+                  <Text style={[studioStyles.folhaBtnTexto, { color: '#ffffff' }]}>Liberar</Text>
                 </TouchableOpacity>
               </View>
               <TouchableOpacity
@@ -8496,8 +8534,8 @@ function CindraStudioScreen({ visible, onClose }) {
             )}
             <View style={studioStyles.cfgIconeBadge}>
               {processandoFoto
-                ? <ActivityIndicator size="small" color="#1a0806" />
-                : <MaterialCommunityIcons name="camera-plus-outline" size={17} color="#1a0806" />}
+                ? <ActivityIndicator size="small" color="#ffffff" />
+                : <MaterialCommunityIcons name="camera-plus-outline" size={17} color="#ffffff" />}
             </View>
           </TouchableOpacity>
           <Text style={studioStyles.previewName} numberOfLines={1}>{nomeApp.trim() || 'Meu App'}</Text>
@@ -8619,9 +8657,10 @@ function CindraStudioScreen({ visible, onClose }) {
       {!tecladoVisivel && (
         <View style={[studioStyles.cfgFooter, { paddingBottom: Math.max(insets.bottom, 12) + 4 }]}>
           <TouchableOpacity style={[studioStyles.criarBtn, criandoProjeto && { opacity: 0.7 }]} onPress={criarProjeto} activeOpacity={0.85} disabled={criandoProjeto}>
+            <Grad />
             {criandoProjeto
-              ? <ActivityIndicator size="small" color="#1a0806" />
-              : <MaterialCommunityIcons name="rocket-launch-outline" size={19} color="#1a0806" />}
+              ? <ActivityIndicator size="small" color="#ffffff" />
+              : <MaterialCommunityIcons name="rocket-launch-outline" size={19} color="#ffffff" />}
             <Text style={studioStyles.criarBtnText}>Criar projeto</Text>
           </TouchableOpacity>
         </View>
@@ -8974,7 +9013,7 @@ function CindraStudioScreen({ visible, onClose }) {
                     {destaqueLinha >= 0 && destaqueLinha < numeroDeLinhas && (
                       <Animated.View
                         pointerEvents="none"
-                        style={{ position: 'absolute', left: 0, width: larguraCodigo, top: 14 + destaqueLinha * alturaLinhaEditor, height: alturaLinhaEditor, backgroundColor: 'rgba(255,182,72,0.16)', opacity: destaqueAnim }}
+                        style={{ position: 'absolute', left: 0, width: larguraCodigo, top: 14 + destaqueLinha * alturaLinhaEditor, height: alturaLinhaEditor, backgroundColor: 'rgba(255,122,217,0.16)', opacity: destaqueAnim }}
                       />
                     )}
                     {!marcasErroOcultas && errosArquivo.map((e, k) => {
@@ -9069,7 +9108,7 @@ function CindraStudioScreen({ visible, onClose }) {
             Abra a pasta do projeto pra escolher um arquivo e começar a editar.
           </Text>
           <TouchableOpacity style={studioStyles.emptyEditorBtn} onPress={() => setSidebarAberta(true)} activeOpacity={0.85}>
-            <MaterialCommunityIcons name="folder-outline" size={16} color="#1a0806" />
+            <MaterialCommunityIcons name="folder-outline" size={16} color="#ffffff" />
             <Text style={studioStyles.emptyEditorBtnText}>Ver arquivos</Text>
           </TouchableOpacity>
         </View>
@@ -9425,7 +9464,7 @@ function CindraStudioScreen({ visible, onClose }) {
                         disabled={!nomeLimpo}
                         activeOpacity={0.85}
                       >
-                        <MaterialCommunityIcons name="check" size={18} color="#1a0806" />
+                        <MaterialCommunityIcons name="check" size={18} color="#ffffff" />
                         <Text style={studioStyles.nodoBtnPrimTexto}>Criar pasta</Text>
                       </TouchableOpacity>
                     </View>
@@ -9558,7 +9597,7 @@ function CindraStudioScreen({ visible, onClose }) {
                 onPress={() => { fechar(); setTimeout(() => compilarProjeto(tipoBuild), 260); }}
                 activeOpacity={0.85}
               >
-                <MaterialCommunityIcons name="play-circle-outline" size={18} color="#1a0806" />
+                <MaterialCommunityIcons name="play-circle-outline" size={18} color="#ffffff" />
                 <Text style={studioStyles.instalarBtnText}>{tipoBuild === 'release' ? 'Compilar release' : 'Compilar debug'}</Text>
               </TouchableOpacity>
             </>
@@ -9732,7 +9771,7 @@ function CindraStudioScreen({ visible, onClose }) {
 
               {apkGerado && !compilando && (
                 <TouchableOpacity style={[studioStyles.instalarBtn, { shadowColor: '#8bd450', shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 }]} onPress={instalarApk} activeOpacity={0.85}>
-                  <MaterialCommunityIcons name="cellphone-arrow-down" size={18} color="#1a0806" />
+                  <MaterialCommunityIcons name="cellphone-arrow-down" size={18} color="#ffffff" />
                   <Text style={studioStyles.instalarBtnText}>Instalar APK</Text>
                 </TouchableOpacity>
               )}
