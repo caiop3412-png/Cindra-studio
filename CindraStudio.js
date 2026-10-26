@@ -12,6 +12,7 @@ import {
   Easing,
   ActivityIndicator,
   AppState,
+  Alert,
   Linking,
   Switch,
   PixelRatio,
@@ -6070,6 +6071,17 @@ function AtualizacaoForcada() {
       if (ouvinte && ouvinte.remove) ouvinte.remove();
     };
   }, []);
+
+  // pop-up pedindo pra atualizar (além da tela de bloqueio)
+  useEffect(() => {
+    if (!pendente) return;
+    Alert.alert(
+      'Atualização disponível',
+      'Tem uma versão nova do Cindra Studio. Toque em Atualizar para continuar.',
+      [{ text: 'Atualizar', onPress: () => { atualizar(); } }],
+      { cancelable: false }
+    );
+  }, [pendente]);
 
   // enquanto tiver atualização pendente, o botão voltar não fecha o bloqueio
   useEffect(() => {
