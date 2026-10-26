@@ -4,7 +4,7 @@ import {
   Text,
   View,
   TextInput,
-  TouchableOpacity,
+  TouchableOpacity as TouchableOpacityBase,
   Platform,
   ScrollView,
   Pressable,
@@ -111,6 +111,40 @@ const COLORS = {
   syntaxTag: '#8fd6ff',
   syntaxAttr: '#c9a7ff',
 };
+
+// Botão com animação: afunda quando o dedo encosta e, ao clicar, SOBE e DESCE
+// (pulinho com molinha). Todos os <TouchableOpacity> do arquivo usam este
+// componente (mesma API do original).
+const TouchableAnimado = Animated.createAnimatedComponent(TouchableOpacityBase);
+function TouchableOpacity({ style, onPress, onPressIn, onPressOut, ...resto }) {
+  const escala = useRef(new Animated.Value(1)).current;
+  const subida = useRef(new Animated.Value(0)).current;
+  const apertar = (e) => {
+    Animated.spring(escala, { toValue: 0.94, speed: 60, bounciness: 0, useNativeDriver: true }).start();
+    if (onPressIn) onPressIn(e);
+  };
+  const soltar = (e) => {
+    Animated.spring(escala, { toValue: 1, speed: 18, bounciness: 16, useNativeDriver: true }).start();
+    if (onPressOut) onPressOut(e);
+  };
+  const clicar = (e) => {
+    subida.stopAnimation();
+    Animated.sequence([
+      Animated.timing(subida, { toValue: -7, duration: 90, useNativeDriver: true }),
+      Animated.spring(subida, { toValue: 0, speed: 14, bounciness: 18, useNativeDriver: true }),
+    ]).start();
+    if (onPress) onPress(e);
+  };
+  return (
+    <TouchableAnimado
+      {...resto}
+      style={[style, { transform: [{ translateY: subida }, { scale: escala }] }]}
+      onPress={clicar}
+      onPressIn={apertar}
+      onPressOut={soltar}
+    />
+  );
+}
 
 // Cores misturadas do logo da Cindra (azul -> roxo -> rosa).
 const GRAD_LOGO = ['#3b4bff', '#8b3dff', '#ff2fc6'];
@@ -257,6 +291,42 @@ function FundoVivo() {
       ))}
     </View>
   );
+}
+
+// ─────────────────────────────────────────────────────────
+// Entrada aleatória de tela: cada vez que uma tela aparece, sorteia um jeito
+// de chegar (vindo de baixo, de cima, da esquerda, da direita, balançando
+// girando ou com zoom) e se estabiliza com uma molinha (passa um pouco do
+// ponto, balança e assenta).
+// ─────────────────────────────────────────────────────────
+function EntradaAleatoria({ children, animar = true, style }) {
+  const { width, height } = useWindowDimensions();
+  const [tipo] = useState(() => Math.floor(Math.random() * 6));
+  const t = useRef(new Animated.Value(animar ? 0 : 1)).current;
+
+  useEffect(() => {
+    if (!animar) return undefined;
+    const anim = Animated.spring(t, { toValue: 1, friction: 5.5, tension: 42, useNativeDriver: true });
+    anim.start();
+    return () => anim.stop();
+  }, []);
+
+  const de = (inicio) => t.interpolate({ inputRange: [0, 1], outputRange: [inicio, 0] });
+  const opacidade = t.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0, 1, 1], extrapolate: 'clamp' });
+  let transform;
+  if (tipo === 0) transform = [{ translateY: de(height * 0.7) }]; // de baixo
+  else if (tipo === 1) transform = [{ translateX: de(-width) }]; // da esquerda
+  else if (tipo === 2) transform = [{ translateX: de(width) }]; // da direita
+  else if (tipo === 3) {
+    // balançando: sobe girando e vai balançando até parar
+    transform = [
+      { translateY: de(height * 0.25) },
+      { rotate: t.interpolate({ inputRange: [0, 1], outputRange: ['-9deg', '0deg'] }) },
+    ];
+  } else if (tipo === 4) transform = [{ scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }]; // zoom
+  else transform = [{ translateY: de(-height * 0.4) }]; // de cima
+
+  return <Animated.View style={[style, { opacity: opacidade, transform }]}>{children}</Animated.View>;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -5938,6 +6008,9 @@ function CindraStudioScreen({ visible, onClose }) {
   const buildsRef = useRef([]);
   buildsRef.current = builds;
   const [abaHome, setAbaHome] = useState('apps'); // barra de baixo da tela inicial: 'apps' | 'gerados' | 'aprender'
+  const abaAnteriorRef = useRef('apps');
+  const trocouAba = abaAnteriorRef.current !== abaHome;
+  useEffect(() => { abaAnteriorRef.current = abaHome; }, [abaHome]);
   const [exemploAberto, setExemploAberto] = useState(null); // id do exemplo aberto na aba Aprender
   const [copiadoChave, setCopiadoChave] = useState(null); // bloco que acabou de ser copiado (mostra "Copiado!")
   const [confirmarSaida, setConfirmarSaida] = useState(false); // folha "Sair do app?" (botão voltar na tela inicial)
@@ -8484,7 +8557,9 @@ function CindraStudioScreen({ visible, onClose }) {
   const renderHome = () => (
     <>
 
-      {abaHome === 'aprender' ? renderAbaAprender() : abaHome === 'gerados' ? renderAbaGerados() : renderAbaApps()}
+      <EntradaAleatoria key={abaHome} animar={trocouAba} style={{ flex: 1 }}>
+        {abaHome === 'aprender' ? renderAbaAprender() : abaHome === 'gerados' ? renderAbaGerados() : renderAbaApps()}
+      </EntradaAleatoria>
 
       {renderNavHome()}
 
@@ -9910,7 +9985,9 @@ function CindraStudioScreen({ visible, onClose }) {
   return (
     <View style={{ flex: 1, backgroundColor: '#000000', paddingTop: insets.top }}>
       {etapa !== 'workspace' && <FundoVivo />}
-      {etapa === 'home' ? renderHome() : etapa === 'config' ? renderConfig() : renderWorkspace()}
+      <EntradaAleatoria key={etapa} style={{ flex: 1 }}>
+        {etapa === 'home' ? renderHome() : etapa === 'config' ? renderConfig() : renderWorkspace()}
+      </EntradaAleatoria>
     </View>
   );
 }
