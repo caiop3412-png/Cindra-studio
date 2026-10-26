@@ -9058,46 +9058,6 @@ function CindraStudioScreen({ visible, onClose }) {
             </View>
           </ItemAnimadoStudio>
 
-          {editorFocado && tecladoVisivel && (
-            <View style={studioStyles.symBarra}>
-              {sugestoesAuto.length > 0 && (
-                <ScrollView
-                  horizontal
-                  keyboardShouldPersistTaps="always"
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={studioStyles.symLinha}
-                  style={{ borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}
-                >
-                  {sugestoesAuto.map((s) => (
-                    <TouchableOpacity key={s.chave} style={[studioStyles.symTecla, s.tipo === 'snippet' && studioStyles.symTeclaDestaque]} onPress={() => aplicarSugestao(s)} activeOpacity={0.7}>
-                      {s.tipo === 'snippet' && <MaterialCommunityIcons name="lightning-bolt" size={13} color={COLORS.ember} />}
-                      <Text style={[studioStyles.symTeclaTexto, { fontSize: 13 }]}>{s.rotulo}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              )}
-              <ScrollView horizontal keyboardShouldPersistTaps="always" showsHorizontalScrollIndicator={false} contentContainerStyle={studioStyles.symLinha}>
-                <TouchableOpacity style={[studioStyles.symTecla, studioStyles.symTeclaDestaque]} onPress={() => setSnippetsAberto(true)} activeOpacity={0.7}>
-                  <MaterialCommunityIcons name="lightning-bolt-outline" size={16} color={COLORS.ember} />
-                  <Text style={[studioStyles.symTeclaTexto, { fontSize: 12.5 }]}>Snippets</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={studioStyles.symTecla} onPress={() => inserirSimbolo('    ')} activeOpacity={0.7}>
-                  <MaterialCommunityIcons name="keyboard-tab" size={17} color={COLORS.ink} />
-                </TouchableOpacity>
-                <TouchableOpacity style={studioStyles.symTecla} onPress={() => moverCursorTecla(-1)} activeOpacity={0.7}>
-                  <MaterialCommunityIcons name="chevron-left" size={19} color={COLORS.ink} />
-                </TouchableOpacity>
-                <TouchableOpacity style={studioStyles.symTecla} onPress={() => moverCursorTecla(1)} activeOpacity={0.7}>
-                  <MaterialCommunityIcons name="chevron-right" size={19} color={COLORS.ink} />
-                </TouchableOpacity>
-                {SIMBOLOS_EDITOR.map((s) => (
-                  <TouchableOpacity key={s} style={studioStyles.symTecla} onPress={() => inserirSimbolo(s)} activeOpacity={0.7}>
-                    <Text style={studioStyles.symTeclaTexto}>{s}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          )}
         </View>
       ) : (
         <View style={studioStyles.emptyEditor}>
