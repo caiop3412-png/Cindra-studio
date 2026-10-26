@@ -2010,6 +2010,110 @@ const studioStyles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.06)',
   },
   pathBarText: { flex: 1, color: COLORS.dim, fontSize: 11 },
+  // ---- Ferramentas do editor: buscar/substituir, ir para linha, símbolos ----
+  pathBtn: { width: 28, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  pathBtnAtivo: { backgroundColor: 'rgba(255,82,39,0.18)' },
+  edBarra: {
+    backgroundColor: '#111113',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 7,
+  },
+  edLinha: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  edInput: {
+    flex: 1,
+    height: 36,
+    borderRadius: 10,
+    paddingHorizontal: 11,
+    paddingVertical: 0,
+    color: COLORS.ink,
+    fontSize: 14,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  edContador: { color: COLORS.dim, fontSize: 12, minWidth: 40, textAlign: 'center' },
+  edIconBtn: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.06)' },
+  edChip: {
+    paddingHorizontal: 11,
+    height: 30,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  edChipAtivo: { backgroundColor: 'rgba(255,82,39,0.16)', borderColor: 'rgba(255,82,39,0.5)' },
+  edChipTexto: { color: COLORS.dim, fontSize: 12.5, fontWeight: '700' },
+  edChipTextoAtivo: { color: COLORS.ink },
+  edBotaoAcao: { paddingHorizontal: 12, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.ember },
+  edBotaoAcaoTexto: { color: '#1a0806', fontSize: 12.5, fontWeight: '800' },
+  edBotaoPerigo: { backgroundColor: '#ff6b6b' },
+  edResultados: { maxHeight: 190, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.04)' },
+  edResResumo: { color: COLORS.dim, fontSize: 11.5, paddingHorizontal: 10, paddingVertical: 7 },
+  edResArquivo: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingTop: 8, paddingBottom: 3 },
+  edResArquivoTexto: { flex: 1, color: COLORS.ink, fontSize: 11.5, fontWeight: '700' },
+  edResItem: { flexDirection: 'row', gap: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  edResLinha: { color: COLORS.ember, fontSize: 11.5, fontWeight: '700', minWidth: 30, textAlign: 'right' },
+  edResTrecho: { flex: 1, color: COLORS.dim, fontSize: 12, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  edErroBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: 'rgba(255,107,107,0.12)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,107,107,0.35)',
+  },
+  edErroTexto: { color: '#ffb4ab', fontSize: 12, lineHeight: 16 },
+  symBarra: { backgroundColor: '#141416', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)' },
+  symLinha: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 5, gap: 5 },
+  symTecla: {
+    minWidth: 36,
+    height: 34,
+    paddingHorizontal: 8,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  symTeclaDestaque: { backgroundColor: 'rgba(255,82,39,0.16)', borderColor: 'rgba(255,82,39,0.5)' },
+  symTeclaTexto: { color: COLORS.ink, fontSize: 16, fontWeight: '600', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  zoomBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.78)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+  },
+  zoomBadgeTexto: { color: COLORS.ink, fontSize: 12.5, fontWeight: '800' },
+  snipItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  snipIcone: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,82,39,0.14)' },
+  snipNome: { color: COLORS.ink, fontSize: 14, fontWeight: '700' },
+  snipDesc: { color: COLORS.dim, fontSize: 12, marginTop: 1 },
+  snipGatilho: { color: COLORS.dim, fontSize: 11.5, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
   editorRow: { flexDirection: 'row', minHeight: '100%' },
   lineNumbers: { paddingVertical: 14, paddingHorizontal: 8, backgroundColor: '#0a0a0c', borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.05)' },
   lineNumberText: { color: 'rgba(255,255,255,0.28)', fontSize: 13, lineHeight: 20, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', textAlign: 'right' },
@@ -5059,6 +5163,433 @@ function diffTexto(antes, depois) {
   return { p, removido: antes.slice(p, antes.length - q), inserido: depois.slice(p, depois.length - q) };
 }
 
+// ─────────────────────────────────────────────────────────
+// Ferramentas do editor: zoom, buscar/substituir, snippets e
+// autocompletar, barra de símbolos, ir para linha, erro na linha.
+// ─────────────────────────────────────────────────────────
+const ZOOM_MIN_EDITOR = 0.7;
+const ZOOM_MAX_EDITOR = 2.4;
+
+// Teclas da barra acima do teclado: cada uma insere exatamente o que mostra.
+const SIMBOLOS_EDITOR = ['{', '}', '(', ')', ';', '<', '>', '"', '=', '/', '[', ']', '.', ',', "'", '!', '&', '|', '+', '-', '*', '_', ':', '@', '#', '\\', '?', '%', '$'];
+
+// Snippets de Java. "g" = gatilho (o que a pessoa digita pra aparecer na
+// barra), "$0" = onde o cursor fica depois de inserir. Só usam o que existe
+// no Android puro (Activity, android.widget...), igual ao projeto novo.
+const SNIPPETS_JAVA_STUDIO = [
+  { g: 'oncreate', nome: 'onCreate', desc: 'Início da tela (Activity)', corpo: `@Override
+protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    $0
+}` },
+  { g: 'onstart', nome: 'onStart', desc: 'Tela ficou visível', corpo: `@Override
+protected void onStart() {
+    super.onStart();
+    $0
+}` },
+  { g: 'onresume', nome: 'onResume', desc: 'Tela voltou pro primeiro plano', corpo: `@Override
+protected void onResume() {
+    super.onResume();
+    $0
+}` },
+  { g: 'onpause', nome: 'onPause', desc: 'Tela vai pra segundo plano', corpo: `@Override
+protected void onPause() {
+    super.onPause();
+    $0
+}` },
+  { g: 'onstop', nome: 'onStop', desc: 'Tela deixou de ser visível', corpo: `@Override
+protected void onStop() {
+    super.onStop();
+    $0
+}` },
+  { g: 'ondestroy', nome: 'onDestroy', desc: 'Tela vai ser fechada', corpo: `@Override
+protected void onDestroy() {
+    super.onDestroy();
+    $0
+}` },
+  { g: 'onback', nome: 'onBackPressed', desc: 'Botão voltar do celular', corpo: `@Override
+public void onBackPressed() {
+    $0
+    super.onBackPressed();
+}` },
+  { g: 'onresult', nome: 'onActivityResult', desc: 'Resultado de outra tela', corpo: `@Override
+protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+    super.onActivityResult(requestCode, resultCode, data);
+    $0
+}` },
+  { g: 'onperm', nome: 'onRequestPermissionsResult', desc: 'Resposta do pedido de permissão', corpo: `@Override
+public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    $0
+}` },
+  { g: 'toast', nome: 'Toast', desc: 'Mensagem rápida na tela', corpo: `Toast.makeText(this, "$0", Toast.LENGTH_SHORT).show();` },
+  { g: 'toastlong', nome: 'Toast longo', desc: 'Mensagem que dura mais', corpo: `Toast.makeText(this, "$0", Toast.LENGTH_LONG).show();` },
+  { g: 'intent', nome: 'Intent (abrir tela)', desc: 'Abre outra Activity', corpo: `Intent intent = new Intent(this, $0.class);
+startActivity(intent);` },
+  { g: 'intentextra', nome: 'Intent com dado', desc: 'Manda um texto pra outra tela', corpo: `Intent intent = new Intent(this, $0.class);
+intent.putExtra("chave", "valor");
+startActivity(intent);` },
+  { g: 'getextra', nome: 'Receber dado do Intent', desc: 'Lê o texto mandado pela outra tela', corpo: `String valor = getIntent().getStringExtra("$0");` },
+  { g: 'intenturl', nome: 'Abrir link', desc: 'Abre um site no navegador', corpo: `Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://$0"));
+startActivity(intent);` },
+  { g: 'intentshare', nome: 'Compartilhar texto', desc: 'Menu de compartilhar do Android', corpo: `Intent intent = new Intent(Intent.ACTION_SEND);
+intent.setType("text/plain");
+intent.putExtra(Intent.EXTRA_TEXT, "$0");
+startActivity(Intent.createChooser(intent, "Compartilhar"));` },
+  { g: 'findview', nome: 'findViewById', desc: 'Pega uma view do layout XML', corpo: `View view = findViewById(R.id.$0);` },
+  { g: 'onclick', nome: 'setOnClickListener', desc: 'Ação ao tocar numa view', corpo: `botao.setOnClickListener(new View.OnClickListener() {
+    @Override
+    public void onClick(View v) {
+        $0
+    }
+});` },
+  { g: 'log', nome: 'Log.d', desc: 'Mensagem de depuração', corpo: `Log.d("TAG", "$0");` },
+  { g: 'prefsave', nome: 'Salvar preferência', desc: 'SharedPreferences (gravar)', corpo: `SharedPreferences prefs = getSharedPreferences("config", MODE_PRIVATE);
+prefs.edit().putString("chave", "$0").apply();` },
+  { g: 'prefget', nome: 'Ler preferência', desc: 'SharedPreferences (ler)', corpo: `String valor = getSharedPreferences("config", MODE_PRIVATE).getString("chave", "$0");` },
+  { g: 'handler', nome: 'Handler (esperar)', desc: 'Roda algo depois de 1 segundo', corpo: `new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+    @Override
+    public void run() {
+        $0
+    }
+}, 1000);` },
+  { g: 'thread', nome: 'Thread', desc: 'Roda algo em segundo plano', corpo: `new Thread(new Runnable() {
+    @Override
+    public void run() {
+        $0
+    }
+}).start();` },
+  { g: 'runui', nome: 'runOnUiThread', desc: 'Volta pra thread da tela', corpo: `runOnUiThread(new Runnable() {
+    @Override
+    public void run() {
+        $0
+    }
+});` },
+  { g: 'dialog', nome: 'AlertDialog', desc: 'Janelinha com título e botão', corpo: `new AlertDialog.Builder(this)
+    .setTitle("Título")
+    .setMessage("$0")
+    .setPositiveButton("OK", null)
+    .show();` },
+  { g: 'vibrar', nome: 'Vibrar', desc: 'Faz o celular vibrar', corpo: `Vibrator vibrador = (Vibrator) getSystemService(VIBRATOR_SERVICE);
+vibrador.vibrate(300);$0` },
+  { g: 'permissao', nome: 'Pedir permissão', desc: 'Checa e pede uma permissão', corpo: `if (checkSelfPermission(Manifest.permission.$0) != PackageManager.PERMISSION_GRANTED) {
+    requestPermissions(new String[]{Manifest.permission.CAMERA}, 1);
+}` },
+  { g: 'webview', nome: 'WebView', desc: 'Mostra um site dentro do app', corpo: `WebView web = new WebView(this);
+web.getSettings().setJavaScriptEnabled(true);
+web.loadUrl("https://$0");
+setContentView(web);` },
+  { g: 'fullscreen', nome: 'Tela cheia', desc: 'Esconde barras do sistema', corpo: `getWindow().getDecorView().setSystemUiVisibility(
+    View.SYSTEM_UI_FLAG_FULLSCREEN
+    | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+    | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);$0` },
+  { g: 'layout', nome: 'LinearLayout em código', desc: 'Cria a tela sem XML', corpo: `LinearLayout layout = new LinearLayout(this);
+layout.setOrientation(LinearLayout.VERTICAL);
+layout.setPadding(32, 32, 32, 32);
+setContentView(layout);$0` },
+  { g: 'textview', nome: 'TextView em código', desc: 'Adiciona um texto no layout', corpo: `TextView texto = new TextView(this);
+texto.setText("$0");
+layout.addView(texto);` },
+  { g: 'button', nome: 'Button em código', desc: 'Adiciona um botão no layout', corpo: `Button botao = new Button(this);
+botao.setText("$0");
+layout.addView(botao);` },
+  { g: 'edittext', nome: 'EditText em código', desc: 'Adiciona um campo de texto', corpo: `EditText campo = new EditText(this);
+campo.setHint("$0");
+layout.addView(campo);` },
+  { g: 'for', nome: 'for', desc: 'Repete N vezes', corpo: `for (int i = 0; i < $0; i++) {
+    
+}` },
+  { g: 'foreach', nome: 'for each', desc: 'Passa por cada item da lista', corpo: `for (String item : $0) {
+    
+}` },
+  { g: 'if', nome: 'if', desc: 'Condição', corpo: `if ($0) {
+    
+}` },
+  { g: 'ifelse', nome: 'if / else', desc: 'Condição com senão', corpo: `if ($0) {
+    
+} else {
+    
+}` },
+  { g: 'while', nome: 'while', desc: 'Repete enquanto for verdade', corpo: `while ($0) {
+    
+}` },
+  { g: 'switch', nome: 'switch', desc: 'Escolhe entre vários casos', corpo: `switch ($0) {
+    case 1:
+        break;
+    default:
+        break;
+}` },
+  { g: 'try', nome: 'try / catch', desc: 'Captura erro', corpo: `try {
+    $0
+} catch (Exception e) {
+    e.printStackTrace();
+}` },
+  { g: 'method', nome: 'Método', desc: 'Cria uma função', corpo: `private void $0() {
+    
+}` },
+  { g: 'lista', nome: 'ArrayList', desc: 'Lista de textos', corpo: `ArrayList<String> $0 = new ArrayList<>();` },
+  { g: 'mapa', nome: 'HashMap', desc: 'Mapa chave → valor', corpo: `HashMap<String, String> $0 = new HashMap<>();` },
+  { g: 'imports', nome: 'Imports básicos', desc: 'Activity, Bundle, View, widget', corpo: `import android.app.Activity;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.*;$0` },
+];
+
+// Snippets de XML (layouts, manifest, values).
+const SNIPPETS_XML_STUDIO = [
+  { g: 'layout', nome: 'Layout raiz (LinearLayout)', desc: 'Tela completa na vertical', corpo: `<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    $0
+
+</LinearLayout>` },
+  { g: 'linear', nome: 'LinearLayout', desc: 'Caixa vertical/horizontal', corpo: `<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    $0
+
+</LinearLayout>` },
+  { g: 'relative', nome: 'RelativeLayout', desc: 'Posiciona em relação aos outros', corpo: `<RelativeLayout
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    $0
+
+</RelativeLayout>` },
+  { g: 'frame', nome: 'FrameLayout', desc: 'Camadas empilhadas', corpo: `<FrameLayout
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    $0
+
+</FrameLayout>` },
+  { g: 'scroll', nome: 'ScrollView', desc: 'Conteúdo que rola', corpo: `<ScrollView
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    $0
+
+</ScrollView>` },
+  { g: 'textview', nome: 'TextView', desc: 'Texto na tela', corpo: `<TextView
+    android:id="@+id/$0"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="Texto"
+    android:textSize="16sp" />` },
+  { g: 'button', nome: 'Button', desc: 'Botão', corpo: `<Button
+    android:id="@+id/$0"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:text="Botão" />` },
+  { g: 'edittext', nome: 'EditText', desc: 'Campo de digitar', corpo: `<EditText
+    android:id="@+id/$0"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:hint="Digite aqui"
+    android:inputType="text" />` },
+  { g: 'imageview', nome: 'ImageView', desc: 'Imagem', corpo: `<ImageView
+    android:id="@+id/$0"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:src="@drawable/ic_launcher" />` },
+  { g: 'checkbox', nome: 'CheckBox', desc: 'Caixa de marcar', corpo: `<CheckBox
+    android:id="@+id/$0"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="Opção" />` },
+  { g: 'switch', nome: 'Switch', desc: 'Liga/desliga', corpo: `<Switch
+    android:id="@+id/$0"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="Ativar" />` },
+  { g: 'progress', nome: 'ProgressBar', desc: 'Carregando', corpo: `<ProgressBar
+    android:id="@+id/$0"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content" />` },
+  { g: 'listview', nome: 'ListView', desc: 'Lista', corpo: `<ListView
+    android:id="@+id/$0"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" />` },
+  { g: 'webview', nome: 'WebView', desc: 'Site dentro do app', corpo: `<WebView
+    android:id="@+id/$0"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" />` },
+  { g: 'divider', nome: 'Divisória', desc: 'Linha fina', corpo: `<View
+    android:layout_width="match_parent"
+    android:layout_height="1dp"
+    android:background="#33000000" />$0` },
+  { g: 'permission', nome: 'uses-permission', desc: 'Permissão no manifest', corpo: `<uses-permission android:name="android.permission.$0" />` },
+  { g: 'internet', nome: 'Permissão de internet', desc: 'android.permission.INTERNET', corpo: `<uses-permission android:name="android.permission.INTERNET" />$0` },
+  { g: 'activity', nome: 'activity', desc: 'Declara uma tela no manifest', corpo: `<activity
+    android:name=".$0"
+    android:exported="false" />` },
+  { g: 'service', nome: 'service', desc: 'Declara um serviço', corpo: `<service
+    android:name=".$0"
+    android:exported="false" />` },
+  { g: 'string', nome: 'string', desc: 'Texto em values/strings.xml', corpo: `<string name="$0"></string>` },
+  { g: 'color', nome: 'color', desc: 'Cor em values/colors.xml', corpo: `<color name="$0">#FF5227</color>` },
+  { g: 'lw', nome: 'layout_width', desc: 'match_parent', corpo: `android:layout_width="match_parent"$0` },
+  { g: 'lh', nome: 'layout_height', desc: 'wrap_content', corpo: `android:layout_height="wrap_content"$0` },
+  { g: 'id', nome: 'android:id', desc: 'Identificador da view', corpo: `android:id="@+id/$0"` },
+  { g: 'text', nome: 'android:text', desc: 'Texto', corpo: `android:text="$0"` },
+  { g: 'padding', nome: 'android:padding', desc: 'Espaço interno', corpo: `android:padding="16dp"$0` },
+  { g: 'margin', nome: 'android:layout_margin', desc: 'Espaço externo', corpo: `android:layout_margin="8dp"$0` },
+  { g: 'gravity', nome: 'android:gravity', desc: 'Alinhamento do conteúdo', corpo: `android:gravity="center"$0` },
+  { g: 'weight', nome: 'layout_weight', desc: 'Divide o espaço', corpo: `android:layout_weight="1"$0` },
+  { g: 'bg', nome: 'android:background', desc: 'Cor de fundo', corpo: `android:background="#$0"` },
+];
+
+// Classes e palavras comuns do Android que o autocompletar também sugere.
+const CLASSES_ANDROID_AUTO = [
+  'Activity', 'Bundle', 'Intent', 'Toast', 'TextView', 'Button', 'EditText', 'ImageView', 'LinearLayout',
+  'RelativeLayout', 'FrameLayout', 'ScrollView', 'ListView', 'ProgressBar', 'WebView', 'View', 'ViewGroup',
+  'Context', 'String', 'StringBuilder', 'ArrayList', 'HashMap', 'List', 'Map', 'SharedPreferences', 'Handler',
+  'Looper', 'Runnable', 'Thread', 'Log', 'Color', 'Gravity', 'Uri', 'File', 'Environment', 'Exception',
+  'Override', 'Integer', 'Double', 'Boolean', 'Math', 'System', 'Object', 'Random', 'Vibrator', 'MediaPlayer',
+  'AlertDialog', 'MotionEvent', 'Canvas', 'Paint', 'Bitmap', 'Drawable', 'Typeface', 'TypedValue', 'Window',
+  'WindowManager', 'Build', 'Manifest', 'PackageManager', 'LayoutParams', 'OnClickListener', 'Gravity',
+  'setContentView', 'findViewById', 'startActivity', 'getSystemService', 'setOnClickListener', 'setText',
+  'getText', 'runOnUiThread', 'getApplicationContext', 'getResources', 'getSharedPreferences',
+];
+
+function escaparRegexBusca(t) {
+  return String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Todas as posições do termo no texto (até `limite`), sem juntar linhas.
+function acharOcorrenciasTexto(texto, termo, maiusc, limite = 3000) {
+  const saida = [];
+  if (!termo || typeof texto !== 'string') return saida;
+  const re = new RegExp(escaparRegexBusca(termo), maiusc ? 'g' : 'gi');
+  let m;
+  while ((m = re.exec(texto)) !== null && saida.length < limite) {
+    saida.push({ pos: m.index, len: m[0].length });
+    if (m[0].length === 0) re.lastIndex += 1;
+  }
+  return saida;
+}
+
+// Busca no projeto inteiro: por arquivo, com linha e um pedaço da linha.
+function buscarNoProjetoStudio(conteudos, termo, maiusc) {
+  const arquivos = [];
+  let total = 0;
+  let truncado = false;
+  if (!termo || !conteudos) return { arquivos, total, truncado };
+  const re = new RegExp(escaparRegexBusca(termo), maiusc ? 'g' : 'gi');
+  const caminhos = Object.keys(conteudos).sort();
+  for (let f = 0; f < caminhos.length; f++) {
+    const caminho = caminhos[f];
+    const texto = conteudos[caminho];
+    if (typeof texto !== 'string' || texto.length > 1500000) continue;
+    if (arquivos.length >= 150) { truncado = true; break; }
+    re.lastIndex = 0;
+    let m;
+    let n = 0;
+    let cursorLinha = 0;
+    let linhaNum = 1;
+    const itens = [];
+    while ((m = re.exec(texto)) !== null) {
+      n += 1;
+      if (m[0].length === 0) re.lastIndex += 1;
+      if (itens.length < 30) {
+        let k = texto.indexOf('\n', cursorLinha);
+        while (k !== -1 && k < m.index) { linhaNum += 1; cursorLinha = k + 1; k = texto.indexOf('\n', cursorLinha); }
+        const iniLinha = m.index > 0 ? texto.lastIndexOf('\n', m.index - 1) + 1 : 0;
+        const fimBruto = texto.indexOf('\n', m.index);
+        const fimLinha = fimBruto === -1 ? texto.length : fimBruto;
+        const preview = texto.slice(iniLinha, Math.min(fimLinha, iniLinha + 160)).trim();
+        itens.push({ linha: linhaNum, coluna: m.index - iniLinha, preview });
+      }
+    }
+    if (n > 0) { arquivos.push({ caminho, total: n, itens }); total += n; }
+  }
+  return { arquivos, total, truncado };
+}
+
+function substituirTudoTexto(texto, termo, maiusc, substituto) {
+  if (!termo || typeof texto !== 'string') return { novo: texto, n: 0 };
+  const re = new RegExp(escaparRegexBusca(termo), maiusc ? 'g' : 'gi');
+  let n = 0;
+  const novo = texto.replace(re, () => { n += 1; return substituto; });
+  return { novo, n };
+}
+
+// Palavra (letras/números/_) logo antes do cursor — base do autocompletar.
+function palavraAntesDoCursor(texto, pos) {
+  let i = Math.min(pos, texto.length);
+  while (i > 0) {
+    const c = texto.charCodeAt(i - 1);
+    if ((c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95) i -= 1;
+    else break;
+  }
+  return { ini: i, palavra: texto.slice(i, Math.min(pos, texto.length)) };
+}
+
+function indentacaoDaLinha(texto, pos) {
+  const ini = pos > 0 ? texto.lastIndexOf('\n', pos - 1) + 1 : 0;
+  const m = /^[ \t]*/.exec(texto.slice(ini, ini + 200));
+  return m ? m[0] : '';
+}
+
+// Aplica a indentação da linha atual nas linhas de baixo e tira o "$0",
+// devolvendo o texto final e onde o cursor deve ficar.
+function expandirSnippet(corpo, indent) {
+  const comIndent = corpo.split('\n').map((l, i) => (i === 0 || l === '' ? l : indent + l)).join('\n');
+  const idx = comIndent.indexOf('$0');
+  if (idx === -1) return { texto: comIndent, cursor: comIndent.length };
+  return { texto: comIndent.slice(0, idx) + comIndent.slice(idx + 2), cursor: idx };
+}
+
+function extrairPalavrasUnicas(texto) {
+  const base = texto.length > 400000 ? texto.slice(0, 400000) : texto;
+  const re = /[A-Za-z_][A-Za-z0-9_]{3,}/g;
+  const conjunto = new Set();
+  let m;
+  while ((m = re.exec(base)) !== null && conjunto.size < 4000) conjunto.add(m[0]);
+  return Array.from(conjunto);
+}
+
+// Sugestões da barra do teclado: snippets primeiro, depois palavras-chave /
+// classes do Android, depois palavras que já existem no arquivo.
+function montarSugestoesEditor(ling, palavra, palavrasArquivo) {
+  if (!palavra || palavra.length < 2) return [];
+  const p = palavra.toLowerCase();
+  const saida = [];
+  const vistos = new Set();
+  const snippets = ling === 'java' ? SNIPPETS_JAVA_STUDIO : ling === 'xml' ? SNIPPETS_XML_STUDIO : [];
+  for (let i = 0; i < snippets.length && saida.length < 6; i++) {
+    const s = snippets[i];
+    if (s.g.indexOf(p) === 0) {
+      saida.push({ tipo: 'snippet', chave: `s:${s.g}`, rotulo: s.g, corpo: s.corpo });
+    }
+  }
+  if (palavra.length >= 3) {
+    const fontes = [];
+    if (ling && PALAVRAS_CHAVE_POR_LINGUAGEM[ling]) fontes.push(PALAVRAS_CHAVE_POR_LINGUAGEM[ling]);
+    if (ling === 'java') fontes.push(CLASSES_ANDROID_AUTO);
+    fontes.push(palavrasArquivo || []);
+    let adicionadas = 0;
+    for (let f = 0; f < fontes.length; f++) {
+      let porFonte = 0;
+      const lista = fontes[f];
+      for (let i = 0; i < lista.length && porFonte < 5 && adicionadas < 10; i++) {
+        const w = lista[i];
+        if (w === palavra || vistos.has(w) || w.toLowerCase().indexOf(p) !== 0) continue;
+        vistos.add(w);
+        saida.push({ tipo: 'palavra', chave: `p:${w}`, rotulo: w, texto: w });
+        porFonte += 1;
+        adicionadas += 1;
+      }
+    }
+  }
+  return saida;
+}
+
 function CindraStudioScreen({ visible, onClose }) {
   const insets = useSafeAreaInsets();
 
@@ -5122,6 +5653,36 @@ function CindraStudioScreen({ visible, onClose }) {
   const scrollYEditorRef = useRef(0);
   const alturaAreaEditorRef = useRef(0);
   const [larguraVisivelCodigo, setLarguraVisivelCodigo] = useState(0); // largura da área do código (sem a coluna de números)
+  // ---- Ferramentas do editor (zoom, buscar/substituir, snippets, símbolos) ----
+  const [zoomEditor, setZoomEditor] = useState(1); // zoom do código (1 = 100%)
+  const zoomRef = useRef(1);
+  const [pinchAtivo, setPinchAtivo] = useState(false); // dois dedos na tela: trava a rolagem enquanto dá zoom
+  const pinchRef = useRef({ ativo: false, d0: 1, z0: 1 });
+  const [zoomVisivel, setZoomVisivel] = useState(false); // selinho "130%" que some sozinho
+  const zoomTimerRef = useRef(null);
+  const [editorFocado, setEditorFocado] = useState(false); // teclado do código aberto → mostra a barra de símbolos
+  const selecaoRef = useRef({ start: 0, end: 0 }); // seleção no texto INTEIRO (não no trecho)
+  const scrollHorizRef = useRef(null);
+  const linhasAtivasRef = useRef(['']);
+  const alturaLinhaRef = useRef(20);
+  const irPendenteRef = useRef(null); // { arquivo, linha, coluna }: ir pra linha depois de abrir o arquivo
+  const [barraEditor, setBarraEditor] = useState(null); // null | 'buscar' | 'linha'
+  const [consultaEditor, setConsultaEditor] = useState('');
+  const [substituirTexto, setSubstituirTexto] = useState('');
+  const [mostrarSubstituir, setMostrarSubstituir] = useState(false);
+  const [buscaMaiusc, setBuscaMaiusc] = useState(false); // diferenciar maiúscula/minúscula
+  const [buscaEscopo, setBuscaEscopo] = useState('arquivo'); // 'arquivo' | 'projeto'
+  const [buscaIdx, setBuscaIdx] = useState(0);
+  const [resultadosProjeto, setResultadosProjeto] = useState(null);
+  const [confirmarSubst, setConfirmarSubst] = useState(false); // "substituir em tudo" pede um segundo toque
+  const [linhaDigitada, setLinhaDigitada] = useState('');
+  const [destaqueLinha, setDestaqueLinha] = useState(-1); // linha piscando depois de "ir para"
+  const destaqueTimerRef = useRef(null);
+  const [snippetsAberto, setSnippetsAberto] = useState(false);
+  const [filtroSnippet, setFiltroSnippet] = useState('');
+  const [erroIdx, setErroIdx] = useState(0);
+  const [marcasErroOcultas, setMarcasErroOcultas] = useState(false);
+  const palavrasCacheRef = useRef({ arquivo: null, t: 0, lista: [] });
   // "Janela" de linhas realmente desenhadas (números + destaque de sintaxe).
   // Em vez de criar um <Text> pra cada linha do arquivo inteiro (pesado em
   // arquivo grande), só desenha as linhas perto do que está visível na tela
@@ -5187,6 +5748,10 @@ function CindraStudioScreen({ visible, onClose }) {
       }
       if (typeof prefs.aliasKeystore === 'string') setAliasKeystore(prefs.aliasKeystore);
       if (prefs.tipoBuild === 'release' || prefs.tipoBuild === 'debug') setTipoBuild(prefs.tipoBuild);
+      if (typeof prefs.zoomEditor === 'number' && prefs.zoomEditor >= ZOOM_MIN_EDITOR && prefs.zoomEditor <= ZOOM_MAX_EDITOR) {
+        zoomRef.current = prefs.zoomEditor;
+        setZoomEditor(prefs.zoomEditor);
+      }
     });
     return () => { vivo = false; };
   }, []);
@@ -5885,6 +6450,7 @@ function CindraStudioScreen({ visible, onClose }) {
   };
 
   const posicionarCursor = (pos) => {
+    selecaoRef.current = { start: pos, end: pos };
     setCaretPos(pos);
     setSelecaoForcada({ start: pos, end: pos });
     setTimeout(() => setSelecaoForcada(null), 80);
@@ -6297,11 +6863,23 @@ function CindraStudioScreen({ visible, onClose }) {
     }
   };
 
-  // Toque num erro: abre o arquivo dele no editor (se existir no projeto).
+  // Toque num erro: abre o arquivo dele no editor, vai até a linha do erro
+  // e deixa a linha marcada em vermelho (se o erro trouxe o número da linha).
   const abrirErro = (erro) => {
     if (projeto && projeto.conteudos[erro.arquivo] !== undefined) {
       setPainelCompilacao(false);
-      abrirArquivo(erro.arquivo);
+      const linha = Number(erro.linha);
+      if (linha > 0) {
+        const doArquivo = errosCompilacao
+          .filter((e) => e && e.arquivo === erro.arquivo && Number(e.linha) > 0)
+          .sort((a, b) => Number(a.linha) - Number(b.linha));
+        const k = doArquivo.indexOf(erro);
+        if (k >= 0) setErroIdx(k);
+        setMarcasErroOcultas(false);
+        irParaArquivoLinha(erro.arquivo, linha, 0);
+      } else {
+        abrirArquivo(erro.arquivo);
+      }
     }
   };
 
@@ -6311,7 +6889,7 @@ function CindraStudioScreen({ visible, onClose }) {
   const podeDesfazer = !!(hist && hist.undo.length > 0);
   const podeRefazer = !!(hist && hist.redo.length > 0);
   const escalaFonte = PixelRatio.getFontScale();
-  const alturaLinhaEditor = 20 * escalaFonte;
+  const alturaLinhaEditor = 20 * escalaFonte * zoomEditor;
 
   // Só recalcula (split da string inteira + varredura pra achar a linha mais
   // comprida) quando o TEXTO muda de verdade. Antes isso rodava em TODO
@@ -6329,10 +6907,10 @@ function CindraStudioScreen({ visible, onClose }) {
     // rolam na horizontal. Largura do código = maior linha × largura do
     // caractere monoespaçado (~0,6em, corrigida pela escala de fonte do
     // sistema) + folga, nunca menor que a área visível.
-    const larguraCaractere = CODIGO_FONTE * 0.6 * escalaFonte;
+    const larguraCaractere = CODIGO_FONTE * 0.6 * escalaFonte * zoomEditor;
     const largura = Math.max(larguraVisivelCodigo, Math.ceil((maior + 4) * larguraCaractere) + 24);
     return { linhasAtivas: linhas, numeroDeLinhas: linhas.length, larguraCodigo: largura };
-  }, [conteudoAtivo, larguraVisivelCodigo, escalaFonte]);
+  }, [conteudoAtivo, larguraVisivelCodigo, escalaFonte, zoomEditor]);
 
   // Recorte de linhas que a janela do editor manda desenhar agora, já
   // limitado ao tamanho real do arquivo (o arquivo pode ter menos linhas
@@ -6340,7 +6918,7 @@ function CindraStudioScreen({ visible, onClose }) {
   const janelaInicio = Math.max(0, Math.min(janelaEditor.inicio, numeroDeLinhas));
   const janelaFim = Math.max(janelaInicio, Math.min(janelaEditor.fim, numeroDeLinhas));
   const digitosNumeroLinhas = String(numeroDeLinhas).length;
-  const larguraGutter = Math.ceil(digitosNumeroLinhas * 13 * 0.6 * escalaFonte) + 16;
+  const larguraGutter = Math.ceil(digitosNumeroLinhas * 13 * 0.6 * escalaFonte * zoomEditor) + 16;
   const alturaTotalCodigo = 28 + numeroDeLinhas * alturaLinhaEditor;
 
   // Trecho carregado no TextInput (sempre com pelo menos 1 linha).
@@ -6465,6 +7043,334 @@ function CindraStudioScreen({ visible, onClose }) {
     }
   }, [caretPos, conteudoAtivo, arquivoAtivo]);
 
+  // =====================================================================
+  // Ferramentas do editor: zoom, ir para linha/posição, buscar e
+  // substituir, snippets/autocompletar, símbolos e erro na linha.
+  // =====================================================================
+  linhasAtivasRef.current = linhasAtivas;
+  alturaLinhaRef.current = alturaLinhaEditor;
+
+  useEffect(() => () => {
+    clearTimeout(zoomTimerRef.current);
+    clearTimeout(destaqueTimerRef.current);
+  }, []);
+
+  // ---------- Zoom (dois dedos ou botões − / +) ----------
+  const lembrarZoom = () => {
+    setZoomVisivel(true);
+    clearTimeout(zoomTimerRef.current);
+    zoomTimerRef.current = setTimeout(() => setZoomVisivel(false), 1000);
+  };
+  const definirZoom = (valor, salvar) => {
+    const z = Math.round(Math.min(ZOOM_MAX_EDITOR, Math.max(ZOOM_MIN_EDITOR, valor)) * 20) / 20;
+    if (z !== zoomRef.current) { zoomRef.current = z; setZoomEditor(z); }
+    lembrarZoom();
+    if (salvar) salvarPref('zoomEditor', z);
+  };
+  const distanciaDedos = (t) => Math.max(1, Math.hypot(t[0].pageX - t[1].pageX, t[0].pageY - t[1].pageY));
+  const aoTocarInicio = (e) => {
+    const t = e.nativeEvent.touches;
+    if (t && t.length >= 2) {
+      pinchRef.current = { ativo: true, d0: distanciaDedos(t), z0: zoomRef.current };
+      setPinchAtivo(true);
+    }
+  };
+  const aoTocarMover = (e) => {
+    const p = pinchRef.current;
+    const t = e.nativeEvent.touches;
+    if (!p.ativo || !t || t.length < 2) return;
+    definirZoom(p.z0 * (distanciaDedos(t) / p.d0), false);
+  };
+  const aoTocarFim = (e) => {
+    const p = pinchRef.current;
+    if (!p.ativo) return;
+    const t = e.nativeEvent.touches;
+    if (!t || t.length < 2) {
+      pinchRef.current = { ...p, ativo: false };
+      setPinchAtivo(false);
+      salvarPref('zoomEditor', zoomRef.current);
+    }
+  };
+
+  // ---------- Ir para posição / linha ----------
+  // Leva o editor até `pos` (offset no texto inteiro): recentra o trecho do
+  // TextInput e a janela de linhas, rola na vertical e na horizontal, põe o
+  // cursor ali e pisca a linha. `textoNovo` serve quando o texto acabou de
+  // mudar e o render ainda não aconteceu.
+  const irParaPosicao = (pos, textoNovo) => {
+    const linhas = textoNovo !== undefined ? textoNovo.split('\n') : linhasAtivasRef.current;
+    const total = linhas.length;
+    let off = 0;
+    let idx = 0;
+    while (idx < total - 1 && off + linhas[idx].length + 1 <= pos) { off += linhas[idx].length + 1; idx += 1; }
+    const col = Math.max(0, pos - off);
+    const alt = alturaLinhaRef.current;
+    ignorarSelecaoAteRef.current = Date.now() + 250;
+    setTrecho({ ini: Math.max(0, idx - TRECHO_FOLGA_LINHAS), fim: idx + TRECHO_FOLGA_LINHAS });
+    setJanelaEditor({ inicio: Math.max(0, idx - OVERSCAN_LINHAS_EDITOR), fim: idx + OVERSCAN_LINHAS_EDITOR * 2 });
+    posicionarCursor(pos);
+    const visivel = alturaAreaEditorRef.current || 400;
+    const y = Math.max(0, 14 + idx * alt - visivel * 0.35);
+    if (scrollEditorRef.current) scrollEditorRef.current.scrollTo({ y, animated: false });
+    scrollYEditorRef.current = y;
+    if (scrollHorizRef.current) {
+      const x = Math.max(0, 12 + col * CODIGO_FONTE * 0.6 * zoomRef.current - (larguraVisivelCodigo || 300) * 0.3);
+      scrollHorizRef.current.scrollTo({ x, animated: false });
+    }
+    setDestaqueLinha(idx);
+    clearTimeout(destaqueTimerRef.current);
+    destaqueTimerRef.current = setTimeout(() => setDestaqueLinha(-1), 1400);
+  };
+
+  const irParaLinha = (numero, coluna = 0) => {
+    const linhas = linhasAtivasRef.current;
+    const idx = Math.min(Math.max(0, Math.floor(numero) - 1), linhas.length - 1);
+    let off = 0;
+    for (let i = 0; i < idx; i++) off += linhas[i].length + 1;
+    irParaPosicao(off + Math.min(Math.max(0, coluna), linhas[idx].length));
+  };
+
+  // Abre o arquivo (se não for o ativo) e vai até a linha. Se o arquivo
+  // for outro, a ida acontece no efeito logo abaixo, depois que a troca de
+  // arquivo zerar a rolagem.
+  const irParaArquivoLinha = (caminho, linha, coluna = 0) => {
+    if (!caminho) return;
+    if (caminho === arquivoAtivo) { irParaLinha(linha, coluna); return; }
+    irPendenteRef.current = { arquivo: caminho, linha, coluna };
+    abrirArquivo(caminho);
+  };
+  useEffect(() => {
+    const p = irPendenteRef.current;
+    if (!p || p.arquivo !== arquivoAtivo) return undefined;
+    irPendenteRef.current = null;
+    const t = setTimeout(() => irParaLinha(p.linha, p.coluna), 260);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arquivoAtivo]);
+
+  // ---------- Inserir texto no cursor (símbolos, snippets, sugestões) ----------
+  const substituirTrecho = (a, b, novoTexto, cursorRel) => {
+    if (!arquivoAtivo) return;
+    const atual = conteudoAtivoRef.current;
+    const novo = atual.slice(0, a) + novoTexto + atual.slice(b);
+    const contar = (s) => { let q = 0; for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) === 10) q++; return q; };
+    const delta = contar(novoTexto) - contar(atual.slice(a, b));
+    if (novo !== atual) {
+      alterarConteudo(novo);
+      if (delta !== 0) setTrecho((t) => ({ ini: t.ini, fim: t.fim + delta }));
+    }
+    posicionarCursor(a + cursorRel);
+  };
+  const faixaDaSelecao = () => {
+    const tam = conteudoAtivoRef.current.length;
+    const s = Math.min(selecaoRef.current.start, tam);
+    const e = Math.min(selecaoRef.current.end, tam);
+    return { a: Math.min(s, e), b: Math.max(s, e) };
+  };
+  const inserirSimbolo = (s) => {
+    const { a, b } = faixaDaSelecao();
+    substituirTrecho(a, b, s, s.length);
+  };
+  const moverCursorTecla = (d) => {
+    const tam = conteudoAtivoRef.current.length;
+    posicionarCursor(Math.min(Math.max(0, selecaoRef.current.end + d), tam));
+  };
+  const inserirSnippet = (s) => {
+    const { a, b } = faixaDaSelecao();
+    const exp = expandirSnippet(s.corpo, indentacaoDaLinha(conteudoAtivoRef.current, a));
+    substituirTrecho(a, b, exp.texto, exp.cursor);
+  };
+  const aplicarSugestao = (s) => {
+    const atual = conteudoAtivoRef.current;
+    const pos = Math.min(selecaoRef.current.end, atual.length);
+    const { ini } = palavraAntesDoCursor(atual, pos);
+    if (s.tipo === 'snippet') {
+      const exp = expandirSnippet(s.corpo, indentacaoDaLinha(atual, ini));
+      // gatilho de XML digitado depois de um "<": o snippet já traz o "<"
+      const ini2 = exp.texto.charAt(0) === '<' && atual.charAt(ini - 1) === '<' ? ini - 1 : ini;
+      substituirTrecho(ini2, pos, exp.texto, exp.cursor);
+    } else {
+      substituirTrecho(ini, pos, s.texto, s.texto.length);
+    }
+  };
+
+  // Sugestões da barra do teclado (só calcula com o teclado do código aberto).
+  const sugestoesAuto = useMemo(() => {
+    if (!editorFocado || alturaTeclado === 0 || !arquivoAtivo) return [];
+    const { palavra } = palavraAntesDoCursor(conteudoAtivo, caretPos);
+    if (palavra.length < 2) return [];
+    const cache = palavrasCacheRef.current;
+    if (palavra.length >= 3 && (cache.arquivo !== arquivoAtivo || Date.now() - cache.t > 1500)) {
+      cache.arquivo = arquivoAtivo;
+      cache.t = Date.now();
+      cache.lista = extrairPalavrasUnicas(conteudoAtivo);
+    }
+    return montarSugestoesEditor(linguagemAtiva, palavra, cache.arquivo === arquivoAtivo ? cache.lista : []);
+  }, [editorFocado, alturaTeclado, arquivoAtivo, linguagemAtiva, caretPos, conteudoAtivo]);
+
+  const listaSnippets = linguagemAtiva === 'xml' ? SNIPPETS_XML_STUDIO : linguagemAtiva === 'java' ? SNIPPETS_JAVA_STUDIO : [];
+
+  // ---------- Buscar e substituir ----------
+  const buscaAtiva = barraEditor === 'buscar' && consultaEditor !== '';
+  const matchesArquivo = useMemo(
+    () => (buscaAtiva && arquivoAtivo ? acharOcorrenciasTexto(conteudoAtivo, consultaEditor, buscaMaiusc) : []),
+    [buscaAtiva, arquivoAtivo, conteudoAtivo, consultaEditor, buscaMaiusc]
+  );
+  const idxBusca = matchesArquivo.length ? Math.min(buscaIdx, matchesArquivo.length - 1) : 0;
+  // Cada ocorrência vira { linha, coluna } pra desenhar o realce amarelo.
+  const marcasBusca = useMemo(() => {
+    const marcas = [];
+    let li = 0;
+    let ini = 0;
+    for (let k = 0; k < matchesArquivo.length; k++) {
+      const m = matchesArquivo[k];
+      while (li < linhasAtivas.length - 1 && ini + linhasAtivas[li].length + 1 <= m.pos) { ini += linhasAtivas[li].length + 1; li += 1; }
+      marcas.push({ k, i: li, col: m.pos - ini, len: m.len });
+    }
+    return marcas;
+  }, [matchesArquivo, linhasAtivas]);
+
+  // Busca no projeto inteiro: espera a pessoa parar de digitar um instante.
+  const conteudosProjeto = projeto ? projeto.conteudos : null;
+  useEffect(() => {
+    if (barraEditor !== 'buscar' || buscaEscopo !== 'projeto' || !consultaEditor || !conteudosProjeto) {
+      setResultadosProjeto(null);
+      return undefined;
+    }
+    const t = setTimeout(() => setResultadosProjeto(buscarNoProjetoStudio(conteudosProjeto, consultaEditor, buscaMaiusc)), 280);
+    return () => clearTimeout(t);
+  }, [barraEditor, buscaEscopo, consultaEditor, buscaMaiusc, conteudosProjeto]);
+
+  const iniciarBusca = (texto, maiusc) => {
+    const ms = acharOcorrenciasTexto(conteudoAtivoRef.current, texto, maiusc);
+    if (!ms.length) { setBuscaIdx(0); return; }
+    let k = ms.findIndex((m) => m.pos >= selecaoRef.current.start);
+    if (k < 0) k = 0;
+    setBuscaIdx(k);
+    irParaPosicao(ms[k].pos);
+  };
+  const aoMudarConsulta = (t) => {
+    setConsultaEditor(t);
+    setConfirmarSubst(false);
+    if (t) iniciarBusca(t, buscaMaiusc); else setBuscaIdx(0);
+  };
+  const alternarMaiusc = () => {
+    const v = !buscaMaiusc;
+    setBuscaMaiusc(v);
+    setConfirmarSubst(false);
+    if (consultaEditor) iniciarBusca(consultaEditor, v);
+  };
+  const irParaOcorrencia = (k) => {
+    const m = matchesArquivo[k];
+    if (!m) return;
+    setBuscaIdx(k);
+    irParaPosicao(m.pos);
+  };
+  const proximaOcorrencia = (dir) => {
+    const n = matchesArquivo.length;
+    if (!n) return;
+    irParaOcorrencia((idxBusca + dir + n) % n);
+  };
+  const substituirAtual = () => {
+    const m = matchesArquivo[idxBusca];
+    if (!m || !arquivoAtivo) return;
+    const atual = conteudoAtivoRef.current;
+    const novo = atual.slice(0, m.pos) + substituirTexto + atual.slice(m.pos + m.len);
+    alterarConteudo(novo);
+    const ms = acharOcorrenciasTexto(novo, consultaEditor, buscaMaiusc);
+    if (!ms.length) { setBuscaIdx(0); return; }
+    let k = ms.findIndex((x) => x.pos >= m.pos + substituirTexto.length);
+    if (k < 0) k = 0;
+    setBuscaIdx(k);
+    irParaPosicao(ms[k].pos, novo);
+  };
+  const substituirTodosArquivo = () => {
+    if (!arquivoAtivo || !consultaEditor) return;
+    const { novo, n } = substituirTudoTexto(conteudoAtivoRef.current, consultaEditor, buscaMaiusc, substituirTexto);
+    if (!n) return;
+    alterarConteudo(novo);
+    setBuscaIdx(0);
+    exibirAviso('Substituído', `${n} ${n === 1 ? 'ocorrência trocada' : 'ocorrências trocadas'} neste arquivo.`, 'sucesso');
+  };
+  const substituirTodosProjeto = () => {
+    if (!projeto || !consultaEditor) return;
+    if (!confirmarSubst) { setConfirmarSubst(true); return; }
+    const mudados = {};
+    let total = 0;
+    let arquivosTrocados = 0;
+    Object.keys(projeto.conteudos).forEach((caminho) => {
+      const texto = projeto.conteudos[caminho];
+      if (typeof texto !== 'string' || caminho === arquivoAtivo) return;
+      const { novo, n } = substituirTudoTexto(texto, consultaEditor, buscaMaiusc, substituirTexto);
+      if (n) {
+        mudados[caminho] = novo;
+        total += n;
+        arquivosTrocados += 1;
+        delete historicoRef.current[caminho]; // o texto mudou por fora: desfazer antigo não vale
+      }
+    });
+    // o arquivo aberto passa pelo caminho normal pra continuar dando pra desfazer
+    if (arquivoAtivo) {
+      const { novo, n } = substituirTudoTexto(conteudoAtivoRef.current, consultaEditor, buscaMaiusc, substituirTexto);
+      if (n) { alterarConteudo(novo); total += n; arquivosTrocados += 1; }
+    }
+    if (Object.keys(mudados).length) {
+      setProjeto((atual) => ({ ...atual, conteudos: { ...atual.conteudos, ...mudados } }));
+    }
+    setConfirmarSubst(false);
+    setBuscaIdx(0);
+    exibirAviso(
+      total ? 'Substituído no projeto' : 'Nada pra substituir',
+      total ? `${total} ${total === 1 ? 'ocorrência trocada' : 'ocorrências trocadas'} em ${arquivosTrocados} ${arquivosTrocados === 1 ? 'arquivo' : 'arquivos'}.` : 'Nenhuma ocorrência encontrada.',
+      total ? 'sucesso' : 'aviso'
+    );
+  };
+
+  const abrirBarraBusca = () => {
+    if (barraEditor === 'buscar') { setBarraEditor(null); setConfirmarSubst(false); return; }
+    setBarraEditor('buscar');
+    setConfirmarSubst(false);
+    // se tinha um trecho (de uma linha só) selecionado, já usa como termo
+    const { a, b } = faixaDaSelecao();
+    if (b > a && b - a <= 80) {
+      const sel = conteudoAtivoRef.current.slice(a, b);
+      if (sel.indexOf('\n') === -1) { setConsultaEditor(sel); iniciarBusca(sel, buscaMaiusc); }
+    }
+  };
+  const abrirBarraLinha = () => {
+    if (barraEditor === 'linha') { setBarraEditor(null); return; }
+    setLinhaDigitada('');
+    setBarraEditor('linha');
+  };
+  const executarIrLinha = () => {
+    const n = parseInt(linhaDigitada, 10);
+    if (!n) return;
+    irParaLinha(n);
+    setBarraEditor(null);
+    Keyboard.dismiss();
+  };
+  const fecharBarraEditor = () => { setBarraEditor(null); setConfirmarSubst(false); Keyboard.dismiss(); };
+
+  // ---------- Erro da compilação na linha ----------
+  const errosArquivo = useMemo(
+    () => (arquivoAtivo
+      ? errosCompilacao
+        .filter((e) => e && e.arquivo === arquivoAtivo && Number(e.linha) > 0)
+        .sort((a, b) => Number(a.linha) - Number(b.linha))
+      : []),
+    [errosCompilacao, arquivoAtivo]
+  );
+  const linhasComErro = useMemo(() => new Set(errosArquivo.map((e) => Number(e.linha))), [errosArquivo]);
+  useEffect(() => { setErroIdx(0); setMarcasErroOcultas(false); }, [errosCompilacao]);
+  const erroIdxSeguro = Math.min(erroIdx, Math.max(0, errosArquivo.length - 1));
+  const irParaErro = (k) => {
+    const n = errosArquivo.length;
+    if (!n) return;
+    const i = ((k % n) + n) % n;
+    setErroIdx(i);
+    irParaLinha(Number(errosArquivo[i].linha));
+  };
+
   // ---------- Tela 0: lista de projetos (tela inicial) ----------
   const termoBusca = buscaProjeto.trim().toLowerCase();
   const listaFiltrada = termoBusca
@@ -6513,9 +7419,11 @@ function CindraStudioScreen({ visible, onClose }) {
     if (menuOrdenarAberto) { setMenuOrdenarAberto(false); return; }
     if (cardNo) { setCardNo(null); setPastaEmCriacao(false); setNomeNovaPasta(''); return; }
     if (permissoesAberto) { setPermissoesAberto(false); setBuscaPermissao(''); return; }
+    if (snippetsAberto) { setSnippetsAberto(false); setFiltroSnippet(''); return; }
     if (menuProjetoAberto) { setMenuProjetoAberto(false); return; }
     if (painelCompilacao) { if (!compilando) setPainelCompilacao(false); return; }
     if (sidebarAberta) { setSidebarAberta(false); return; }
+    if (barraEditor) { fecharBarraEditor(); return; }
     if (etapa === 'workspace') { voltarParaHome(); return; }
     if (etapa === 'config') { setEtapa('home'); return; }
     if (buscaAberta) { fecharBusca(); return; }
@@ -7568,10 +8476,200 @@ function CindraStudioScreen({ visible, onClose }) {
           <View style={studioStyles.pathBar}>
             <MaterialCommunityIcons name="folder-outline" size={12} color={COLORS.dim} />
             <Text style={studioStyles.pathBarText} numberOfLines={1} ellipsizeMode="head" maxFontSizeMultiplier={1.1}>{arquivoAtivo.split('/').join(' \u203a ')}</Text>
+            <TouchableOpacity style={[studioStyles.pathBtn, barraEditor === 'buscar' && studioStyles.pathBtnAtivo]} onPress={abrirBarraBusca} hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }} activeOpacity={0.7}>
+              <MaterialCommunityIcons name="magnify" size={17} color={barraEditor === 'buscar' ? COLORS.ember : COLORS.dim} />
+            </TouchableOpacity>
+            <TouchableOpacity style={[studioStyles.pathBtn, barraEditor === 'linha' && studioStyles.pathBtnAtivo]} onPress={abrirBarraLinha} hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }} activeOpacity={0.7}>
+              <MaterialCommunityIcons name="format-list-numbered" size={17} color={barraEditor === 'linha' ? COLORS.ember : COLORS.dim} />
+            </TouchableOpacity>
+            <TouchableOpacity style={studioStyles.pathBtn} onPress={() => setSnippetsAberto(true)} hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }} activeOpacity={0.7}>
+              <MaterialCommunityIcons name="lightning-bolt-outline" size={17} color={COLORS.dim} />
+            </TouchableOpacity>
+            <TouchableOpacity style={studioStyles.pathBtn} onPress={() => definirZoom(zoomRef.current - 0.1, true)} hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }} activeOpacity={0.7}>
+              <MaterialCommunityIcons name="magnify-minus-outline" size={17} color={COLORS.dim} />
+            </TouchableOpacity>
+            <TouchableOpacity style={studioStyles.pathBtn} onPress={() => definirZoom(zoomRef.current + 0.1, true)} hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }} activeOpacity={0.7}>
+              <MaterialCommunityIcons name="magnify-plus-outline" size={17} color={COLORS.dim} />
+            </TouchableOpacity>
           </View>
+
+          {barraEditor === 'buscar' && (
+            <View style={studioStyles.edBarra}>
+              <View style={studioStyles.edLinha}>
+                <TextInput
+                  style={studioStyles.edInput}
+                  value={consultaEditor}
+                  onChangeText={aoMudarConsulta}
+                  placeholder={buscaEscopo === 'projeto' ? 'Buscar no projeto' : 'Buscar neste arquivo'}
+                  placeholderTextColor={COLORS.dim}
+                  autoFocus
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="search"
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => proximaOcorrencia(1)}
+                  selectionColor={COLORS.ember}
+                  cursorColor={COLORS.ember}
+                />
+                <Text style={studioStyles.edContador} numberOfLines={1}>
+                  {buscaEscopo === 'projeto'
+                    ? (resultadosProjeto ? `${resultadosProjeto.total}` : '')
+                    : (matchesArquivo.length ? `${idxBusca + 1}/${matchesArquivo.length}` : (consultaEditor ? '0' : ''))}
+                </Text>
+                {buscaEscopo === 'arquivo' && (
+                  <>
+                    <TouchableOpacity style={[studioStyles.edIconBtn, !matchesArquivo.length && { opacity: 0.35 }]} disabled={!matchesArquivo.length} onPress={() => proximaOcorrencia(-1)} activeOpacity={0.7}>
+                      <MaterialCommunityIcons name="chevron-up" size={20} color={COLORS.ink} />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[studioStyles.edIconBtn, !matchesArquivo.length && { opacity: 0.35 }]} disabled={!matchesArquivo.length} onPress={() => proximaOcorrencia(1)} activeOpacity={0.7}>
+                      <MaterialCommunityIcons name="chevron-down" size={20} color={COLORS.ink} />
+                    </TouchableOpacity>
+                  </>
+                )}
+                <TouchableOpacity style={studioStyles.edIconBtn} onPress={fecharBarraEditor} activeOpacity={0.7}>
+                  <MaterialCommunityIcons name="close" size={18} color={COLORS.dim} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={studioStyles.edLinha}>
+                <TouchableOpacity style={[studioStyles.edChip, buscaMaiusc && studioStyles.edChipAtivo]} onPress={alternarMaiusc} activeOpacity={0.7}>
+                  <Text style={[studioStyles.edChipTexto, buscaMaiusc && studioStyles.edChipTextoAtivo]}>Aa</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[studioStyles.edChip, buscaEscopo === 'arquivo' && studioStyles.edChipAtivo]} onPress={() => { setBuscaEscopo('arquivo'); setConfirmarSubst(false); }} activeOpacity={0.7}>
+                  <Text style={[studioStyles.edChipTexto, buscaEscopo === 'arquivo' && studioStyles.edChipTextoAtivo]}>Arquivo</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[studioStyles.edChip, buscaEscopo === 'projeto' && studioStyles.edChipAtivo]} onPress={() => { setBuscaEscopo('projeto'); setConfirmarSubst(false); }} activeOpacity={0.7}>
+                  <Text style={[studioStyles.edChipTexto, buscaEscopo === 'projeto' && studioStyles.edChipTextoAtivo]}>Projeto</Text>
+                </TouchableOpacity>
+                <View style={{ flex: 1 }} />
+                <TouchableOpacity style={[studioStyles.edChip, mostrarSubstituir && studioStyles.edChipAtivo]} onPress={() => { setMostrarSubstituir((v) => !v); setConfirmarSubst(false); }} activeOpacity={0.7}>
+                  <MaterialCommunityIcons name="swap-horizontal" size={15} color={mostrarSubstituir ? COLORS.ink : COLORS.dim} />
+                  <Text style={[studioStyles.edChipTexto, mostrarSubstituir && studioStyles.edChipTextoAtivo]}>Substituir</Text>
+                </TouchableOpacity>
+              </View>
+
+              {mostrarSubstituir && (
+                <View style={studioStyles.edLinha}>
+                  <TextInput
+                    style={studioStyles.edInput}
+                    value={substituirTexto}
+                    onChangeText={(t) => { setSubstituirTexto(t); setConfirmarSubst(false); }}
+                    placeholder="Substituir por"
+                    placeholderTextColor={COLORS.dim}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    selectionColor={COLORS.ember}
+                    cursorColor={COLORS.ember}
+                  />
+                  {buscaEscopo === 'arquivo' ? (
+                    <>
+                      <TouchableOpacity style={[studioStyles.edBotaoAcao, !matchesArquivo.length && { opacity: 0.4 }]} disabled={!matchesArquivo.length} onPress={substituirAtual} activeOpacity={0.8}>
+                        <Text style={studioStyles.edBotaoAcaoTexto}>Trocar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[studioStyles.edBotaoAcao, !matchesArquivo.length && { opacity: 0.4 }]} disabled={!matchesArquivo.length} onPress={substituirTodosArquivo} activeOpacity={0.8}>
+                        <Text style={studioStyles.edBotaoAcaoTexto}>Todos</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <TouchableOpacity
+                      style={[studioStyles.edBotaoAcao, confirmarSubst && studioStyles.edBotaoPerigo, !(resultadosProjeto && resultadosProjeto.total) && { opacity: 0.4 }]}
+                      disabled={!(resultadosProjeto && resultadosProjeto.total)}
+                      onPress={substituirTodosProjeto}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={studioStyles.edBotaoAcaoTexto}>{confirmarSubst ? 'Confirmar' : 'Trocar tudo'}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+
+              {buscaEscopo === 'projeto' && consultaEditor !== '' && resultadosProjeto && (
+                <ScrollView style={studioStyles.edResultados} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                  <Text style={studioStyles.edResResumo}>
+                    {resultadosProjeto.total === 0
+                      ? 'Nada encontrado no projeto.'
+                      : `${resultadosProjeto.total} ${resultadosProjeto.total === 1 ? 'resultado' : 'resultados'} em ${resultadosProjeto.arquivos.length} ${resultadosProjeto.arquivos.length === 1 ? 'arquivo' : 'arquivos'}${resultadosProjeto.truncado ? ' (mostrando os primeiros)' : ''}${confirmarSubst ? ' — toque em Confirmar pra trocar tudo' : ''}`}
+                  </Text>
+                  {resultadosProjeto.arquivos.map((arq) => (
+                    <View key={arq.caminho}>
+                      <View style={studioStyles.edResArquivo}>
+                        <MaterialCommunityIcons name="file-document-outline" size={13} color={COLORS.dim} />
+                        <Text style={studioStyles.edResArquivoTexto} numberOfLines={1} ellipsizeMode="head">{arq.caminho}</Text>
+                        <Text style={{ color: COLORS.dim, fontSize: 11.5 }}>{arq.total}</Text>
+                      </View>
+                      {arq.itens.map((it, i) => (
+                        <TouchableOpacity key={`${arq.caminho}:${i}`} style={studioStyles.edResItem} onPress={() => irParaArquivoLinha(arq.caminho, it.linha, it.coluna)} activeOpacity={0.7}>
+                          <Text style={studioStyles.edResLinha}>{it.linha}</Text>
+                          <Text style={studioStyles.edResTrecho} numberOfLines={1}>{it.preview}</Text>
+                        </TouchableOpacity>
+                      ))}
+                      {arq.total > arq.itens.length && (
+                        <Text style={[studioStyles.edResResumo, { paddingTop: 0 }]}>+ {arq.total - arq.itens.length} neste arquivo</Text>
+                      )}
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          )}
+
+          {barraEditor === 'linha' && (
+            <View style={studioStyles.edBarra}>
+              <View style={studioStyles.edLinha}>
+                <MaterialCommunityIcons name="format-list-numbered" size={18} color={COLORS.ember} />
+                <TextInput
+                  style={studioStyles.edInput}
+                  value={linhaDigitada}
+                  onChangeText={(t) => setLinhaDigitada(t.replace(/\D/g, '').slice(0, 7))}
+                  placeholder={`Ir para a linha (1 a ${numeroDeLinhas})`}
+                  placeholderTextColor={COLORS.dim}
+                  keyboardType="number-pad"
+                  autoFocus
+                  returnKeyType="go"
+                  onSubmitEditing={executarIrLinha}
+                  selectionColor={COLORS.ember}
+                  cursorColor={COLORS.ember}
+                />
+                <TouchableOpacity style={[studioStyles.edBotaoAcao, !linhaDigitada && { opacity: 0.4 }]} disabled={!linhaDigitada} onPress={executarIrLinha} activeOpacity={0.8}>
+                  <Text style={studioStyles.edBotaoAcaoTexto}>Ir</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={studioStyles.edIconBtn} onPress={fecharBarraEditor} activeOpacity={0.7}>
+                  <MaterialCommunityIcons name="close" size={18} color={COLORS.dim} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {errosArquivo.length > 0 && !marcasErroOcultas && (() => {
+            const erro = errosArquivo[erroIdxSeguro];
+            return (
+              <View style={studioStyles.edErroBanner}>
+                <MaterialCommunityIcons name="alert-circle-outline" size={16} color={COLORS.error} />
+                <TouchableOpacity style={{ flex: 1 }} onPress={() => irParaErro(erroIdxSeguro)} activeOpacity={0.7}>
+                  <Text style={studioStyles.edErroTexto} numberOfLines={2}>Linha {erro.linha} · {erro.mensagem}</Text>
+                </TouchableOpacity>
+                {errosArquivo.length > 1 && (
+                  <>
+                    <Text style={studioStyles.edContador}>{erroIdxSeguro + 1}/{errosArquivo.length}</Text>
+                    <TouchableOpacity onPress={() => irParaErro(erroIdxSeguro - 1)} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }} activeOpacity={0.7}>
+                      <MaterialCommunityIcons name="chevron-up" size={20} color={COLORS.ink} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => irParaErro(erroIdxSeguro + 1)} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }} activeOpacity={0.7}>
+                      <MaterialCommunityIcons name="chevron-down" size={20} color={COLORS.ink} />
+                    </TouchableOpacity>
+                  </>
+                )}
+                <TouchableOpacity onPress={() => setMarcasErroOcultas(true)} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }} activeOpacity={0.7}>
+                  <MaterialCommunityIcons name="close" size={16} color={COLORS.dim} />
+                </TouchableOpacity>
+              </View>
+            );
+          })()}
           <ItemAnimadoStudio key={arquivoAtivo} indice={0} style={{ flex: 1 }}>
+            <View style={{ flex: 1 }} onTouchStart={aoTocarInicio} onTouchMove={aoTocarMover} onTouchEnd={aoTocarFim} onTouchCancel={aoTocarFim}>
             <ScrollView
               ref={scrollEditorRef}
+              scrollEnabled={!pinchAtivo}
               style={{ flex: 1, backgroundColor: '#0a0a0c' }}
               contentContainerStyle={{ paddingBottom: alturaTeclado > 0 ? 24 : Math.max(insets.bottom, 0) + 24 }}
               keyboardShouldPersistTaps="handled"
@@ -7597,7 +8695,7 @@ function CindraStudioScreen({ visible, onClose }) {
                     return (
                       <Text
                         key={i}
-                        style={[studioStyles.lineNumberText, { position: 'absolute', top: 14 + i * alturaLinhaEditor, right: 8, width: larguraGutter - 16 }]}
+                        style={[studioStyles.lineNumberText, { position: 'absolute', top: 14 + i * alturaLinhaEditor, right: 8, width: larguraGutter - 16, fontSize: 13 * zoomEditor, lineHeight: 20 * zoomEditor }, !marcasErroOcultas && linhasComErro.has(i + 1) && { color: COLORS.error, fontWeight: '800' }]}
                       >
                         {i + 1}
                       </Text>
@@ -7605,22 +8703,66 @@ function CindraStudioScreen({ visible, onClose }) {
                   })}
                 </View>
                 <ScrollView
+                  ref={scrollHorizRef}
                   horizontal
                   nestedScrollEnabled
+                  scrollEnabled={!pinchAtivo}
                   style={{ flex: 1 }}
                   showsHorizontalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
                   onLayout={(e) => setLarguraVisivelCodigo(Math.floor(e.nativeEvent.layout.width))}
                 >
                   <View style={{ width: larguraCodigo, height: alturaTotalCodigo }}>
+                    {/* Realces ATRÁS do texto (o TextInput é transparente):
+                        linha pra onde acabou de pular, linhas com erro da
+                        compilação e ocorrências da busca. */}
+                    {destaqueLinha >= 0 && destaqueLinha < numeroDeLinhas && (
+                      <View
+                        pointerEvents="none"
+                        style={{ position: 'absolute', left: 0, width: larguraCodigo, top: 14 + destaqueLinha * alturaLinhaEditor, height: alturaLinhaEditor, backgroundColor: 'rgba(255,182,72,0.16)' }}
+                      />
+                    )}
+                    {!marcasErroOcultas && errosArquivo.map((e, k) => {
+                      const i = Number(e.linha) - 1;
+                      if (i < 0 || i >= numeroDeLinhas) return null;
+                      return (
+                        <View
+                          key={`er${k}`}
+                          pointerEvents="none"
+                          style={{ position: 'absolute', left: 0, width: larguraCodigo, top: 14 + i * alturaLinhaEditor, height: alturaLinhaEditor, backgroundColor: 'rgba(255,107,107,0.16)', borderBottomWidth: 1.5, borderBottomColor: 'rgba(255,107,107,0.85)' }}
+                        />
+                      );
+                    })}
+                    {barraEditor === 'buscar' && marcasBusca
+                      .filter((m) => m.i >= janelaInicio && m.i < janelaFim)
+                      .map((m) => (
+                        <View
+                          key={`bm${m.k}`}
+                          pointerEvents="none"
+                          style={{
+                            position: 'absolute',
+                            left: 12 + m.col * CODIGO_FONTE * 0.6 * zoomEditor,
+                            top: 14 + m.i * alturaLinhaEditor + 1,
+                            width: m.len * CODIGO_FONTE * 0.6 * zoomEditor,
+                            height: alturaLinhaEditor - 2,
+                            borderRadius: 3,
+                            backgroundColor: m.k === idxBusca ? 'rgba(255,170,0,0.55)' : 'rgba(255,214,10,0.22)',
+                          }}
+                        />
+                      ))}
                     <TextInput
-                      style={[studioStyles.codeInput, { position: 'absolute', left: 0, top: trechoIni * alturaLinhaEditor, width: larguraCodigo }]}
+                      style={[studioStyles.codeInput, { position: 'absolute', left: 0, top: trechoIni * alturaLinhaEditor, width: larguraCodigo, fontSize: CODIGO_FONTE * zoomEditor, lineHeight: 20 * zoomEditor }]}
                       value={textoTrecho}
                       onChangeText={alterarTrecho}
                       onSelectionChange={(e) => {
                         if (Date.now() < ignorarSelecaoAteRef.current) return;
-                        setCaretPos(trechoInfoRef.current.offset + e.nativeEvent.selection.end);
+                        const sel = e.nativeEvent.selection;
+                        const off = trechoInfoRef.current.offset;
+                        selecaoRef.current = { start: off + sel.start, end: off + sel.end };
+                        setCaretPos(off + sel.end);
                       }}
+                      onFocus={() => setEditorFocado(true)}
+                      onBlur={() => setEditorFocado(false)}
                       selection={selecaoTrecho}
                       multiline
                       autoCapitalize="none"
@@ -7650,7 +8792,7 @@ function CindraStudioScreen({ visible, onClose }) {
                           key={i}
                           numberOfLines={1}
                           allowFontScaling={false}
-                          style={[studioStyles.codeHighlightLine, { top: 14 + i * alturaLinhaEditor }]}
+                          style={[studioStyles.codeHighlightLine, { top: 14 + i * alturaLinhaEditor, fontSize: CODIGO_FONTE * zoomEditor, lineHeight: 20 * zoomEditor }]}
                         >
                           {texto === ''
                             ? ' '
@@ -7664,7 +8806,54 @@ function CindraStudioScreen({ visible, onClose }) {
                 </ScrollView>
               </View>
             </ScrollView>
+            {zoomVisivel && (
+              <View pointerEvents="none" style={studioStyles.zoomBadge}>
+                <Text style={studioStyles.zoomBadgeTexto}>{Math.round(zoomEditor * 100)}%</Text>
+              </View>
+            )}
+            </View>
           </ItemAnimadoStudio>
+
+          {editorFocado && alturaTeclado > 0 && (
+            <View style={studioStyles.symBarra}>
+              {sugestoesAuto.length > 0 && (
+                <ScrollView
+                  horizontal
+                  keyboardShouldPersistTaps="always"
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={studioStyles.symLinha}
+                  style={{ borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}
+                >
+                  {sugestoesAuto.map((s) => (
+                    <TouchableOpacity key={s.chave} style={[studioStyles.symTecla, s.tipo === 'snippet' && studioStyles.symTeclaDestaque]} onPress={() => aplicarSugestao(s)} activeOpacity={0.7}>
+                      {s.tipo === 'snippet' && <MaterialCommunityIcons name="lightning-bolt" size={13} color={COLORS.ember} />}
+                      <Text style={[studioStyles.symTeclaTexto, { fontSize: 13 }]}>{s.rotulo}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+              <ScrollView horizontal keyboardShouldPersistTaps="always" showsHorizontalScrollIndicator={false} contentContainerStyle={studioStyles.symLinha}>
+                <TouchableOpacity style={[studioStyles.symTecla, studioStyles.symTeclaDestaque]} onPress={() => setSnippetsAberto(true)} activeOpacity={0.7}>
+                  <MaterialCommunityIcons name="lightning-bolt-outline" size={16} color={COLORS.ember} />
+                  <Text style={[studioStyles.symTeclaTexto, { fontSize: 12.5 }]}>Snippets</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={studioStyles.symTecla} onPress={() => inserirSimbolo('    ')} activeOpacity={0.7}>
+                  <MaterialCommunityIcons name="keyboard-tab" size={17} color={COLORS.ink} />
+                </TouchableOpacity>
+                <TouchableOpacity style={studioStyles.symTecla} onPress={() => moverCursorTecla(-1)} activeOpacity={0.7}>
+                  <MaterialCommunityIcons name="chevron-left" size={19} color={COLORS.ink} />
+                </TouchableOpacity>
+                <TouchableOpacity style={studioStyles.symTecla} onPress={() => moverCursorTecla(1)} activeOpacity={0.7}>
+                  <MaterialCommunityIcons name="chevron-right" size={19} color={COLORS.ink} />
+                </TouchableOpacity>
+                {SIMBOLOS_EDITOR.map((s) => (
+                  <TouchableOpacity key={s} style={studioStyles.symTecla} onPress={() => inserirSimbolo(s)} activeOpacity={0.7}>
+                    <Text style={studioStyles.symTeclaTexto}>{s}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
       ) : (
         <View style={studioStyles.emptyEditor}>
@@ -7719,6 +8908,58 @@ function CindraStudioScreen({ visible, onClose }) {
             </View>
           )}
         </PainelLateralStudio>
+      )}
+
+      {snippetsAberto && (
+        <FolhaInferiorStudio onFechar={() => { setSnippetsAberto(false); setFiltroSnippet(''); }} insetBottom={Math.max(insets.bottom, 12) + alturaTeclado}>
+          {(fechar) => {
+            const termoSnip = filtroSnippet.trim().toLowerCase();
+            const filtrados = termoSnip
+              ? listaSnippets.filter((s) => s.g.includes(termoSnip) || s.nome.toLowerCase().includes(termoSnip) || s.desc.toLowerCase().includes(termoSnip))
+              : listaSnippets;
+            return (
+              <>
+                <Text style={studioStyles.folhaTitulo}>Snippets</Text>
+                <Text style={[studioStyles.folhaSub, { marginBottom: 10 }]}>
+                  {listaSnippets.length > 0
+                    ? `${linguagemAtiva === 'xml' ? 'XML' : 'Java'} · toque pra inserir onde está o cursor`
+                    : 'Disponíveis em arquivos .java e .xml'}
+                </Text>
+                {listaSnippets.length > 0 && (
+                  <TextInput
+                    style={[studioStyles.edInput, { flex: 0, marginBottom: 6 }]}
+                    value={filtroSnippet}
+                    onChangeText={setFiltroSnippet}
+                    placeholder="Buscar snippet (toast, intent, onCreate...)"
+                    placeholderTextColor={COLORS.dim}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    selectionColor={COLORS.ember}
+                    cursorColor={COLORS.ember}
+                  />
+                )}
+                <ScrollView style={{ maxHeight: 340 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                  {listaSnippets.length === 0 ? (
+                    <Text style={{ color: COLORS.dim, fontSize: 13, paddingVertical: 14 }}>Abra um arquivo .java ou .xml pra ver os snippets.</Text>
+                  ) : filtrados.length === 0 ? (
+                    <Text style={{ color: COLORS.dim, fontSize: 13, paddingVertical: 14 }}>Nenhum snippet com esse nome.</Text>
+                  ) : filtrados.map((s) => (
+                    <TouchableOpacity key={s.g} style={studioStyles.snipItem} onPress={() => { inserirSnippet(s); fechar(); }} activeOpacity={0.75}>
+                      <View style={studioStyles.snipIcone}>
+                        <MaterialCommunityIcons name="lightning-bolt-outline" size={17} color={COLORS.ember} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={studioStyles.snipNome} numberOfLines={1}>{s.nome}</Text>
+                        <Text style={studioStyles.snipDesc} numberOfLines={1}>{s.desc}</Text>
+                      </View>
+                      <Text style={studioStyles.snipGatilho}>{s.g}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </>
+            );
+          }}
+        </FolhaInferiorStudio>
       )}
 
       {menuProjetoAberto && (
