@@ -3531,13 +3531,10 @@ const loginStyles = StyleSheet.create({
     position: 'absolute', right: 16, width: 40, height: 40, borderRadius: 20, zIndex: 5,
     backgroundColor: 'rgba(255,255,255,0.09)', alignItems: 'center', justifyContent: 'center',
   },
-  topo: { alignItems: 'center', marginBottom: 6 },
-  tile: {
-    width: 92, height: 92, borderRadius: 28, overflow: 'hidden', alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)',
-  },
+  topo: { alignItems: 'center', marginBottom: 2 },
+  logo: { width: 190, height: 190 },
   selo: {
-    position: 'absolute', right: -7, bottom: -7, width: 32, height: 32, borderRadius: 16, backgroundColor: '#07041a',
+    position: 'absolute', right: 4, top: 4, width: 34, height: 34, borderRadius: 17, backgroundColor: '#07041a',
     alignItems: 'center', justifyContent: 'center',
   },
   seloInterno: { width: 25, height: 25, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
@@ -3545,7 +3542,7 @@ const loginStyles = StyleSheet.create({
     color: '#fff', fontSize: 28, fontWeight: '900', letterSpacing: 1.4, marginTop: 22,
     textShadowColor: 'rgba(180,60,255,0.9)', textShadowRadius: 14, textShadowOffset: { width: 0, height: 0 },
   },
-  sub: { color: COLORS.dim, fontSize: 14, textAlign: 'center', marginTop: 8, marginBottom: 26, lineHeight: 20, paddingHorizontal: 6 },
+  sub: { color: COLORS.dim, fontSize: 14, textAlign: 'center', marginTop: 6, marginBottom: 24, lineHeight: 20, paddingHorizontal: 6 },
   campo: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 16, paddingHorizontal: 15, marginBottom: 12, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.1)',
@@ -3617,23 +3614,22 @@ function useAlturaTecladoNuvem(ativo) {
   return alt;
 }
 
-// Ícone do app (Cindra Studio), só flutuando suave. Sem brilho nem círculo atrás.
+// Logo do Cindra Studio (arquivo em assets/cindra-logo.png), flutuando suave.
+// A logo já traz o nome "cindra studio" escrito, então não repete o texto.
 function IconeAppNuvem({ ativo, sucesso }) {
   const flutua = useLoopNuvem(ativo, 2100);
   return (
     <View style={loginStyles.topo}>
-      <Animated.View style={{ transform: [{ translateY: flutua.interpolate({ inputRange: [0, 1], outputRange: [3, -4] }) }] }}>
-        <View style={loginStyles.tile}>
-          <Grad />
-          <MaterialCommunityIcons name="code-braces" size={46} color="#ffffff" />
-        </View>
-        <View style={loginStyles.selo}>
-          <View style={[loginStyles.seloInterno, { backgroundColor: sucesso ? '#3ddc84' : COLORS.emberDeep }]}>
-            <MaterialCommunityIcons name={sucesso ? 'check-bold' : 'cloud-outline'} size={15} color="#fff" />
+      <Animated.View style={{ transform: [{ translateY: flutua.interpolate({ inputRange: [0, 1], outputRange: [3, -5] }) }] }}>
+        <Image source={require('./assets/cindra-logo.png')} style={loginStyles.logo} resizeMode="contain" />
+        {sucesso && (
+          <View style={loginStyles.selo}>
+            <View style={[loginStyles.seloInterno, { backgroundColor: '#3ddc84' }]}>
+              <MaterialCommunityIcons name="check-bold" size={16} color="#fff" />
+            </View>
           </View>
-        </View>
+        )}
       </Animated.View>
-      <Text style={loginStyles.marca}>CINDRA STUDIO</Text>
     </View>
   );
 }
