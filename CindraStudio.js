@@ -180,16 +180,22 @@ function corNoDegrade(cores, t) {
   const b = hexParaRgb(cores[i + 1]);
   return 'rgb(' + a.map((v, k) => Math.round(v + (b[k] - v) * f)).join(',') + ')';
 }
-const FAIXAS_DEGRADE = 28;
+const FAIXAS_DEGRADE = 72;
 function Grad({ cores = GRAD_LOGO }) {
   const faixas = useMemo(
-    () => Array.from({ length: FAIXAS_DEGRADE }, (_, k) => corNoDegrade(cores, k / (FAIXAS_DEGRADE - 1))),
+    () => Array.from({ length: FAIXAS_DEGRADE }, (_, k) => corNoDegrade(cores, (k + 0.5) / FAIXAS_DEGRADE)),
     [cores]
   );
+  // Cada faixa vai do seu ponto até a borda direita e a próxima fica por cima.
+  // Assim não existe emenda entre as faixas (antes aparecia uma linha fininha
+  // entre elas, principalmente ao tocar no botão).
   return (
-    <View style={[StyleSheet.absoluteFill, { flexDirection: 'row' }]} pointerEvents="none">
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
       {faixas.map((c, k) => (
-        <View key={k} style={{ flex: 1, backgroundColor: c, marginRight: k < FAIXAS_DEGRADE - 1 ? -0.5 : 0 }} />
+        <View
+          key={k}
+          style={{ position: 'absolute', top: 0, bottom: 0, right: 0, left: `${(k / FAIXAS_DEGRADE) * 100}%`, backgroundColor: c }}
+        />
       ))}
     </View>
   );
@@ -3532,13 +3538,13 @@ const loginStyles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center',
   },
   topo: { alignItems: 'center' },
-  logo: { width: 176, height: 176 },
+  logo: { width: 112, height: 112 },
   selo: {
-    position: 'absolute', right: 10, bottom: 12, width: 44, height: 44, borderRadius: 22, backgroundColor: '#07041a',
+    position: 'absolute', right: 2, bottom: 4, width: 32, height: 32, borderRadius: 16, backgroundColor: '#07041a',
     alignItems: 'center', justifyContent: 'center',
   },
-  seloInterno: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  titulo: { color: '#fff', fontSize: 25, fontWeight: '900', textAlign: 'center', marginTop: 10, letterSpacing: 0.2 },
+  seloInterno: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  titulo: { color: '#fff', fontSize: 25, fontWeight: '900', textAlign: 'center', marginTop: 16, letterSpacing: 0.2 },
   sub: { color: COLORS.dim, fontSize: 14, textAlign: 'center', marginTop: 8, marginBottom: 26, lineHeight: 20, paddingHorizontal: 4 },
   rotulo: { color: 'rgba(255,255,255,0.55)', fontSize: 11.5, fontWeight: '800', letterSpacing: 1.1, marginBottom: 7, marginLeft: 3 },
   campo: {
@@ -3678,7 +3684,7 @@ function SeloNuvem({ status }) {
   return (
     <Animated.View style={[loginStyles.selo, { transform: [{ scale: Animated.multiply(pop, pulso.interpolate({ inputRange: [0, 1], outputRange: [1, 1.14] })) }] }]}>
       <View style={[loginStyles.seloInterno, { backgroundColor: cfg.c }]}>
-        <MaterialCommunityIcons name={cfg.i} size={21} color="#ffffff" />
+        <MaterialCommunityIcons name={cfg.i} size={16} color="#ffffff" />
       </View>
     </Animated.View>
   );
@@ -3891,8 +3897,9 @@ function LoginNuvemModal({ visible, convite, onFechar, onSucesso }) {
                     </Animated.View>
                   )}
 
-                  <TouchableOpacity style={[loginStyles.botao, { opacity: pronto || enviando ? 1 : 0.6 }]} onPress={enviar} activeOpacity={0.88} disabled={enviando}>
+                  <TouchableOpacity style={loginStyles.botao} onPress={enviar} activeOpacity={0.9} disabled={enviando}>
                     <Grad />
+                    {!pronto && !enviando && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(7,4,26,0.4)' }]} />}
                     {enviando ? (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                         <ActivityIndicator color="#fff" />
