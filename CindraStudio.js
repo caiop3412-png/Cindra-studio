@@ -3525,72 +3525,102 @@ function BotaoContaNuvem({ nome, status, onPress }) {
 // ── tela cheia de login / conta ──
 const loginStyles = StyleSheet.create({
   tela: { flex: 1, backgroundColor: '#07041a' },
-  conteudo: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 26 },
+  conteudo: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24 },
   corpo: { width: '100%', maxWidth: 440, alignSelf: 'center' },
   fechar: {
     position: 'absolute', right: 16, width: 40, height: 40, borderRadius: 20, zIndex: 5,
-    backgroundColor: 'rgba(255,255,255,0.09)', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center',
   },
-  topo: { alignItems: 'center', marginBottom: 2 },
-  logo: { width: 190, height: 190 },
+  topo: { alignItems: 'center' },
+  logo: { width: 176, height: 176 },
   selo: {
-    position: 'absolute', right: 4, top: 4, width: 34, height: 34, borderRadius: 17, backgroundColor: '#07041a',
+    position: 'absolute', right: 10, bottom: 12, width: 44, height: 44, borderRadius: 22, backgroundColor: '#07041a',
     alignItems: 'center', justifyContent: 'center',
   },
-  seloInterno: { width: 25, height: 25, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  marca: {
-    color: '#fff', fontSize: 28, fontWeight: '900', letterSpacing: 1.4, marginTop: 22,
-    textShadowColor: 'rgba(180,60,255,0.9)', textShadowRadius: 14, textShadowOffset: { width: 0, height: 0 },
-  },
-  sub: { color: COLORS.dim, fontSize: 14, textAlign: 'center', marginTop: 6, marginBottom: 24, lineHeight: 20, paddingHorizontal: 6 },
+  seloInterno: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  titulo: { color: '#fff', fontSize: 25, fontWeight: '900', textAlign: 'center', marginTop: 10, letterSpacing: 0.2 },
+  sub: { color: COLORS.dim, fontSize: 14, textAlign: 'center', marginTop: 8, marginBottom: 26, lineHeight: 20, paddingHorizontal: 4 },
+  rotulo: { color: 'rgba(255,255,255,0.55)', fontSize: 11.5, fontWeight: '800', letterSpacing: 1.1, marginBottom: 7, marginLeft: 3 },
   campo: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 16, paddingHorizontal: 15, marginBottom: 12, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.1)',
+    flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 15, paddingHorizontal: 15, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.09)',
   },
-  campoFoco: { borderColor: 'rgba(180,60,255,0.85)', backgroundColor: 'rgba(180,60,255,0.1)' },
-  input: { flex: 1, color: '#fff', fontSize: 16, paddingVertical: 15, marginLeft: 11 },
+  campoFoco: { borderColor: 'rgba(180,60,255,0.9)', backgroundColor: 'rgba(180,60,255,0.09)' },
+  campoErro: { borderColor: 'rgba(255,107,107,0.7)' },
+  input: { flex: 1, color: '#fff', fontSize: 16, paddingVertical: 14, marginLeft: 11 },
+  dicaLinha: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 7, marginBottom: 14, marginLeft: 3, minHeight: 16 },
+  dicaTxt: { fontSize: 12, flexShrink: 1 },
   erroCaixa: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,107,107,0.12)',
-    borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 6,
+    flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: 'rgba(255,107,107,0.1)',
+    borderRadius: 12, paddingVertical: 11, paddingHorizontal: 13, marginBottom: 10,
     borderWidth: 1, borderColor: 'rgba(255,107,107,0.35)',
   },
   erroTxt: { color: COLORS.error, fontSize: 12.5, flex: 1, lineHeight: 17 },
-  botao: { borderRadius: 17, overflow: 'hidden', height: 56, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+  botao: { borderRadius: 16, overflow: 'hidden', height: 56, alignItems: 'center', justifyContent: 'center' },
   botaoTxt: { color: '#fff', fontWeight: '900', fontSize: 16.5, letterSpacing: 0.4 },
   carregaFaixa: { position: 'absolute', bottom: 0, left: 0, height: 3, width: '35%', backgroundColor: 'rgba(255,255,255,0.85)' },
-  dica: { color: 'rgba(255,255,255,0.45)', fontSize: 12.5, textAlign: 'center', marginTop: 12 },
-  aviso: {
-    flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 26, padding: 13, borderRadius: 15,
-    backgroundColor: 'rgba(255,122,217,0.08)', borderWidth: 1, borderColor: 'rgba(255,122,217,0.25)',
+  dicaBotao: { color: 'rgba(255,255,255,0.45)', fontSize: 12.5, textAlign: 'center', marginTop: 12 },
+  linkSenha: { alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 10, marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  linkSenhaTxt: { color: COLORS.syntaxAttr, fontSize: 13, fontWeight: '700' },
+  beneficios: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 22 },
+  beneficio: { flex: 1, alignItems: 'center', paddingHorizontal: 4 },
+  beneficioIcone: {
+    width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(180,60,255,0.12)', alignItems: 'center',
+    justifyContent: 'center', marginBottom: 8, borderWidth: 1, borderColor: 'rgba(180,60,255,0.22)',
   },
-  avisoTxt: { color: 'rgba(255,255,255,0.62)', fontSize: 12, lineHeight: 17, flex: 1 },
-  sucessoCaixa: { alignItems: 'center', paddingVertical: 24 },
-  sucessoTitulo: { color: '#fff', fontSize: 22, fontWeight: '900' },
+  beneficioTxt: { color: 'rgba(255,255,255,0.6)', fontSize: 11.5, textAlign: 'center', lineHeight: 15 },
+  aviso: {
+    flexDirection: 'row', gap: 11, alignItems: 'flex-start', marginTop: 24, padding: 14, borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+  },
+  avisoTxt: { color: 'rgba(255,255,255,0.58)', fontSize: 12, lineHeight: 17, flex: 1 },
+  sucessoCaixa: { alignItems: 'center', paddingVertical: 20 },
+  sucessoTitulo: { color: '#fff', fontSize: 23, fontWeight: '900' },
   sucessoSub: { color: COLORS.dim, fontSize: 14, marginTop: 8, textAlign: 'center' },
-  contaNome: { color: '#fff', fontSize: 20, fontWeight: '800', textAlign: 'center', marginTop: 10 },
-  contaSyncLinha: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14 },
-  contaStatus: { fontSize: 14, flexShrink: 1, textAlign: 'center' },
-  contaDica: { color: 'rgba(255,255,255,0.45)', fontSize: 12, textAlign: 'center', marginTop: 6, marginBottom: 24 },
-  botaoSec: { borderRadius: 17, height: 54, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.08)', marginTop: 12 },
-  botaoPerigo: { borderRadius: 17, height: 54, alignItems: 'center', justifyContent: 'center', marginTop: 12, borderWidth: 1, borderColor: 'rgba(255,107,107,0.5)' },
+  contaRotulo: { color: 'rgba(255,255,255,0.5)', fontSize: 11.5, fontWeight: '800', letterSpacing: 1.1, textAlign: 'center', marginTop: 10 },
+  contaNome: { color: '#fff', fontSize: 24, fontWeight: '900', textAlign: 'center', marginTop: 4 },
+  contaCard: {
+    marginTop: 22, marginBottom: 18, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)', paddingHorizontal: 16,
+  },
+  contaLinha: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 14 },
+  contaLinhaBorda: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.07)' },
+  contaIcone: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  contaLinhaTitulo: { color: '#fff', fontSize: 14.5, fontWeight: '700' },
+  contaLinhaSub: { color: 'rgba(255,255,255,0.5)', fontSize: 12.5, marginTop: 2 },
+  botaoSec: {
+    borderRadius: 16, height: 52, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.07)',
+    marginTop: 12, flexDirection: 'row', gap: 9,
+  },
+  botaoSecTxt: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  botaoPerigo: {
+    borderRadius: 16, height: 52, alignItems: 'center', justifyContent: 'center', marginTop: 12,
+    borderWidth: 1, borderColor: 'rgba(255,107,107,0.55)', backgroundColor: 'rgba(255,107,107,0.08)',
+  },
 });
 
-// Entrada suave (o conteúdo sobe e aparece).
-function useEntradaNuvem(visible) {
-  const v = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (visible) {
-      v.setValue(0);
-      Animated.spring(v, { toValue: 1, friction: 8, tension: 60, useNativeDriver: true }).start();
+const NOME_VALIDO_NUVEM = /^[A-Za-z0-9][A-Za-z0-9_.-]{2,19}$/;
+
+// Abre o WhatsApp do suporte (redefinição de senha só pelo suporte).
+async function abrirSuporteNuvem(usuario) {
+  const texto = encodeURIComponent(
+    usuario ? `Olá! Preciso redefinir a senha da minha conta no Cindra Studio. Meu usuário é: ${usuario}` : 'Olá! Preciso de ajuda com a minha conta no Cindra Studio.'
+  );
+  try {
+    await Linking.openURL(`whatsapp://send?phone=${WHATS_SUPORTE}&text=${texto}`);
+  } catch (e) {
+    try {
+      await Linking.openURL(`https://wa.me/${WHATS_SUPORTE}?text=${texto}`);
+    } catch (e2) {
+      exibirAviso('WhatsApp', 'Não consegui abrir o WhatsApp. Chame o suporte no número +55 31 98397-4632.', 'aviso');
     }
-  }, [visible]);
-  return v;
+  }
 }
 
 function useLoopNuvem(ativo, duracao = 2200) {
   const v = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (!ativo) return undefined;
+    if (!ativo) { v.setValue(0); return undefined; }
     const anim = Animated.loop(
       Animated.sequence([
         Animated.timing(v, { toValue: 1, duration: duracao, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
@@ -3603,6 +3633,21 @@ function useLoopNuvem(ativo, duracao = 2200) {
   return v;
 }
 
+// Os blocos da tela entram um depois do outro (fade + subida).
+function useEscalonadoNuvem(visible, n) {
+  const vals = useRef(Array.from({ length: n }, () => new Animated.Value(0))).current;
+  useEffect(() => {
+    if (!visible) return;
+    vals.forEach((v) => v.setValue(0));
+    Animated.stagger(
+      85,
+      vals.map((v) => Animated.spring(v, { toValue: 1, friction: 9, tension: 60, useNativeDriver: true }))
+    ).start();
+  }, [visible]);
+  return vals;
+}
+const entradaEstilo = (v) => ({ opacity: v, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [28, 0] }) }] });
+
 function useAlturaTecladoNuvem(ativo) {
   const [alt, setAlt] = useState(0);
   useEffect(() => {
@@ -3614,21 +3659,39 @@ function useAlturaTecladoNuvem(ativo) {
   return alt;
 }
 
-// Logo do Cindra Studio (arquivo em assets/cindra-logo.png), flutuando suave.
-// A logo já traz o nome "cindra studio" escrito, então não repete o texto.
-function IconeAppNuvem({ ativo, sucesso }) {
-  const flutua = useLoopNuvem(ativo, 2100);
+// Selo de nuvem no canto da logo: muda conforme o estado.
+function SeloNuvem({ status }) {
+  const pop = useRef(new Animated.Value(1)).current;
+  const pulso = useLoopNuvem(status === 'sincronizando', 650);
+  useEffect(() => {
+    pop.setValue(0.55);
+    Animated.spring(pop, { toValue: 1, friction: 5, tension: 140, useNativeDriver: true }).start();
+  }, [status]);
+  const mapa = {
+    padrao: { i: 'cloud-outline', c: COLORS.emberDeep },
+    ok: { i: 'cloud-check', c: '#2fcf7a' },
+    sincronizando: { i: 'cloud-sync', c: '#e0a41b' },
+    offline: { i: 'cloud-off-outline', c: '#7d8499' },
+    erro: { i: 'cloud-alert', c: '#ff6b6b' },
+  };
+  const cfg = mapa[status] || mapa.padrao;
+  return (
+    <Animated.View style={[loginStyles.selo, { transform: [{ scale: Animated.multiply(pop, pulso.interpolate({ inputRange: [0, 1], outputRange: [1, 1.14] })) }] }]}>
+      <View style={[loginStyles.seloInterno, { backgroundColor: cfg.c }]}>
+        <MaterialCommunityIcons name={cfg.i} size={21} color="#ffffff" />
+      </View>
+    </Animated.View>
+  );
+}
+
+// Logo do Cindra Studio (assets/cindra-logo.png) com o selo de nuvem, flutuando suave.
+function IconeAppNuvem({ ativo, status = 'padrao' }) {
+  const flutua = useLoopNuvem(ativo, 2300);
   return (
     <View style={loginStyles.topo}>
-      <Animated.View style={{ transform: [{ translateY: flutua.interpolate({ inputRange: [0, 1], outputRange: [3, -5] }) }] }}>
+      <Animated.View style={{ transform: [{ translateY: flutua.interpolate({ inputRange: [0, 1], outputRange: [2, -4] }) }] }}>
         <Image source={require('./assets/cindra-logo.png')} style={loginStyles.logo} resizeMode="contain" />
-        {sucesso && (
-          <View style={loginStyles.selo}>
-            <View style={[loginStyles.seloInterno, { backgroundColor: '#3ddc84' }]}>
-              <MaterialCommunityIcons name="check-bold" size={16} color="#fff" />
-            </View>
-          </View>
-        )}
+        <SeloNuvem status={status} />
       </Animated.View>
     </View>
   );
@@ -3642,10 +3705,25 @@ function BotaoFecharNuvem({ onPress, topo }) {
   );
 }
 
+function AvisoSenhaNuvem({ texto }) {
+  return (
+    <View style={loginStyles.aviso}>
+      <MaterialCommunityIcons name="shield-lock-outline" size={21} color={COLORS.gold} />
+      <Text style={loginStyles.avisoTxt}>{texto}</Text>
+    </View>
+  );
+}
+
+const BENEFICIOS_NUVEM = [
+  ['cloud-upload-outline', 'Backup automático'],
+  ['cellphone-link', 'Em qualquer aparelho'],
+  ['sync', 'Sincroniza sozinho'],
+];
+
 function LoginNuvemModal({ visible, convite, onFechar, onSucesso }) {
   const insets = useSafeAreaInsets();
   const teclado = useAlturaTecladoNuvem(visible);
-  const entrada = useEntradaNuvem(visible);
+  const bloco = useEscalonadoNuvem(visible, 5);
   const [nome, setNome] = useState('');
   const [senha, setSenha] = useState('');
   const [ver, setVer] = useState(false);
@@ -3691,20 +3769,19 @@ function LoginNuvemModal({ visible, convite, onFechar, onSucesso }) {
   };
   const falhar = (msg) => { setErro(msg); tremer(); };
 
-  const nomeOk = /^[A-Za-z0-9][A-Za-z0-9_.-]{2,19}$/.test(nome.trim());
+  const nomeTxt = nome.trim();
+  const nomeOk = NOME_VALIDO_NUVEM.test(nomeTxt);
+  const senhaOk = senha.length >= 6;
+  const pronto = nomeOk && senhaOk;
 
   const enviar = async () => {
     if (enviando || sucesso) return;
     Keyboard.dismiss();
-    const n = nome.trim();
-    if (!nomeOk) {
-      falhar('O nome deve ter de 3 a 20 caracteres: letras, números, ponto, traço ou _ (sem espaços).');
-      return;
-    }
-    if (senha.length < 6) { falhar('A senha precisa ter pelo menos 6 caracteres.'); return; }
+    if (!nomeOk) { falhar('O nome deve ter de 3 a 20 caracteres: letras, números, ponto, traço ou _ (sem espaços).'); return; }
+    if (!senhaOk) { falhar('A senha precisa ter pelo menos 6 caracteres.'); return; }
     setErro('');
     setEnviando(true);
-    const r = await entrarNuvemStudio(n, senha);
+    const r = await entrarNuvemStudio(nomeTxt, senha);
     setEnviando(false);
     if (!r.ok) { falhar(r.mensagem); return; }
     setSenha('');
@@ -3714,27 +3791,29 @@ function LoginNuvemModal({ visible, convite, onFechar, onSucesso }) {
     setTimeout(() => onSucesso({ token: r.token, nome: r.nome }), 1100);
   };
 
+  // dica embaixo do nome
+  let dicaNome = { icone: 'information-outline', cor: 'rgba(255,255,255,0.45)', txt: '3 a 20 caracteres: letras, números, ponto, traço ou _' };
+  if (nome.length > 0) {
+    dicaNome = nomeOk
+      ? { icone: 'check-circle', cor: '#3ddc84', txt: 'Nome válido' }
+      : { icone: 'alert-circle-outline', cor: '#ffb020', txt: nome.length < 3 ? 'Use pelo menos 3 caracteres' : 'Sem espaços ou símbolos (só letras, números, . - _)' };
+  }
+  const dicaSenha = senhaOk
+    ? { icone: 'check-circle', cor: '#3ddc84', txt: 'Senha ok' }
+    : { icone: 'information-outline', cor: 'rgba(255,255,255,0.45)', txt: 'Mínimo de 6 caracteres' };
+
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onFechar} statusBarTranslucent>
       <View style={loginStyles.tela}>
         <ScrollView
-          contentContainerStyle={[loginStyles.conteudo, { paddingTop: insets.top + 70, paddingBottom: insets.bottom + 24 + teclado }]}
+          contentContainerStyle={[loginStyles.conteudo, { paddingTop: insets.top + 64, paddingBottom: insets.bottom + 24 + teclado }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Animated.View
-            style={[
-              loginStyles.corpo,
-              {
-                opacity: entrada,
-                transform: [
-                  { translateY: entrada.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) },
-                  { translateX: shake.interpolate({ inputRange: [-1, 1], outputRange: [-9, 9] }) },
-                ],
-              },
-            ]}
-          >
-            <IconeAppNuvem ativo={visible} sucesso={!!sucesso} />
+          <View style={loginStyles.corpo}>
+            <Animated.View style={entradaEstilo(bloco[0])}>
+              <IconeAppNuvem ativo={visible} status={sucesso ? 'ok' : enviando ? 'sincronizando' : 'padrao'} />
+            </Animated.View>
 
             {sucesso ? (
               <Animated.View style={[loginStyles.sucessoCaixa, { opacity: sucessoAnim, transform: [{ scale: sucessoAnim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }) }] }]}>
@@ -3744,92 +3823,117 @@ function LoginNuvemModal({ visible, convite, onFechar, onSucesso }) {
               </Animated.View>
             ) : (
               <>
-                <Text style={loginStyles.sub}>
-                  {convite
-                    ? 'Quer salvar seus projetos na nuvem? Entre com um nome e uma senha para abrir eles em qualquer aparelho.'
-                    : 'Entre com um nome e uma senha para salvar e sincronizar seus projetos na nuvem.'}
-                </Text>
-
-                <View style={[loginStyles.campo, foco === 'nome' && loginStyles.campoFoco]}>
-                  <MaterialCommunityIcons name="account-outline" size={22} color={foco === 'nome' ? COLORS.ember : COLORS.dim} />
-                  <TextInput
-                    style={loginStyles.input}
-                    value={nome}
-                    onChangeText={(t) => { setNome(t); if (erro) setErro(''); }}
-                    placeholder="Nome de usuário"
-                    placeholderTextColor="rgba(255,255,255,0.35)"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    maxLength={20}
-                    returnKeyType="next"
-                    onFocus={() => setFoco('nome')}
-                    onBlur={() => setFoco(null)}
-                    onSubmitEditing={() => inputSenhaRef.current && inputSenhaRef.current.focus()}
-                    editable={!enviando}
-                  />
-                  {nome.length > 0 && nomeOk && <MaterialCommunityIcons name="check-circle" size={19} color="#3ddc84" />}
-                </View>
-
-                <View style={[loginStyles.campo, foco === 'senha' && loginStyles.campoFoco]}>
-                  <MaterialCommunityIcons name="lock-outline" size={22} color={foco === 'senha' ? COLORS.ember : COLORS.dim} />
-                  <TextInput
-                    ref={inputSenhaRef}
-                    style={loginStyles.input}
-                    value={senha}
-                    onChangeText={(t) => { setSenha(t); if (erro) setErro(''); }}
-                    placeholder="Senha"
-                    placeholderTextColor="rgba(255,255,255,0.35)"
-                    secureTextEntry={!ver}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    maxLength={100}
-                    returnKeyType="go"
-                    onFocus={() => setFoco('senha')}
-                    onBlur={() => setFoco(null)}
-                    onSubmitEditing={enviar}
-                    editable={!enviando}
-                  />
-                  <TouchableOpacity onPress={() => setVer(!ver)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <MaterialCommunityIcons name={ver ? 'eye-off-outline' : 'eye-outline'} size={22} color={COLORS.dim} />
-                  </TouchableOpacity>
-                </View>
-
-                {!!erro && (
-                  <Animated.View style={[loginStyles.erroCaixa, { opacity: erroAnim, transform: [{ translateY: erroAnim.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }] }]}>
-                    <MaterialCommunityIcons name="alert-circle-outline" size={18} color={COLORS.error} />
-                    <Text style={loginStyles.erroTxt}>{erro}</Text>
-                  </Animated.View>
-                )}
-
-                <TouchableOpacity style={loginStyles.botao} onPress={enviar} activeOpacity={0.88} disabled={enviando}>
-                  <Grad />
-                  {enviando ? (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                      <ActivityIndicator color="#fff" />
-                      <Text style={loginStyles.botaoTxt}>Conectando{'.'.repeat(pontos)}</Text>
-                    </View>
-                  ) : (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
-                      <MaterialCommunityIcons name="login-variant" size={21} color="#fff" />
-                      <Text style={loginStyles.botaoTxt}>Entrar / Criar</Text>
-                    </View>
-                  )}
-                  {enviando && (
-                    <Animated.View style={[loginStyles.carregaFaixa, { transform: [{ translateX: faixa.interpolate({ inputRange: [0, 1], outputRange: [-120, 380] }) }] }]} />
-                  )}
-                </TouchableOpacity>
-
-                <Text style={loginStyles.dica}>Já tem conta? A gente entra. Ainda não tem? A gente cria pra você.</Text>
-
-                <View style={loginStyles.aviso}>
-                  <MaterialCommunityIcons name="shield-lock-outline" size={21} color={COLORS.gold} />
-                  <Text style={loginStyles.avisoTxt}>
-                    Este login serve apenas para salvar seus projetos na nuvem. Não existe recuperação automática de senha: só o suporte consegue redefinir. Guarde bem a sua senha.
+                <Animated.View style={entradaEstilo(bloco[1])}>
+                  <Text style={loginStyles.titulo}>{convite ? 'Salve seus projetos na nuvem' : 'Acesse sua conta'}</Text>
+                  <Text style={loginStyles.sub}>
+                    Entre com seu nome e senha. Se ainda não tem conta, a gente cria na hora.
                   </Text>
-                </View>
+                </Animated.View>
+
+                <Animated.View style={[entradaEstilo(bloco[2]), { transform: [...entradaEstilo(bloco[2]).transform, { translateX: shake.interpolate({ inputRange: [-1, 1], outputRange: [-9, 9] }) }] }]}>
+                  <Text style={loginStyles.rotulo}>USUÁRIO</Text>
+                  <View style={[loginStyles.campo, foco === 'nome' && loginStyles.campoFoco]}>
+                    <MaterialCommunityIcons name="account-outline" size={22} color={foco === 'nome' ? COLORS.ember : COLORS.dim} />
+                    <TextInput
+                      style={loginStyles.input}
+                      value={nome}
+                      onChangeText={(t) => { setNome(t); if (erro) setErro(''); }}
+                      placeholder="Seu nome de usuário"
+                      placeholderTextColor="rgba(255,255,255,0.3)"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      maxLength={20}
+                      returnKeyType="next"
+                      onFocus={() => setFoco('nome')}
+                      onBlur={() => setFoco(null)}
+                      onSubmitEditing={() => inputSenhaRef.current && inputSenhaRef.current.focus()}
+                      editable={!enviando}
+                    />
+                  </View>
+                  <View style={loginStyles.dicaLinha}>
+                    <MaterialCommunityIcons name={dicaNome.icone} size={15} color={dicaNome.cor} />
+                    <Text style={[loginStyles.dicaTxt, { color: dicaNome.cor }]}>{dicaNome.txt}</Text>
+                  </View>
+
+                  <Text style={loginStyles.rotulo}>SENHA</Text>
+                  <View style={[loginStyles.campo, foco === 'senha' && loginStyles.campoFoco]}>
+                    <MaterialCommunityIcons name="lock-outline" size={22} color={foco === 'senha' ? COLORS.ember : COLORS.dim} />
+                    <TextInput
+                      ref={inputSenhaRef}
+                      style={loginStyles.input}
+                      value={senha}
+                      onChangeText={(t) => { setSenha(t); if (erro) setErro(''); }}
+                      placeholder="Sua senha"
+                      placeholderTextColor="rgba(255,255,255,0.3)"
+                      secureTextEntry={!ver}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      maxLength={100}
+                      returnKeyType="go"
+                      onFocus={() => setFoco('senha')}
+                      onBlur={() => setFoco(null)}
+                      onSubmitEditing={enviar}
+                      editable={!enviando}
+                    />
+                    <TouchableOpacity onPress={() => setVer(!ver)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <MaterialCommunityIcons name={ver ? 'eye-off-outline' : 'eye-outline'} size={22} color={COLORS.dim} />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={loginStyles.dicaLinha}>
+                    <MaterialCommunityIcons name={dicaSenha.icone} size={15} color={dicaSenha.cor} />
+                    <Text style={[loginStyles.dicaTxt, { color: dicaSenha.cor }]}>{dicaSenha.txt}</Text>
+                  </View>
+
+                  {!!erro && (
+                    <Animated.View style={[loginStyles.erroCaixa, { opacity: erroAnim, transform: [{ translateY: erroAnim.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }] }]}>
+                      <MaterialCommunityIcons name="alert-circle-outline" size={19} color={COLORS.error} />
+                      <Text style={loginStyles.erroTxt}>{erro}</Text>
+                    </Animated.View>
+                  )}
+
+                  <TouchableOpacity style={[loginStyles.botao, { opacity: pronto || enviando ? 1 : 0.6 }]} onPress={enviar} activeOpacity={0.88} disabled={enviando}>
+                    <Grad />
+                    {enviando ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <ActivityIndicator color="#fff" />
+                        <Text style={loginStyles.botaoTxt}>Conectando{'.'.repeat(pontos)}</Text>
+                      </View>
+                    ) : (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+                        <MaterialCommunityIcons name="login-variant" size={21} color="#fff" />
+                        <Text style={loginStyles.botaoTxt}>Entrar / Criar</Text>
+                      </View>
+                    )}
+                    {enviando && (
+                      <Animated.View style={[loginStyles.carregaFaixa, { transform: [{ translateX: faixa.interpolate({ inputRange: [0, 1], outputRange: [-120, 380] }) }] }]} />
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={loginStyles.linkSenha} onPress={() => abrirSuporteNuvem(nomeTxt)} activeOpacity={0.7}>
+                    <MaterialCommunityIcons name="lifebuoy" size={16} color={COLORS.syntaxAttr} />
+                    <Text style={loginStyles.linkSenhaTxt}>Esqueceu a senha? Falar com o suporte</Text>
+                  </TouchableOpacity>
+                </Animated.View>
+
+                <Animated.View style={entradaEstilo(bloco[3])}>
+                  <View style={loginStyles.beneficios}>
+                    {BENEFICIOS_NUVEM.map(([icone, rotulo]) => (
+                      <View key={rotulo} style={loginStyles.beneficio}>
+                        <View style={loginStyles.beneficioIcone}>
+                          <MaterialCommunityIcons name={icone} size={22} color={COLORS.ember} />
+                        </View>
+                        <Text style={loginStyles.beneficioTxt}>{rotulo}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </Animated.View>
+
+                <Animated.View style={entradaEstilo(bloco[4])}>
+                  <AvisoSenhaNuvem texto="Este login serve apenas para salvar seus projetos na nuvem. Não existe recuperação automática de senha: só o suporte consegue redefinir. Guarde bem a sua senha." />
+                </Animated.View>
               </>
             )}
-          </Animated.View>
+          </View>
         </ScrollView>
         <BotaoFecharNuvem onPress={onFechar} topo={insets.top} />
       </View>
@@ -3837,12 +3941,11 @@ function LoginNuvemModal({ visible, convite, onFechar, onSucesso }) {
   );
 }
 
-function ContaNuvemModal({ visible, nome, status, ultima, onFechar, onSincronizar, onSair }) {
+function ContaNuvemModal({ visible, nome, status, ultima, totalProjetos, onFechar, onSincronizar, onSair }) {
   const insets = useSafeAreaInsets();
-  const entrada = useEntradaNuvem(visible);
+  const bloco = useEscalonadoNuvem(visible, 4);
   const [confirmarSaida, setConfirmarSaida] = useState(false);
   const [, setRelogio] = useState(0);
-  const giro = useRef(new Animated.Value(0)).current;
   useEffect(() => { if (!visible) setConfirmarSaida(false); }, [visible]);
   // atualiza o "há X s" enquanto a tela está aberta
   useEffect(() => {
@@ -3850,68 +3953,86 @@ function ContaNuvemModal({ visible, nome, status, ultima, onFechar, onSincroniza
     const t = setInterval(() => setRelogio((x) => x + 1), 1000);
     return () => clearInterval(t);
   }, [visible]);
-  useEffect(() => {
-    if (status !== 'sincronizando') { giro.setValue(0); return undefined; }
-    const anim = Animated.loop(Animated.timing(giro, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: true }));
-    anim.start();
-    return () => anim.stop();
-  }, [status]);
 
   const seg = ultima ? Math.max(0, Math.round((Date.now() - ultima) / 1000)) : null;
   const quando = seg === null ? '' : seg < 5 ? 'agora mesmo' : seg < 60 ? `há ${seg} s` : `há ${Math.round(seg / 60)} min`;
   const info = status === 'sincronizando'
-    ? { txt: 'Sincronizando seus projetos…', cor: COLORS.gold, icone: 'sync' }
+    ? { titulo: 'Sincronizando…', sub: 'Enviando e recebendo seus projetos', cor: '#e0a41b', icone: 'cloud-sync' }
     : status === 'offline'
-      ? { txt: 'Sem internet — sincroniza quando voltar.', cor: '#9aa0b4', icone: 'cloud-off-outline' }
+      ? { titulo: 'Sem internet', sub: 'Sincroniza sozinho quando voltar', cor: '#7d8499', icone: 'cloud-off-outline' }
       : status === 'erro'
-        ? { txt: 'Não deu pra sincronizar agora. Tentando de novo…', cor: COLORS.error, icone: 'cloud-alert' }
-        : { txt: `Tudo salvo na nuvem${quando ? ` · ${quando}` : ''}`, cor: '#3ddc84', icone: 'cloud-check-outline' };
+        ? { titulo: 'Falha ao sincronizar', sub: 'Tentando de novo automaticamente', cor: '#ff6b6b', icone: 'cloud-alert' }
+        : { titulo: 'Tudo salvo na nuvem', sub: quando ? `Última sincronização ${quando}` : 'Conta conectada', cor: '#2fcf7a', icone: 'cloud-check' };
+  const selo = status === 'sincronizando' || status === 'offline' || status === 'erro' ? status : 'ok';
+  const n = totalProjetos || 0;
+
+  const linhas = [
+    { icone: info.icone, cor: info.cor, titulo: info.titulo, sub: info.sub },
+    { icone: 'folder-multiple-outline', cor: COLORS.emberDeep, titulo: `${n} ${n === 1 ? 'projeto' : 'projetos'} no aparelho`, sub: 'Todos são salvos na sua pasta na nuvem' },
+    { icone: 'timer-sand', cor: COLORS.ember, titulo: 'Sincronização automática', sub: 'Confere o servidor a cada 5 segundos' },
+  ];
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onFechar} statusBarTranslucent>
       <View style={loginStyles.tela}>
         <ScrollView
-          contentContainerStyle={[loginStyles.conteudo, { paddingTop: insets.top + 70, paddingBottom: insets.bottom + 24 }]}
+          contentContainerStyle={[loginStyles.conteudo, { paddingTop: insets.top + 64, paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Animated.View style={[loginStyles.corpo, { opacity: entrada, transform: [{ translateY: entrada.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }] }]}>
-            <IconeAppNuvem ativo={visible} sucesso={status === 'ok'} />
-            <Text style={loginStyles.contaNome}>{nome}</Text>
+          <View style={loginStyles.corpo}>
+            <Animated.View style={entradaEstilo(bloco[0])}>
+              <IconeAppNuvem ativo={visible} status={selo} />
+              <Text style={loginStyles.contaRotulo}>CONTA CINDRA</Text>
+              <Text style={loginStyles.contaNome}>{nome}</Text>
+            </Animated.View>
 
-            <View style={loginStyles.contaSyncLinha}>
-              <Animated.View style={{ transform: [{ rotate: giro.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] }}>
-                <MaterialCommunityIcons name={info.icone} size={21} color={info.cor} />
-              </Animated.View>
-              <Text style={[loginStyles.contaStatus, { color: info.cor }]}>{info.txt}</Text>
-            </View>
-            <Text style={loginStyles.contaDica}>Sincroniza automaticamente a cada 5 segundos.</Text>
-
-            <TouchableOpacity style={loginStyles.botao} onPress={onSincronizar} activeOpacity={0.88}>
-              <Grad />
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
-                <MaterialCommunityIcons name="sync" size={21} color="#fff" />
-                <Text style={loginStyles.botaoTxt}>Sincronizar agora</Text>
+            <Animated.View style={entradaEstilo(bloco[1])}>
+              <View style={loginStyles.contaCard}>
+                {linhas.map((l, idx) => (
+                  <View key={l.titulo} style={[loginStyles.contaLinha, idx > 0 && loginStyles.contaLinhaBorda]}>
+                    <View style={[loginStyles.contaIcone, { backgroundColor: `${l.cor}22` }]}>
+                      <MaterialCommunityIcons name={l.icone} size={21} color={l.cor} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={loginStyles.contaLinhaTitulo}>{l.titulo}</Text>
+                      <Text style={loginStyles.contaLinhaSub}>{l.sub}</Text>
+                    </View>
+                  </View>
+                ))}
               </View>
-            </TouchableOpacity>
+            </Animated.View>
 
-            {confirmarSaida ? (
-              <TouchableOpacity style={loginStyles.botaoPerigo} onPress={onSair} activeOpacity={0.85}>
-                <Text style={[loginStyles.botaoTxt, { color: COLORS.error, fontSize: 15 }]}>Toque de novo para sair</Text>
+            <Animated.View style={entradaEstilo(bloco[2])}>
+              <TouchableOpacity style={loginStyles.botao} onPress={onSincronizar} activeOpacity={0.88}>
+                <Grad />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+                  <MaterialCommunityIcons name="sync" size={21} color="#fff" />
+                  <Text style={loginStyles.botaoTxt}>Sincronizar agora</Text>
+                </View>
               </TouchableOpacity>
-            ) : (
-              <TouchableOpacity style={loginStyles.botaoSec} onPress={() => setConfirmarSaida(true)} activeOpacity={0.85}>
-                <Text style={[loginStyles.botaoTxt, { fontSize: 15 }]}>Sair da conta</Text>
-              </TouchableOpacity>
-            )}
 
-            <View style={loginStyles.aviso}>
-              <MaterialCommunityIcons name="shield-lock-outline" size={21} color={COLORS.gold} />
-              <Text style={loginStyles.avisoTxt}>
-                Ao sair, seus projetos continuam no celular e na nuvem. Esqueceu a senha? Só o suporte consegue redefinir.
-              </Text>
-            </View>
-          </Animated.View>
+              <TouchableOpacity style={loginStyles.botaoSec} onPress={() => abrirSuporteNuvem(nome)} activeOpacity={0.85}>
+                <MaterialCommunityIcons name="lifebuoy" size={20} color="#fff" />
+                <Text style={loginStyles.botaoSecTxt}>Falar com o suporte</Text>
+              </TouchableOpacity>
+
+              {confirmarSaida ? (
+                <TouchableOpacity style={loginStyles.botaoPerigo} onPress={onSair} activeOpacity={0.85}>
+                  <Text style={[loginStyles.botaoSecTxt, { color: COLORS.error }]}>Toque de novo para sair</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={loginStyles.botaoSec} onPress={() => setConfirmarSaida(true)} activeOpacity={0.85}>
+                  <MaterialCommunityIcons name="logout" size={20} color="#fff" />
+                  <Text style={loginStyles.botaoSecTxt}>Sair da conta</Text>
+                </TouchableOpacity>
+              )}
+            </Animated.View>
+
+            <Animated.View style={entradaEstilo(bloco[3])}>
+              <AvisoSenhaNuvem texto="Ao sair, seus projetos continuam no celular e na nuvem. Esqueceu a senha? Só o suporte consegue redefinir." />
+            </Animated.View>
+          </View>
         </ScrollView>
         <BotaoFecharNuvem onPress={onFechar} topo={insets.top} />
       </View>
@@ -11860,6 +11981,7 @@ function CindraStudioScreen({ visible, onClose }) {
         nome={contaNuvem ? contaNuvem.nome : ''}
         status={statusNuvem}
         ultima={ultimaSyncNuvem}
+        totalProjetos={listaProjetos.length}
         onFechar={() => setContaNuvemAberta(false)}
         onSincronizar={() => { agendarSyncNuvem(0); }}
         onSair={sairDaNuvem}
