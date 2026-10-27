@@ -7,11 +7,6 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0c0c0d"
-    },
     "android": {
       "package": "com.cindratech.studio",
       "googleServicesFile": "./google-services.json",
@@ -48,6 +43,15 @@
           "icon": "./assets/notification-icon.png",
           "color": "#ff5227",
           "defaultChannel": "lembretes"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#0c0c0d"
         }
       ]
     ],
