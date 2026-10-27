@@ -9151,6 +9151,11 @@ async function prepararNotificacoesStudio() {
           sound: 'default',
         });
       }
+      if (Notifications.setNotificationCategoryAsync) {
+        await Notifications.setNotificationCategoryAsync('aviso', [
+          { identifier: 'abrir', buttonTitle: 'Abrir app', options: { opensAppToForeground: true } },
+        ]);
+      }
       notifPreparadasStudio = true;
     }
     let { status } = await Notifications.getPermissionsAsync();
@@ -9179,6 +9184,8 @@ async function notificarNaBarraStudio(aviso) {
       title: String(aviso.titulo || 'Aviso'),
       body: String(aviso.mensagem || ''),
       sound: 'default',
+      color: '#C026D3',
+      categoryIdentifier: 'aviso',
       data: { local: true, avisoId: aviso.id },
     };
     try {
