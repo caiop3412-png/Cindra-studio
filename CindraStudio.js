@@ -3179,6 +3179,502 @@ async function gravarPrefsStudio(prefs) {
   } catch (e) {}
 }
 
+// ─────────────────────────────────────────────────────────
+// NUVEM CINDRA — login opcional + backup dos projetos no servidor.
+// O login serve SÓ pra salvar projetos. Sem conta o app funciona igual.
+// Servidor: cada usuário tem uma pasta, e dentro dela uma pasta por projeto.
+// ─────────────────────────────────────────────────────────
+const NUVEM_URL = 'https://cindra-studio.shop';
+const ARQUIVO_NUVEM_STUDIO = `${FileSystem.documentDirectory}cindrastudio/_nuvem.json`;
+const LIMITE_BINARIO_NUVEM = 15 * 1024 * 1024;
+
+function nuvemPadrao() {
+  // pendentes: { pacote: quando mudou } · excluir: { pacote: true }
+  // versoes: { pacote: última versão (do servidor) que este aparelho já tem }
+  return { token: null, nome: null, pendentes: {}, excluir: {}, versoes: {} };
+}
+
+async function lerNuvemStudio() {
+  try {
+    const info = await FileSystem.getInfoAsync(ARQUIVO_NUVEM_STUDIO);
+    if (!info.exists) return nuvemPadrao();
+    const texto = await FileSystem.readAsStringAsync(ARQUIVO_NUVEM_STUDIO, { encoding: FileSystem.EncodingType.UTF8 });
+    const obj = JSON.parse(texto);
+    return { ...nuvemPadrao(), ...(obj && typeof obj === 'object' ? obj : {}) };
+  } catch (e) {
+    return nuvemPadrao();
+  }
+}
+
+async function gravarNuvemStudio(n) {
+  await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}cindrastudio/`, { intermediates: true });
+  await FileSystem.writeAsStringAsync(ARQUIVO_NUVEM_STUDIO, JSON.stringify(n), { encoding: FileSystem.EncodingType.UTF8 });
+}
+
+// Todas as mudanças no arquivo da nuvem passam por uma fila (sem corrida
+// entre o autosave e a sincronização).
+let filaNuvemStudio = Promise.resolve();
+function alterarNuvemStudio(fn) {
+  const p = filaNuvemStudio.then(async () => {
+    const n = await lerNuvemStudio();
+    const r = fn(n);
+    await gravarNuvemStudio(n);
+    return r;
+  });
+  filaNuvemStudio = p.catch(() => {});
+  return p;
+}
+
+async function nuvemFetch(caminho, { metodo = 'GET', corpo, token, timeoutMs = 25000 } = {}) {
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const resp = await fetch(NUVEM_URL + caminho, {
+      method: metodo,
+      headers,
+      body: corpo !== undefined ? JSON.stringify(corpo) : undefined,
+      signal: ctrl ? ctrl.signal : undefined,
+    });
+    let dados = null;
+    try { dados = await resp.json(); } catch (e) {}
+    return { ok: resp.ok, status: resp.status, dados };
+  } catch (e) {
+    return { ok: false, status: 0, dados: null, semRede: true };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function mensagemErroNuvem(r) {
+  if (r.semRede) return 'Sem conexão com a internet. Tente de novo.';
+  const e = r.dados && r.dados.erro;
+  if (e === 'nome_invalido') return 'O nome deve ter de 3 a 20 caracteres: letras, números, ponto, traço ou _ (sem espaços).';
+  if (e === 'senha_invalida') return 'A senha precisa ter de 6 a 100 caracteres.';
+  if (e === 'nome_em_uso') return 'Esse nome já está em uso. Escolha outro.';
+  if (e === 'login_incorreto') return 'Nome ou senha incorretos.';
+  if (r.status === 429 || e === 'muitas_tentativas') return 'Muitas tentativas. Aguarde alguns minutos e tente de novo.';
+  return 'Não foi possível conectar agora. Tente de novo em instantes.';
+}
+
+async function entrarNuvemStudio(modo, nome, senha) {
+  const r = await nuvemFetch(`/api/conta/${modo === 'criar' ? 'criar' : 'entrar'}`, { metodo: 'POST', corpo: { nome, senha } });
+  if (r.ok && r.dados && r.dados.token) return { ok: true, token: r.dados.token, nome: r.dados.nome || nome };
+  return { ok: false, mensagem: mensagemErroNuvem(r) };
+}
+
+async function sairNuvemStudio() {
+  const n = await lerNuvemStudio();
+  if (n.token) nuvemFetch('/api/conta/sair', { metodo: 'POST', token: n.token, timeoutMs: 8000 }).catch(() => {});
+  await gravarNuvemStudio(nuvemPadrao());
+}
+
+function marcarPendenteNuvem(pacote) {
+  return alterarNuvemStudio((n) => { if (n.token) n.pendentes[pacote] = Date.now(); }).catch(() => {});
+}
+
+function registrarExclusaoNuvem(pacote) {
+  return alterarNuvemStudio((n) => {
+    if (!n.token) return;
+    n.excluir[pacote] = true;
+    delete n.pendentes[pacote];
+  }).catch(() => {});
+}
+
+// Monta o que vai pro servidor: textos separados do resto do estado + binários em base64.
+async function montarPacoteNuvem(pacote) {
+  const e = await lerEstadoStudio(pacote);
+  if (!e) return null;
+  const { conteudos, ...projetoSem } = e.projeto;
+  const binarios64 = {};
+  const pastaBin = pastaBinariosStudio(pacote);
+  for (const caminho of Object.keys(e.projeto.binarios || {})) {
+    try {
+      const info = await FileSystem.getInfoAsync(pastaBin + caminho);
+      if (!info.exists || (info.size || 0) > LIMITE_BINARIO_NUVEM) continue;
+      binarios64[caminho] = await FileSystem.readAsStringAsync(pastaBin + caminho, { encoding: FileSystem.EncodingType.Base64 });
+    } catch (err) {}
+  }
+  return { estado: { ...e, projeto: projetoSem }, conteudos, binarios64 };
+}
+
+// Recebe um projeto do servidor e cria tudo no celular (estado, lista e pasta).
+async function instalarProjetoDaNuvem(pacote, dados) {
+  const estadoRemoto = dados.estado || {};
+  let proj = { ...(estadoRemoto.projeto || {}), conteudos: dados.conteudos || {} };
+  if (!proj.arvore) throw new Error('projeto sem árvore');
+  const binRecebidos = dados.binarios64 || {};
+  const pastaBin = pastaBinariosStudio(pacote);
+  await FileSystem.deleteAsync(pastaBin, { idempotent: true });
+  const binarios = { ...(proj.binarios || {}) };
+  for (const caminho of Object.keys(binarios)) {
+    if (typeof binRecebidos[caminho] !== 'string') {
+      // binário grande demais que não subiu: some do projeto neste aparelho
+      delete binarios[caminho];
+      proj = { ...proj, arvore: removerNoDaArvore(proj.arvore, caminho) };
+      continue;
+    }
+    await FileSystem.makeDirectoryAsync(pastaBin + caminho.split('/').slice(0, -1).join('/'), { intermediates: true });
+    await FileSystem.writeAsStringAsync(pastaBin + caminho, binRecebidos[caminho], { encoding: FileSystem.EncodingType.Base64 });
+  }
+  proj = { ...proj, binarios };
+
+  let fotoIcone = null;
+  if (binarios[ICONE_FOTO_CAMINHO]) {
+    try {
+      await FileSystem.makeDirectoryAsync(PASTA_ICONES_STUDIO, { intermediates: true });
+      fotoIcone = `${PASTA_ICONES_STUDIO}${pacote}_${Date.now()}.png`;
+      await FileSystem.copyAsync({ from: pastaBin + ICONE_FOTO_CAMINHO, to: fotoIcone });
+    } catch (err) { fotoIcone = null; }
+  }
+
+  await gravarEstadoStudio({ ...estadoRemoto, nomePacote: pacote, fotoIcone, projeto: proj });
+
+  const resumo = dados.resumo || {};
+  const lista = await lerListaProjetosStudio();
+  const anterior = lista.find((p) => p.pacote === pacote) || {};
+  if (anterior.fotoIcone && anterior.fotoIcone !== fotoIcone) FileSystem.deleteAsync(anterior.fotoIcone, { idempotent: true }).catch(() => {});
+  const item = {
+    favorito: false,
+    ...anterior,
+    ...resumo,
+    pacote,
+    nomeApp: resumo.nomeApp || estadoRemoto.nomeApp || dados.nomeApp || anterior.nomeApp || 'Meu App',
+    iconeEscolhido: resumo.iconeEscolhido || estadoRemoto.iconeEscolhido || anterior.iconeEscolhido,
+    corIcone: resumo.corIcone || estadoRemoto.corIcone || anterior.corIcone,
+    fotoIcone,
+    atualizadoEm: dados.atualizadoEm || Date.now(),
+  };
+  await gravarListaProjetosStudio([item, ...lista.filter((p) => p.pacote !== pacote)]);
+  // cria a pasta do projeto no celular
+  await gravarProjetoStudio(proj).catch(() => {});
+}
+
+// Reconcilia celular × servidor. Nunca roda duas vezes ao mesmo tempo (quem chama garante).
+async function sincronizarNuvemStudio({ abertoPacote } = {}) {
+  let n = await lerNuvemStudio();
+  if (!n.token) return { ok: false, semConta: true };
+  const token = n.token;
+  const res = { ok: true, mudouLista: false, enviados: 0, baixados: 0, rejeitados: [], pendencias: false, semRede: false };
+  const aindaPendente = async () => {
+    const x = await lerNuvemStudio();
+    return Object.keys(x.pendentes || {}).length > 0 || Object.keys(x.excluir || {}).length > 0;
+  };
+  const falha = async (r) => ({ ...res, ok: false, semRede: !!r.semRede, pendencias: await aindaPendente() });
+
+  // 1) exclusões feitas no aparelho
+  for (const pacote of Object.keys(n.excluir || {})) {
+    const r = await nuvemFetch(`/api/projetos/${encodeURIComponent(pacote)}`, { metodo: 'DELETE', token });
+    if (r.status === 401) { await gravarNuvemStudio(nuvemPadrao()); return { ok: false, sessaoExpirada: true }; }
+    if (r.ok || r.status === 404 || r.status === 400) {
+      await alterarNuvemStudio((x) => { delete x.excluir[pacote]; delete x.versoes[pacote]; });
+    } else return falha(r);
+  }
+  n = await lerNuvemStudio();
+
+  // 2) o que existe no servidor
+  const rl = await nuvemFetch('/api/projetos', { token });
+  if (rl.status === 401) { await gravarNuvemStudio(nuvemPadrao()); return { ok: false, sessaoExpirada: true }; }
+  if (!rl.ok) return falha(rl);
+  const remotos = {};
+  ((rl.dados && rl.dados.projetos) || []).forEach((p) => { remotos[p.pacote] = p; });
+  const locais = {};
+  (await lerListaProjetosStudio()).forEach((p) => { locais[p.pacote] = p; });
+
+  for (const pacote of new Set([...Object.keys(remotos), ...Object.keys(locais)])) {
+    if (n.excluir && n.excluir[pacote]) continue;
+    const local = locais[pacote];
+    const remoto = remotos[pacote];
+    const ver = (n.versoes && n.versoes[pacote]) || 0;
+    const marca = (n.pendentes && n.pendentes[pacote]) || 0;
+    const tLocal = Math.max(marca, local ? local.atualizadoEm || 0 : 0);
+    const localMudou = !!local && (marca > 0 || tLocal > ver);
+    const remotoMudou = !!remoto && (remoto.atualizadoEm || 0) > ver;
+
+    let acao = null;
+    if (local && !remoto) acao = 'subir';
+    else if (!local && remoto) acao = 'baixar';
+    else if (local && remoto) {
+      if (localMudou && remotoMudou) acao = tLocal >= (remoto.atualizadoEm || 0) ? 'subir' : 'baixar';
+      else if (remotoMudou) acao = 'baixar';
+      else if (localMudou) acao = 'subir';
+    }
+    if (!acao) continue;
+
+    if (acao === 'subir') {
+      const pacoteNuvem = await montarPacoteNuvem(pacote);
+      if (!pacoteNuvem) { await alterarNuvemStudio((x) => { delete x.pendentes[pacote]; }); continue; }
+      const quando = tLocal > 0 ? tLocal : Date.now();
+      const resumo = { ...local };
+      delete resumo.fotoIcone;
+      delete resumo.atualizadoEm;
+      const r = await nuvemFetch(`/api/projetos/${encodeURIComponent(pacote)}`, {
+        metodo: 'PUT',
+        token,
+        timeoutMs: 180000,
+        corpo: { atualizadoEm: quando, nomeApp: local.nomeApp, resumo, ...pacoteNuvem },
+      });
+      if (r.status === 401) { await gravarNuvemStudio(nuvemPadrao()); return { ok: false, sessaoExpirada: true }; }
+      if (r.ok) {
+        const v = (r.dados && r.dados.atualizadoEm) || quando;
+        await alterarNuvemStudio((x) => {
+          x.versoes[pacote] = v;
+          if ((x.pendentes[pacote] || 0) <= marca) delete x.pendentes[pacote];
+        });
+        res.enviados += 1;
+      } else if (r.status === 400 || r.status === 413) {
+        await alterarNuvemStudio((x) => { delete x.pendentes[pacote]; });
+        res.rejeitados.push(pacote);
+      } else return falha(r);
+    } else {
+      if (pacote === abertoPacote) { res.pendencias = true; continue; } // não troca o projeto que está aberto
+      const r = await nuvemFetch(`/api/projetos/${encodeURIComponent(pacote)}`, { token, timeoutMs: 180000 });
+      if (r.status === 401) { await gravarNuvemStudio(nuvemPadrao()); return { ok: false, sessaoExpirada: true }; }
+      if (r.ok && r.dados) {
+        try {
+          await instalarProjetoDaNuvem(pacote, r.dados);
+          await alterarNuvemStudio((x) => { x.versoes[pacote] = r.dados.atualizadoEm || remoto.atualizadoEm || 0; delete x.pendentes[pacote]; });
+          res.baixados += 1;
+          res.mudouLista = true;
+        } catch (err) {
+          res.rejeitados.push(pacote);
+        }
+      } else if (r.status === 404) continue;
+      else return falha(r);
+    }
+  }
+  res.pendencias = res.pendencias || (await aindaPendente());
+  return res;
+}
+
+const nuvemStyles = StyleSheet.create({
+  fundo: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)' },
+  scroll: { flexGrow: 1, justifyContent: 'center', padding: 22 },
+  card: {
+    backgroundColor: '#120c2a',
+    borderRadius: 26,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(180,60,255,0.35)',
+    alignItems: 'stretch',
+  },
+  iconeTopo: {
+    width: 64, height: 64, borderRadius: 32, overflow: 'hidden', alignSelf: 'center',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 14,
+  },
+  titulo: { color: COLORS.ink, fontSize: 20, fontWeight: '800', textAlign: 'center' },
+  sub: { color: COLORS.dim, fontSize: 13.5, lineHeight: 19, textAlign: 'center', marginTop: 8, marginBottom: 16 },
+  abas: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 14, padding: 4, marginBottom: 14 },
+  aba: { flex: 1, paddingVertical: 10, borderRadius: 11, alignItems: 'center', overflow: 'hidden' },
+  abaTexto: { color: COLORS.dim, fontWeight: '700', fontSize: 14 },
+  abaTextoAtivo: { color: '#fff' },
+  campo: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 14, paddingHorizontal: 14, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+  },
+  input: { flex: 1, color: COLORS.ink, fontSize: 15.5, paddingVertical: 13 },
+  erro: { color: COLORS.error, fontSize: 13, marginBottom: 8, textAlign: 'center' },
+  botao: { borderRadius: 16, overflow: 'hidden', paddingVertical: 15, alignItems: 'center', justifyContent: 'center', marginTop: 6 },
+  botaoTexto: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  link: { paddingVertical: 12, alignItems: 'center' },
+  linkTexto: { color: COLORS.dim, fontSize: 14, fontWeight: '600' },
+  termos: { color: 'rgba(255,255,255,0.42)', fontSize: 11, lineHeight: 15.5, textAlign: 'center', marginTop: 6 },
+  avatar: { width: 42, height: 42 },
+  avatarBola: {
+    width: 42, height: 42, borderRadius: 21, overflow: 'hidden', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(180,60,255,0.12)', borderWidth: 1.5, borderColor: 'rgba(180,60,255,0.7)',
+  },
+  avatarBolaLogado: {
+    borderColor: 'rgba(255,255,255,0.35)', shadowColor: '#b43cff', shadowOpacity: 0.7, shadowRadius: 8, elevation: 6,
+  },
+  avatarLetra: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  avatarPonto: { position: 'absolute', right: -1, bottom: -1, width: 13, height: 13, borderRadius: 7, borderWidth: 2, borderColor: '#0b0720' },
+  contaLetra: { color: '#fff', fontSize: 30, fontWeight: '800' },
+  status: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 8, marginBottom: 18 },
+  statusTexto: { color: COLORS.dim, fontSize: 13.5, textAlign: 'center', flexShrink: 1 },
+  botaoSec: {
+    borderRadius: 16, paddingVertical: 14, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.08)', marginTop: 10,
+  },
+  botaoPerigo: { borderRadius: 16, paddingVertical: 14, alignItems: 'center', marginTop: 10, borderWidth: 1, borderColor: 'rgba(255,107,107,0.5)' },
+});
+
+// A "bolinha" ao lado do sino: pede login se não tem conta, e mostra a inicial do nome depois.
+function BotaoContaNuvem({ nome, status, onPress }) {
+  const logado = !!nome;
+  const corPonto = status === 'sincronizando' ? COLORS.gold : status === 'offline' ? '#9aa0b4' : status === 'erro' ? COLORS.error : '#3ddc84';
+  return (
+    <TouchableOpacity style={nuvemStyles.avatar} onPress={onPress} activeOpacity={0.8}>
+      <View style={[nuvemStyles.avatarBola, logado && nuvemStyles.avatarBolaLogado]}>
+        {logado ? (
+          <>
+            <Grad />
+            <Text style={nuvemStyles.avatarLetra}>{String(nome).charAt(0).toUpperCase()}</Text>
+          </>
+        ) : (
+          <MaterialCommunityIcons name="account-outline" size={22} color={COLORS.ink} />
+        )}
+      </View>
+      {logado && <View style={[nuvemStyles.avatarPonto, { backgroundColor: corPonto }]} />}
+    </TouchableOpacity>
+  );
+}
+
+function LoginNuvemModal({ visible, convite, onFechar, onSucesso }) {
+  const [modo, setModo] = useState('criar'); // 'criar' | 'entrar'
+  const [nome, setNome] = useState('');
+  const [senha, setSenha] = useState('');
+  const [ver, setVer] = useState(false);
+  const [erro, setErro] = useState('');
+  const [enviando, setEnviando] = useState(false);
+
+  useEffect(() => {
+    if (visible) { setErro(''); setSenha(''); setVer(false); setModo(convite ? 'criar' : 'entrar'); }
+  }, [visible, convite]);
+
+  const enviar = async () => {
+    if (enviando) return;
+    const n = nome.trim();
+    if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{2,19}$/.test(n)) {
+      setErro('O nome deve ter de 3 a 20 caracteres: letras, números, ponto, traço ou _ (sem espaços).');
+      return;
+    }
+    if (senha.length < 6) { setErro('A senha precisa ter pelo menos 6 caracteres.'); return; }
+    setErro('');
+    setEnviando(true);
+    const r = await entrarNuvemStudio(modo, n, senha);
+    setEnviando(false);
+    if (!r.ok) { setErro(r.mensagem); return; }
+    setSenha('');
+    onSucesso({ token: r.token, nome: r.nome });
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onFechar} statusBarTranslucent>
+      <View style={nuvemStyles.fundo}>
+        <ScrollView contentContainerStyle={nuvemStyles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={nuvemStyles.card}>
+            <View style={nuvemStyles.iconeTopo}>
+              <Grad />
+              <MaterialCommunityIcons name="cloud-check-outline" size={32} color="#ffffff" />
+            </View>
+            <Text style={nuvemStyles.titulo}>{convite ? 'Salvar seus projetos na nuvem?' : 'Conta Cindra'}</Text>
+            <Text style={nuvemStyles.sub}>
+              Crie um login para guardar seus projetos e abrir eles em qualquer aparelho. É opcional.
+            </Text>
+
+            <View style={nuvemStyles.abas}>
+              {[['criar', 'Criar conta'], ['entrar', 'Entrar']].map(([id, rotulo]) => (
+                <TouchableOpacity key={id} style={nuvemStyles.aba} onPress={() => { setModo(id); setErro(''); }} activeOpacity={0.8}>
+                  {modo === id && <Grad />}
+                  <Text style={[nuvemStyles.abaTexto, modo === id && nuvemStyles.abaTextoAtivo]}>{rotulo}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={nuvemStyles.campo}>
+              <MaterialCommunityIcons name="account-outline" size={20} color={COLORS.dim} />
+              <TextInput
+                style={[nuvemStyles.input, { marginLeft: 10 }]}
+                value={nome}
+                onChangeText={setNome}
+                placeholder="Nome de usuário"
+                placeholderTextColor={COLORS.dim}
+                autoCapitalize="none"
+                autoCorrect={false}
+                maxLength={20}
+              />
+            </View>
+            <View style={nuvemStyles.campo}>
+              <MaterialCommunityIcons name="lock-outline" size={20} color={COLORS.dim} />
+              <TextInput
+                style={[nuvemStyles.input, { marginLeft: 10 }]}
+                value={senha}
+                onChangeText={setSenha}
+                placeholder="Senha"
+                placeholderTextColor={COLORS.dim}
+                secureTextEntry={!ver}
+                autoCapitalize="none"
+                autoCorrect={false}
+                maxLength={100}
+                onSubmitEditing={enviar}
+              />
+              <TouchableOpacity onPress={() => setVer(!ver)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <MaterialCommunityIcons name={ver ? 'eye-off-outline' : 'eye-outline'} size={20} color={COLORS.dim} />
+              </TouchableOpacity>
+            </View>
+
+            {!!erro && <Text style={nuvemStyles.erro}>{erro}</Text>}
+
+            <TouchableOpacity style={nuvemStyles.botao} onPress={enviar} activeOpacity={0.85} disabled={enviando}>
+              <Grad />
+              {enviando ? <ActivityIndicator color="#fff" /> : <Text style={nuvemStyles.botaoTexto}>{modo === 'criar' ? 'Criar conta' : 'Entrar'}</Text>}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={nuvemStyles.link} onPress={onFechar} activeOpacity={0.7}>
+              <Text style={nuvemStyles.linkTexto}>{convite ? 'Agora não' : 'Cancelar'}</Text>
+            </TouchableOpacity>
+
+            <Text style={nuvemStyles.termos}>
+              Este login serve apenas para salvar seus projetos na nuvem. Não existe recuperação automática de senha: só o suporte consegue redefinir. Guarde bem a sua senha.
+            </Text>
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+function ContaNuvemModal({ visible, nome, status, onFechar, onSincronizar, onSair }) {
+  const [confirmarSaida, setConfirmarSaida] = useState(false);
+  useEffect(() => { if (!visible) setConfirmarSaida(false); }, [visible]);
+  const textoStatus = status === 'sincronizando'
+    ? 'Sincronizando seus projetos…'
+    : status === 'offline'
+      ? 'Sem internet — vai sincronizar quando voltar.'
+      : status === 'erro'
+        ? 'Não deu pra sincronizar agora. Vou tentar de novo.'
+        : 'Seus projetos estão salvos na nuvem.';
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onFechar} statusBarTranslucent>
+      <View style={nuvemStyles.fundo}>
+        <ScrollView contentContainerStyle={nuvemStyles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={nuvemStyles.card}>
+            <View style={nuvemStyles.iconeTopo}>
+              <Grad />
+              <Text style={nuvemStyles.contaLetra}>{String(nome || '?').charAt(0).toUpperCase()}</Text>
+            </View>
+            <Text style={nuvemStyles.titulo}>{nome}</Text>
+            <View style={nuvemStyles.status}>
+              {status === 'sincronizando' && <ActivityIndicator size="small" color={COLORS.ember} />}
+              <Text style={nuvemStyles.statusTexto}>{textoStatus}</Text>
+            </View>
+            <TouchableOpacity style={nuvemStyles.botao} onPress={onSincronizar} activeOpacity={0.85}>
+              <Grad />
+              <Text style={nuvemStyles.botaoTexto}>Sincronizar agora</Text>
+            </TouchableOpacity>
+            {confirmarSaida ? (
+              <TouchableOpacity style={nuvemStyles.botaoPerigo} onPress={onSair} activeOpacity={0.85}>
+                <Text style={[nuvemStyles.botaoTexto, { color: COLORS.error }]}>Toque de novo para sair</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={nuvemStyles.botaoSec} onPress={() => setConfirmarSaida(true)} activeOpacity={0.85}>
+                <Text style={[nuvemStyles.botaoTexto, { fontSize: 15 }]}>Sair da conta</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={nuvemStyles.link} onPress={onFechar} activeOpacity={0.7}>
+              <Text style={nuvemStyles.linkTexto}>Fechar</Text>
+            </TouchableOpacity>
+            <Text style={nuvemStyles.termos}>
+              Ao sair, seus projetos continuam no celular e na nuvem. Esqueceu a senha? Só o suporte pode redefinir.
+            </Text>
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
 // Item que entra com fade + subida suave (o atraso cresce com a posição na lista).
 // `leve`: só um fade curtinho, sem subir e sem atraso — usado no editor de
 // código, onde mover o TextInput durante a animação fazia o cursor e as cores
@@ -8485,7 +8981,7 @@ function CindraStudioScreen({ visible, onClose }) {
   useEffect(() => {
     if (!estadoRef.current) return undefined;
     const t = setTimeout(() => {
-      if (estadoRef.current) gravarEstadoStudio(estadoRef.current).catch(() => {});
+      if (estadoRef.current) gravarEstadoStudio(estadoRef.current).then(() => marcarSeMudouNuvem()).catch(() => {});
     }, 4000);
     return () => clearTimeout(t);
   }, [estadoCarregado, projeto, pastasAbertas, abasAbertas, arquivoAtivo, nomeApp, nomePacote, iconeEscolhido, corIcone, fotoIcone]);
@@ -8495,7 +8991,7 @@ function CindraStudioScreen({ visible, onClose }) {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (estadoApp) => {
       if (estadoApp !== 'active' && estadoRef.current) {
-        gravarEstadoStudio(estadoRef.current).catch(() => {});
+        gravarEstadoStudio(estadoRef.current).then(() => marcarSeMudouNuvem()).catch(() => {});
       }
     });
     return () => sub.remove();
@@ -8665,6 +9161,7 @@ function CindraStudioScreen({ visible, onClose }) {
       FileSystem.deleteAsync(pastaProjetoStudio(antigo.pacote), { idempotent: true }).catch(() => {});
       FileSystem.deleteAsync(pastaBinariosStudio(antigo.pacote), { idempotent: true }).catch(() => {});
     }
+    registrarExclusaoNuvem(pacoteAntigo).then(() => { lerNuvemStudio().then((n) => { nuvemRef.current = n; }); agendarSyncNuvem(1000); });
     removerDaListaProjetosStudio(pacoteAntigo)
       .then(setListaProjetos)
       .catch(() => {})
@@ -8716,6 +9213,7 @@ function CindraStudioScreen({ visible, onClose }) {
       };
     }
     setProjeto(proj);
+    projetoMarcadoRef.current = proj;
     setPastasAbertas(e.pastasAbertas || {});
     setAbasAbertas(Array.isArray(e.abasAbertas) ? e.abasAbertas.filter(existe) : []);
     setArquivoAtivo(e.arquivoAtivo && existe(e.arquivoAtivo) ? e.arquivoAtivo : null);
@@ -8773,6 +9271,7 @@ function CindraStudioScreen({ visible, onClose }) {
     FileSystem.deleteAsync(pastaProjetoStudio(pacote), { idempotent: true }).catch(() => {});
     FileSystem.deleteAsync(pastaBinariosStudio(pacote), { idempotent: true }).catch(() => {});
     removerDaListaProjetosStudio(pacote).then(setListaProjetos).catch(() => {});
+    registrarExclusaoNuvem(pacote).then(() => { lerNuvemStudio().then((n) => { nuvemRef.current = n; }); agendarSyncNuvem(1000); });
   };
 
   // Workspace → seta de voltar: salva o projeto atual, atualiza a lista
@@ -8790,6 +9289,8 @@ function CindraStudioScreen({ visible, onClose }) {
         versaoCodigo: lerVersaoProjeto(estadoRef.current.projeto).codigo,
       }).catch(() => null);
       if (lista) setListaProjetos(lista);
+      marcarSeMudouNuvem();
+      agendarSyncNuvem(2500);
     }
     await sincronizarPastaApp(false).catch(() => {});
     importouRef.current = '';
@@ -10185,6 +10686,131 @@ function CindraStudioScreen({ visible, onClose }) {
     null
   );
 
+  // ─────────────────────────────────────────────────────
+  // NUVEM: login opcional + backup dos projetos (ver módulo "NUVEM CINDRA")
+  // ─────────────────────────────────────────────────────
+  const [contaNuvem, setContaNuvem] = useState(null); // { nome } | null
+  const [statusNuvem, setStatusNuvem] = useState('ocioso'); // ocioso | sincronizando | ok | offline | erro
+  const [loginNuvem, setLoginNuvem] = useState(null); // null | 'convite' | 'manual'
+  const [contaNuvemAberta, setContaNuvemAberta] = useState(false);
+  const [conviteNuvemPendente, setConviteNuvemPendente] = useState(false);
+  const nuvemRef = useRef(null);
+  const timerSyncRef = useRef(null);
+  const syncandoRef = useRef(false);
+  const syncDeNovoRef = useRef(false);
+  const projetoMarcadoRef = useRef(null);
+  const abertoRef = useRef(null);
+  abertoRef.current = estadoRef.current ? nomePacote : null;
+
+  const agendarSyncNuvem = (ms = 2500) => {
+    clearTimeout(timerSyncRef.current);
+    timerSyncRef.current = setTimeout(() => { executarSyncNuvem(); }, ms);
+  };
+
+  const executarSyncNuvem = async () => {
+    if (!nuvemRef.current || !nuvemRef.current.token) return;
+    if (syncandoRef.current) { syncDeNovoRef.current = true; return; }
+    syncandoRef.current = true;
+    setStatusNuvem('sincronizando');
+    let r;
+    try {
+      r = await sincronizarNuvemStudio({ abertoPacote: abertoRef.current });
+    } catch (e) {
+      r = { ok: false, pendencias: true };
+    }
+    syncandoRef.current = false;
+    nuvemRef.current = await lerNuvemStudio();
+    if (r.sessaoExpirada) {
+      setContaNuvem(null);
+      setStatusNuvem('ocioso');
+      exibirAviso('Sessão expirada', 'Entre de novo na sua conta para continuar salvando na nuvem.', 'aviso');
+      return;
+    }
+    if (r.mudouLista) lerListaProjetosStudio().then(setListaProjetos).catch(() => {});
+    if (r.rejeitados && r.rejeitados.length) {
+      exibirAviso('Alguns projetos não subiram', 'Estão grandes demais ou com arquivos inválidos para a nuvem.', 'erro');
+    }
+    setStatusNuvem(r.ok ? 'ok' : r.semRede ? 'offline' : 'erro');
+    if (!r.ok && r.pendencias) agendarSyncNuvem(30000); // tenta de novo quando a internet voltar
+    else if (syncDeNovoRef.current) { syncDeNovoRef.current = false; agendarSyncNuvem(1500); }
+  };
+
+  // Chamado depois que o autosave gravou: se o projeto mudou, marca pra subir.
+  const marcarSeMudouNuvem = () => {
+    const e = estadoRef.current;
+    if (!e || !nuvemRef.current || !nuvemRef.current.token) return;
+    if (e.projeto === projetoMarcadoRef.current) return;
+    projetoMarcadoRef.current = e.projeto;
+    marcarPendenteNuvem(e.nomePacote).then(() => {
+      lerNuvemStudio().then((n) => { nuvemRef.current = n; }).catch(() => {});
+      agendarSyncNuvem(2500);
+    });
+  };
+
+  const aoLogarNuvem = async ({ token, nome }) => {
+    const novo = { ...nuvemPadrao(), token, nome };
+    await gravarNuvemStudio(novo);
+    nuvemRef.current = novo;
+    setContaNuvem({ nome });
+    setLoginNuvem(null);
+    setConviteNuvemPendente(false);
+    salvarPref('perguntouLoginNuvem', true);
+    exibirAviso('Conta conectada', 'Seus projetos agora são salvos na nuvem.', 'sucesso');
+    agendarSyncNuvem(300);
+  };
+
+  const fecharLoginNuvem = () => {
+    if (loginNuvem === 'convite') {
+      salvarPref('perguntouLoginNuvem', true);
+      setConviteNuvemPendente(false);
+    }
+    setLoginNuvem(null);
+  };
+
+  const sairDaNuvem = async () => {
+    setContaNuvemAberta(false);
+    clearTimeout(timerSyncRef.current);
+    await sairNuvemStudio();
+    nuvemRef.current = nuvemPadrao();
+    setContaNuvem(null);
+    setStatusNuvem('ocioso');
+  };
+
+  const tocarBolinhaConta = () => {
+    if (contaNuvem) setContaNuvemAberta(true);
+    else setLoginNuvem('manual');
+  };
+
+  // Ao abrir o app: carrega a conta (se tiver) e sincroniza; senão pergunta uma vez.
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      const n = await lerNuvemStudio();
+      const prefs = await lerPrefsStudio();
+      if (!vivo) return;
+      nuvemRef.current = n;
+      if (n.token) { setContaNuvem({ nome: n.nome }); agendarSyncNuvem(2000); }
+      else if (!prefs.perguntouLoginNuvem) setConviteNuvemPendente(true);
+    })();
+    return () => { vivo = false; clearTimeout(timerSyncRef.current); };
+  }, []);
+
+  // Voltou pro app ou passou um tempo: confere o servidor (pega o que mudou em outro aparelho).
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') agendarSyncNuvem(1000); });
+    const iv = setInterval(() => { if (AppState.currentState === 'active') agendarSyncNuvem(0); }, 120000);
+    return () => { sub.remove(); clearInterval(iv); };
+  }, []);
+
+  // Convite na primeira vez que o app abre (depois do pedido de acesso aos arquivos).
+  useEffect(() => {
+    if (conviteNuvemPendente && visible && estadoCarregado && etapa === 'home' && !pedirAcessoArquivos && !loginNuvem) {
+      const t = setTimeout(() => setLoginNuvem('convite'), 900);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [conviteNuvemPendente, visible, estadoCarregado, etapa, pedirAcessoArquivos, loginNuvem]);
+
   const salvarPref = (chave, valor) => {
     prefsRef.current = { ...prefsRef.current, [chave]: valor };
     gravarPrefsStudio(prefsRef.current);
@@ -10417,6 +11043,7 @@ function CindraStudioScreen({ visible, onClose }) {
               >
                 <MaterialCommunityIcons name="bell-outline" size={22} color={COLORS.ink} />
               </TouchableOpacity>
+              <BotaoContaNuvem nome={contaNuvem ? contaNuvem.nome : null} status={statusNuvem} onPress={tocarBolinhaConta} />
               {listaProjetos.length > 0 && (
                 <TouchableOpacity style={studioStyles.homeIconBtn} onPress={() => setBuscaAberta(true)} activeOpacity={0.8}>
                   <MaterialCommunityIcons name="magnify" size={22} color={COLORS.ink} />
@@ -10969,6 +11596,21 @@ function CindraStudioScreen({ visible, onClose }) {
           )}
         </FolhaInferiorStudio>
       )}
+
+      <LoginNuvemModal
+        visible={!!loginNuvem}
+        convite={loginNuvem === 'convite'}
+        onFechar={fecharLoginNuvem}
+        onSucesso={aoLogarNuvem}
+      />
+      <ContaNuvemModal
+        visible={contaNuvemAberta && !!contaNuvem}
+        nome={contaNuvem ? contaNuvem.nome : ''}
+        status={statusNuvem}
+        onFechar={() => setContaNuvemAberta(false)}
+        onSincronizar={() => { agendarSyncNuvem(0); }}
+        onSair={sairDaNuvem}
+      />
 
       {pedirAcessoArquivos && (
         <FolhaInferiorStudio
