@@ -499,6 +499,11 @@ function hexParaRgba(hex, alpha) {
 // painel de compilação — o texto real de cada linha continua vindo do
 // apk-builder nativo, aqui a gente só casa "N/6" com o passo certo).
 // ─────────────────────────────────────────────────────────
+// Texto único mostrado no lugar de qualquer erro interno (exceção, falha do
+// compilador, módulo nativo ausente etc). O detalhe real nunca vai pra tela.
+const TITULO_MANUTENCAO = 'Em manutenção';
+const MSG_MANUTENCAO = 'Estamos em manutenção. Resolvemos em breve.';
+
 const STEPS_COMPILACAO = [
   { icone: 'image-multiple-outline', titulo: 'Recursos', sub: 'Preparando imagens e textos' },
   { icone: 'link-variant', titulo: 'Link', sub: 'Conectando o app' },
@@ -520,17 +525,38 @@ const TEXTOS_ETAPAS_LOG = [
 ];
 const REGEX_LINHA_TECNICA = /aapt2|android\.jar|\bECJ\b|\bD8\b|apksig|\.class\b|\.dex\b|resources\.arsc|R\.java|libaapt|zipalign/i;
 
+// Lê uma linha de progresso do módulo nativo no formato "N/M ..." (hoje "N/6"
+// ou "N/7"; o total pode mudar). Devolve { n, m, etapa (0..6), valor (0..6) }.
+function lerLinhaProgresso(linha) {
+  const x = /^(\d+)\/(\d+)\b/.exec(String(linha || '').trim());
+  if (!x) return null;
+  const n = parseInt(x[1], 10);
+  const m = parseInt(x[2], 10);
+  if (!(m > 0)) return null;
+  const total = STEPS_COMPILACAO.length;
+  const valor = m === total ? Math.min(n, total) : Math.max(0, Math.min(total, (n / m) * total));
+  return { n, m, etapa: Math.min(total, Math.ceil(valor - 1e-9)), valor };
+}
+
 // Converte o log cru em itens bonitos: { tipo: 'etapa'|'info'|'erro', texto, numero }.
 function montarLogAmigavel(logCru) {
   const itens = [];
   let ultimoDownload = -1;
+  let ultimaProtecao = -1;
   logCru.forEach((linha) => {
     const bruta = String(linha || '').trim();
     if (!bruta) return;
-    const etapa = /^(\d+)\/6/.exec(bruta);
-    if (etapa) {
-      const n = parseInt(etapa[1], 10);
-      if (n >= 1 && n <= 6) itens.push({ tipo: 'etapa', numero: n, texto: TEXTOS_ETAPAS_LOG[n - 1] });
+    const prog = lerLinhaProgresso(bruta);
+    if (prog) {
+      if (prog.etapa >= 1) {
+        const ult = itens[itens.length - 1];
+        if (!(ult && ult.tipo === 'etapa' && ult.numero === prog.etapa)) {
+          itens.push({ tipo: 'etapa', numero: prog.etapa, texto: TEXTOS_ETAPAS_LOG[prog.etapa - 1] });
+        }
+      } else {
+        const item = { tipo: 'info', texto: 'Preparando proteções…' };
+        if (ultimaProtecao >= 0) itens[ultimaProtecao] = item; else { ultimaProtecao = itens.length; itens.push(item); }
+      }
       return;
     }
     if (/^baixando/i.test(bruta)) {
@@ -545,12 +571,11 @@ function montarLogAmigavel(logCru) {
     }
     const falhou = /^falhou na etapa:\s*(.*)$/i.exec(bruta);
     if (falhou) {
-      itens.push({ tipo: 'erro', texto: 'Algo deu errado na compilação' });
+      itens.push({ tipo: 'erro', texto: MSG_MANUTENCAO });
       return;
     }
     if (/^erro:/i.test(bruta)) {
-      const msg = bruta.replace(/^erro:\s*/i, '');
-      itens.push({ tipo: 'erro', texto: REGEX_LINHA_TECNICA.test(msg) ? 'Não foi possível compilar o app' : msg });
+      itens.push({ tipo: 'erro', texto: MSG_MANUTENCAO });
       return;
     }
     if (REGEX_LINHA_TECNICA.test(bruta)) return; // linha técnica: esconde
@@ -5235,7 +5260,2035 @@ public class MainActivity extends Activity implements SensorEventListener {
       },
     ],
   },
+  // ═══════════════ RECURSOS DO CELULAR ═══════════════
+  {
+    categoria: 'Recursos do celular',
+    icone: 'cellphone-cog',
+    itens: [
+      {
+        id: 'lanterna',
+        titulo: 'Lanterna',
+        icone: 'flashlight',
+        descricao: 'Liga e desliga o flash do celular como lanterna. Não precisa de permissão. A lanterna apaga sozinha quando você sai do app.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.content.Context;
+import android.graphics.Color;
+import android.hardware.camera2.CameraAccessException;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraManager;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.Toast;
+
+public class MainActivity extends Activity {
+
+    private CameraManager camera;
+    private String idCamera = null;
+    private boolean ligada = false;
+    private Button botao;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        camera = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+
+        // Procura a câmera que tem flash
+        try {
+            for (String id : camera.getCameraIdList()) {
+                Boolean temFlash = camera.getCameraCharacteristics(id)
+                        .get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+                if (temFlash != null && temFlash) {
+                    idCamera = id;
+                    break;
+                }
+            }
+        } catch (CameraAccessException e) {
+            idCamera = null;
+        }
+
+        botao = new Button(this);
+        botao.setText("Ligar lanterna");
+        botao.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                trocar(!ligada);
+            }
+        });
+
+        FrameLayout raiz = new FrameLayout(this);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(botao, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER));
+        setContentView(raiz);
+    }
+
+    private void trocar(boolean ligar) {
+        if (idCamera == null) {
+            Toast.makeText(this, "Este celular não tem flash", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            camera.setTorchMode(idCamera, ligar);
+            ligada = ligar;
+            botao.setText(ligada ? "Desligar lanterna" : "Ligar lanterna");
+        } catch (CameraAccessException e) {
+            Toast.makeText(this, "Não consegui usar o flash", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    // Apaga a lanterna ao sair do app
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (ligada) {
+            trocar(false);
+        }
+    }
+}`,
+        }],
+      },
+      {
+        id: 'gps',
+        titulo: 'Localização (GPS)',
+        icone: 'map-marker-radius-outline',
+        descricao: 'Pede a permissão de localização, mostra latitude e longitude em tempo real e tem um botão pra abrir o ponto no mapa. Teste com o GPS do celular ligado e, de preferência, ao ar livre.',
+        blocos: [
+          {
+            rotulo: 'AndroidManifest.xml — adicione antes de <application>',
+            codigo: JAVA`<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />`,
+          },
+          {
+            rotulo: 'MainActivity.java',
+            codigo: JAVA`import android.Manifest;
+import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+
+public class MainActivity extends Activity implements LocationListener {
+
+    private static final int CODIGO_GPS = 20;
+
+    private LocationManager gerente;
+    private TextView texto;
+    private Location ultima = null;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        gerente = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+
+        texto = new TextView(this);
+        texto.setTextColor(Color.WHITE);
+        texto.setTextSize(20);
+        texto.setGravity(Gravity.CENTER);
+        texto.setText("Procurando sinal de GPS...");
+
+        Button mapa = new Button(this);
+        mapa.setText("Ver no mapa");
+        mapa.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (ultima == null) {
+                    Toast.makeText(MainActivity.this, "Ainda sem localização", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                Uri lugar = Uri.parse("geo:" + ultima.getLatitude() + "," + ultima.getLongitude()
+                        + "?q=" + ultima.getLatitude() + "," + ultima.getLongitude());
+                startActivity(new Intent(Intent.ACTION_VIEW, lugar));
+            }
+        });
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setGravity(Gravity.CENTER);
+        raiz.setPadding(40, 40, 40, 40);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(texto);
+        raiz.addView(mapa);
+        setContentView(raiz);
+
+        if (Build.VERSION.SDK_INT >= 23
+                && checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, CODIGO_GPS);
+        } else {
+            comecar();
+        }
+    }
+
+    private void comecar() {
+        try {
+            if (gerente.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                gerente.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000, 0, this);
+            } else {
+                texto.setText("Ligue o GPS do celular");
+            }
+        } catch (SecurityException e) {
+            texto.setText("Sem permissão de localização");
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int codigo, String[] permissoes, int[] resultados) {
+        super.onRequestPermissionsResult(codigo, permissoes, resultados);
+        if (codigo == CODIGO_GPS) {
+            if (resultados.length > 0 && resultados[0] == PackageManager.PERMISSION_GRANTED) {
+                comecar();
+            } else {
+                texto.setText("Permissão negada");
+            }
+        }
+    }
+
+    @Override
+    public void onLocationChanged(Location local) {
+        ultima = local;
+        texto.setText("Latitude: " + local.getLatitude()
+                + "\nLongitude: " + local.getLongitude()
+                + "\nPrecisão: " + local.getAccuracy() + " m");
+    }
+
+    @Override
+    public void onStatusChanged(String provedor, int status, Bundle extras) {
+    }
+
+    @Override
+    public void onProviderEnabled(String provedor) {
+    }
+
+    @Override
+    public void onProviderDisabled(String provedor) {
+    }
+
+    // Para de gastar bateria quando o app fecha
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        gerente.removeUpdates(this);
+    }
+}`,
+          },
+        ],
+      },
+      {
+        id: 'tarefas',
+        titulo: 'Lista de tarefas (banco de dados)',
+        icone: 'database-outline',
+        descricao: 'Lista de tarefas que fica salva de verdade num banco SQLite: fecha o app, abre de novo e tudo continua lá. Digite e toque em Adicionar; segure o dedo numa tarefa pra apagar.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.content.ContentValues;
+import android.content.Context;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteOpenHelper;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ListView;
+import java.util.ArrayList;
+
+public class MainActivity extends Activity {
+
+    // Cria o banco na primeira vez que o app abre
+    static class Banco extends SQLiteOpenHelper {
+        Banco(Context contexto) {
+            super(contexto, "tarefas.db", null, 1);
+        }
+
+        @Override
+        public void onCreate(SQLiteDatabase db) {
+            db.execSQL("CREATE TABLE tarefas (id INTEGER PRIMARY KEY AUTOINCREMENT, texto TEXT)");
+        }
+
+        @Override
+        public void onUpgrade(SQLiteDatabase db, int antiga, int nova) {
+            db.execSQL("DROP TABLE IF EXISTS tarefas");
+            onCreate(db);
+        }
+    }
+
+    private Banco banco;
+    private ArrayList<Long> ids = new ArrayList<Long>();
+    private ArrayList<String> textos = new ArrayList<String>();
+    private ArrayAdapter<String> adaptador;
+    private EditText campo;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        banco = new Banco(this);
+
+        campo = new EditText(this);
+        campo.setHint("Nova tarefa");
+        campo.setTextColor(Color.WHITE);
+        campo.setHintTextColor(Color.GRAY);
+
+        Button adicionar = new Button(this);
+        adicionar.setText("Adicionar");
+        adicionar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String t = campo.getText().toString().trim();
+                if (t.length() == 0) {
+                    return;
+                }
+                ContentValues valores = new ContentValues();
+                valores.put("texto", t);
+                banco.getWritableDatabase().insert("tarefas", null, valores);
+                campo.setText("");
+                carregar();
+            }
+        });
+
+        adaptador = new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, textos);
+        ListView lista = new ListView(this);
+        lista.setAdapter(adaptador);
+
+        // Segurar o dedo numa tarefa apaga ela
+        lista.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener() {
+            @Override
+            public boolean onItemLongClick(AdapterView<?> pai, View item, int posicao, long id) {
+                banco.getWritableDatabase().delete("tarefas", "id = ?",
+                        new String[]{String.valueOf(ids.get(posicao))});
+                carregar();
+                return true;
+            }
+        });
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setPadding(30, 30, 30, 30);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(campo);
+        raiz.addView(adicionar);
+        raiz.addView(lista);
+        setContentView(raiz);
+
+        carregar();
+    }
+
+    // Lê tudo do banco e atualiza a lista na tela
+    private void carregar() {
+        ids.clear();
+        textos.clear();
+        Cursor c = banco.getReadableDatabase()
+                .rawQuery("SELECT id, texto FROM tarefas ORDER BY id DESC", null);
+        while (c.moveToNext()) {
+            ids.add(c.getLong(0));
+            textos.add(c.getString(1));
+        }
+        c.close();
+        adaptador.notifyDataSetChanged();
+    }
+}`,
+        }],
+      },
+    ],
+  },
+  // ═══════════════ FERRAMENTAS E JOGOS ═══════════════
+  {
+    categoria: 'Ferramentas e jogos',
+    icone: 'toolbox-outline',
+    itens: [
+      {
+        id: 'calculadora',
+        titulo: 'Calculadora',
+        icone: 'calculator',
+        descricao: 'Dois campos de número e quatro botões (+ − x ÷). Mostra o resultado na hora e avisa se tentar dividir por zero.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.text.InputType;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+public class MainActivity extends Activity {
+
+    private EditText campoA;
+    private EditText campoB;
+    private TextView resultado;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        campoA = novoCampo("Primeiro número");
+        campoB = novoCampo("Segundo número");
+
+        resultado = new TextView(this);
+        resultado.setTextColor(Color.WHITE);
+        resultado.setTextSize(28);
+        resultado.setGravity(Gravity.CENTER);
+        resultado.setPadding(0, 40, 0, 0);
+
+        LinearLayout botoes = new LinearLayout(this);
+        botoes.setOrientation(LinearLayout.HORIZONTAL);
+        char[] operacoes = {'+', '-', 'x', '/'};
+        for (char op : operacoes) {
+            botoes.addView(novoBotao(op), new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        }
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setPadding(40, 60, 40, 40);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(campoA);
+        raiz.addView(campoB);
+        raiz.addView(botoes);
+        raiz.addView(resultado);
+        setContentView(raiz);
+    }
+
+    private EditText novoCampo(String dica) {
+        EditText c = new EditText(this);
+        c.setHint(dica);
+        c.setHintTextColor(Color.GRAY);
+        c.setTextColor(Color.WHITE);
+        c.setInputType(InputType.TYPE_CLASS_NUMBER
+                | InputType.TYPE_NUMBER_FLAG_DECIMAL
+                | InputType.TYPE_NUMBER_FLAG_SIGNED);
+        return c;
+    }
+
+    private Button novoBotao(final char op) {
+        Button b = new Button(this);
+        b.setText(String.valueOf(op));
+        b.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                calcular(op);
+            }
+        });
+        return b;
+    }
+
+    private void calcular(char op) {
+        double x;
+        double y;
+        try {
+            x = Double.parseDouble(campoA.getText().toString());
+            y = Double.parseDouble(campoB.getText().toString());
+        } catch (NumberFormatException e) {
+            resultado.setText("Digite os dois números");
+            return;
+        }
+
+        double r;
+        if (op == '+') {
+            r = x + y;
+        } else if (op == '-') {
+            r = x - y;
+        } else if (op == 'x') {
+            r = x * y;
+        } else {
+            if (y == 0) {
+                resultado.setText("Não dá pra dividir por zero");
+                return;
+            }
+            r = x / y;
+        }
+
+        // Mostra 5 em vez de 5.0 quando o resultado é inteiro
+        if (r == Math.floor(r)) {
+            resultado.setText(String.valueOf((long) r));
+        } else {
+            resultado.setText(String.valueOf(r));
+        }
+    }
+}`,
+        }],
+      },
+      {
+        id: 'cronometro',
+        titulo: 'Cronômetro',
+        icone: 'timer-outline',
+        descricao: 'Cronômetro com minutos, segundos e centésimos. Iniciar/pausar e zerar. Usa um Handler que se repete a cada 50 milissegundos.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.SystemClock;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+public class MainActivity extends Activity {
+
+    private Handler handler = new Handler();
+    private TextView tela;
+    private Button botaoIniciar;
+    private boolean rodando = false;
+    private long inicio = 0;
+    private long acumulado = 0;
+
+    private Runnable atualizar = new Runnable() {
+        @Override
+        public void run() {
+            if (rodando) {
+                mostrar(acumulado + SystemClock.elapsedRealtime() - inicio);
+                handler.postDelayed(this, 50);
+            }
+        }
+    };
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        tela = new TextView(this);
+        tela.setTextColor(Color.WHITE);
+        tela.setTextSize(48);
+        tela.setGravity(Gravity.CENTER);
+        mostrar(0);
+
+        botaoIniciar = new Button(this);
+        botaoIniciar.setText("Iniciar");
+        botaoIniciar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                alternar();
+            }
+        });
+
+        Button zerar = new Button(this);
+        zerar.setText("Zerar");
+        zerar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                rodando = false;
+                acumulado = 0;
+                botaoIniciar.setText("Iniciar");
+                mostrar(0);
+            }
+        });
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setGravity(Gravity.CENTER);
+        raiz.setPadding(40, 40, 40, 40);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(tela);
+        raiz.addView(botaoIniciar);
+        raiz.addView(zerar);
+        setContentView(raiz);
+    }
+
+    private void alternar() {
+        if (rodando) {
+            acumulado += SystemClock.elapsedRealtime() - inicio;
+            rodando = false;
+            botaoIniciar.setText("Continuar");
+        } else {
+            inicio = SystemClock.elapsedRealtime();
+            rodando = true;
+            botaoIniciar.setText("Pausar");
+            handler.post(atualizar);
+        }
+    }
+
+    private void mostrar(long ms) {
+        long centesimos = (ms / 10) % 100;
+        long segundos = (ms / 1000) % 60;
+        long minutos = ms / 60000;
+        tela.setText(String.format("%02d:%02d.%02d", minutos, segundos, centesimos));
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        handler.removeCallbacks(atualizar);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'relogio',
+        titulo: 'Relógio digital',
+        icone: 'clock-digital',
+        descricao: 'Mostra a hora e a data de hoje, atualizando a cada segundo. Para de atualizar quando o app sai da tela, pra não gastar bateria.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.os.Handler;
+import android.view.Gravity;
+import android.widget.TextView;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
+public class MainActivity extends Activity {
+
+    private Handler handler = new Handler();
+    private TextView tela;
+    private SimpleDateFormat formato =
+            new SimpleDateFormat("HH:mm:ss\nEEEE, dd/MM/yyyy", Locale.getDefault());
+
+    private Runnable atualizar = new Runnable() {
+        @Override
+        public void run() {
+            tela.setText(formato.format(new Date()));
+            handler.postDelayed(this, 1000);
+        }
+    };
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        tela = new TextView(this);
+        tela.setTextColor(Color.WHITE);
+        tela.setTextSize(34);
+        tela.setGravity(Gravity.CENTER);
+        tela.setBackgroundColor(Color.parseColor("#03050a"));
+        setContentView(tela);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        handler.post(atualizar);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        handler.removeCallbacks(atualizar);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'dado',
+        titulo: 'Dado',
+        icone: 'dice-5-outline',
+        descricao: 'Toque no botão e o dado "rola": os números trocam rápido por um instante e depois param num valor de 1 a 6.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.os.Handler;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import java.util.Random;
+
+public class MainActivity extends Activity {
+
+    private Handler handler = new Handler();
+    private Random sorteio = new Random();
+    private TextView numero;
+    private int vezes = 0;
+
+    private Runnable passo = new Runnable() {
+        @Override
+        public void run() {
+            numero.setText(String.valueOf(sorteio.nextInt(6) + 1));
+            vezes++;
+            if (vezes < 10) {
+                handler.postDelayed(this, 60);
+            }
+        }
+    };
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        numero = new TextView(this);
+        numero.setText("?");
+        numero.setTextColor(Color.WHITE);
+        numero.setTextSize(96);
+        numero.setGravity(Gravity.CENTER);
+
+        Button rolar = new Button(this);
+        rolar.setText("Rolar dado");
+        rolar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                handler.removeCallbacks(passo);
+                vezes = 0;
+                handler.post(passo);
+            }
+        });
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setGravity(Gravity.CENTER);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(numero);
+        raiz.addView(rolar);
+        setContentView(raiz);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'jogotoque',
+        titulo: 'Jogo: pegue o botão',
+        icone: 'gamepad-variant-outline',
+        descricao: 'Um botão que pula pra um lugar aleatório a cada toque. Faça o máximo de pontos em 10 segundos. Mostra como usar CountDownTimer, posição (setX/setY) e placar.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.os.CountDownTimer;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.TextView;
+import java.util.Random;
+
+public class MainActivity extends Activity {
+
+    private FrameLayout raiz;
+    private Button alvo;
+    private Button iniciar;
+    private TextView placar;
+    private Random sorteio = new Random();
+    private int pontos = 0;
+    private long segundosRestantes = 10;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        raiz = new FrameLayout(this);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+
+        placar = new TextView(this);
+        placar.setTextColor(Color.WHITE);
+        placar.setTextSize(20);
+        placar.setPadding(30, 30, 30, 30);
+        placar.setText("Toque em Começar");
+        raiz.addView(placar);
+
+        alvo = new Button(this);
+        alvo.setText("TOQUE!");
+        alvo.setVisibility(View.GONE);
+        alvo.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                pontos++;
+                atualizarPlacar();
+                mover();
+            }
+        });
+        raiz.addView(alvo, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT));
+
+        iniciar = new Button(this);
+        iniciar.setText("Começar");
+        iniciar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                comecar();
+            }
+        });
+        raiz.addView(iniciar, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER));
+
+        setContentView(raiz);
+    }
+
+    private void comecar() {
+        pontos = 0;
+        segundosRestantes = 10;
+        iniciar.setVisibility(View.GONE);
+        alvo.setVisibility(View.VISIBLE);
+        atualizarPlacar();
+        mover();
+
+        new CountDownTimer(10000, 1000) {
+            @Override
+            public void onTick(long ms) {
+                segundosRestantes = ms / 1000 + 1;
+                atualizarPlacar();
+            }
+
+            @Override
+            public void onFinish() {
+                alvo.setVisibility(View.GONE);
+                placar.setText("Fim! Você fez " + pontos + " pontos");
+                iniciar.setText("Jogar de novo");
+                iniciar.setVisibility(View.VISIBLE);
+            }
+        }.start();
+    }
+
+    private void atualizarPlacar() {
+        placar.setText("Pontos: " + pontos + "    Tempo: " + segundosRestantes);
+    }
+
+    // Leva o botão pra um lugar aleatório (espera ele ter tamanho na tela)
+    private void mover() {
+        alvo.post(new Runnable() {
+            @Override
+            public void run() {
+                int maxX = Math.max(1, raiz.getWidth() - alvo.getWidth());
+                int maxY = Math.max(1, raiz.getHeight() - alvo.getHeight() - 150);
+                alvo.setX(sorteio.nextInt(maxX));
+                alvo.setY(150 + sorteio.nextInt(maxY));
+            }
+        });
+    }
+}`,
+        }],
+      },
+      {
+        id: 'conversor',
+        titulo: 'Conversor de temperatura',
+        icone: 'thermometer',
+        descricao: 'Digite graus Celsius e veja o valor em Fahrenheit mudando enquanto você digita (TextWatcher). Dá pra adaptar pra qualquer conversão.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.text.Editable;
+import android.text.InputType;
+import android.text.TextWatcher;
+import android.view.Gravity;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+public class MainActivity extends Activity {
+
+    private TextView resultado;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        EditText campo = new EditText(this);
+        campo.setHint("Graus Celsius (°C)");
+        campo.setHintTextColor(Color.GRAY);
+        campo.setTextColor(Color.WHITE);
+        campo.setInputType(InputType.TYPE_CLASS_NUMBER
+                | InputType.TYPE_NUMBER_FLAG_DECIMAL
+                | InputType.TYPE_NUMBER_FLAG_SIGNED);
+
+        resultado = new TextView(this);
+        resultado.setTextColor(Color.WHITE);
+        resultado.setTextSize(32);
+        resultado.setGravity(Gravity.CENTER);
+        resultado.setPadding(0, 50, 0, 0);
+
+        // Roda toda vez que o texto muda
+        campo.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int inicio, int depois, int novo) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int inicio, int antes, int quanto) {
+                converter(s.toString());
+            }
+
+            @Override
+            public void afterTextChanged(Editable e) {
+            }
+        });
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setPadding(40, 80, 40, 40);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(campo);
+        raiz.addView(resultado);
+        setContentView(raiz);
+    }
+
+    private void converter(String texto) {
+        try {
+            double celsius = Double.parseDouble(texto);
+            double fahrenheit = celsius * 9 / 5 + 32;
+            resultado.setText(String.format("%.1f °F", fahrenheit));
+        } catch (NumberFormatException e) {
+            resultado.setText("");
+        }
+    }
+}`,
+        }],
+      },
+    ],
+  },
+  // ═══════════════ COMPONENTES DE TELA ═══════════════
+  {
+    categoria: 'Componentes de tela',
+    icone: 'view-dashboard-outline',
+    itens: [
+      {
+        id: 'seekbar',
+        titulo: 'Barra deslizante (SeekBar)',
+        icone: 'tune-variant',
+        descricao: 'Arraste a barra pra mudar o tamanho e a cor do texto na hora. Serve de base pra volume, brilho, zoom e qualquer valor de 0 a 100.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.widget.LinearLayout;
+import android.widget.SeekBar;
+import android.widget.TextView;
+
+public class MainActivity extends Activity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        final TextView texto = new TextView(this);
+        texto.setText("Arraste a barra");
+        texto.setTextColor(Color.WHITE);
+        texto.setTextSize(20);
+        texto.setGravity(Gravity.CENTER);
+        texto.setPadding(0, 0, 0, 60);
+
+        SeekBar barra = new SeekBar(this);
+        barra.setMax(100);
+        barra.setProgress(20);
+        barra.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar s, int valor, boolean pessoa) {
+                texto.setTextSize(14 + valor);
+                texto.setTextColor(Color.HSVToColor(new float[]{valor * 3.6f, 1f, 1f}));
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar s) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar s) {
+            }
+        });
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setGravity(Gravity.CENTER);
+        raiz.setPadding(50, 50, 50, 50);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(texto);
+        raiz.addView(barra);
+        setContentView(raiz);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'spinner',
+        titulo: 'Lista suspensa (Spinner)',
+        icone: 'form-dropdown',
+        descricao: 'Menu que abre pra escolher uma opção da lista. Mostra a escolha num texto embaixo.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.LinearLayout;
+import android.widget.Spinner;
+import android.widget.TextView;
+
+public class MainActivity extends Activity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        final String[] frutas = {"Maçã", "Banana", "Uva", "Laranja", "Manga"};
+
+        final TextView escolha = new TextView(this);
+        escolha.setTextColor(Color.WHITE);
+        escolha.setTextSize(24);
+        escolha.setGravity(Gravity.CENTER);
+        escolha.setPadding(0, 50, 0, 0);
+
+        ArrayAdapter<String> adaptador = new ArrayAdapter<String>(
+                this, android.R.layout.simple_spinner_item, frutas);
+        adaptador.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+
+        Spinner lista = new Spinner(this);
+        lista.setAdapter(adaptador);
+        lista.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> pai, View item, int posicao, long id) {
+                escolha.setText("Você escolheu: " + frutas[posicao]);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> pai) {
+            }
+        });
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setPadding(50, 100, 50, 50);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(lista);
+        raiz.addView(escolha);
+        setContentView(raiz);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'opcoes',
+        titulo: 'Caixas e opções (CheckBox e RadioButton)',
+        icone: 'checkbox-marked-outline',
+        descricao: 'Um grupo de opções onde só dá pra marcar uma (RadioGroup) e uma caixa de marcar sim/não (CheckBox). O botão mostra o que foi escolhido.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.LinearLayout;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
+import android.widget.Toast;
+
+public class MainActivity extends Activity {
+
+    private RadioGroup grupo;
+    private CheckBox caixa;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        grupo = new RadioGroup(this);
+        String[] tamanhos = {"Pequeno", "Médio", "Grande"};
+        for (String nome : tamanhos) {
+            RadioButton opcao = new RadioButton(this);
+            opcao.setId(View.generateViewId());
+            opcao.setText(nome);
+            opcao.setTextColor(Color.WHITE);
+            grupo.addView(opcao);
+        }
+
+        caixa = new CheckBox(this);
+        caixa.setText("Quero borda recheada");
+        caixa.setTextColor(Color.WHITE);
+
+        Button ver = new Button(this);
+        ver.setText("Ver minha escolha");
+        ver.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                int idMarcado = grupo.getCheckedRadioButtonId();
+                if (idMarcado == -1) {
+                    Toast.makeText(MainActivity.this, "Escolha um tamanho", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                RadioButton marcado = (RadioButton) findViewById(idMarcado);
+                String msg = marcado.getText() + (caixa.isChecked() ? " com borda" : " sem borda");
+                Toast.makeText(MainActivity.this, msg, Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setPadding(50, 80, 50, 50);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(grupo);
+        raiz.addView(caixa);
+        raiz.addView(ver);
+        setContentView(raiz);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'progresso',
+        titulo: 'Barra de progresso',
+        icone: 'progress-clock',
+        descricao: 'Barra que enche de 0 a 100% sozinha, com a porcentagem escrita. Um botão reinicia. Base pra downloads e carregamentos.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.os.Handler;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+
+public class MainActivity extends Activity {
+
+    private Handler handler = new Handler();
+    private ProgressBar barra;
+    private TextView texto;
+    private int valor = 0;
+
+    private Runnable avancar = new Runnable() {
+        @Override
+        public void run() {
+            if (valor < 100) {
+                valor++;
+                barra.setProgress(valor);
+                texto.setText(valor + "%");
+                handler.postDelayed(this, 40);
+            } else {
+                texto.setText("Pronto!");
+            }
+        }
+    };
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        texto = new TextView(this);
+        texto.setText("0%");
+        texto.setTextColor(Color.WHITE);
+        texto.setTextSize(30);
+        texto.setGravity(Gravity.CENTER);
+
+        barra = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        barra.setMax(100);
+
+        Button reiniciar = new Button(this);
+        reiniciar.setText("Reiniciar");
+        reiniciar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                handler.removeCallbacks(avancar);
+                valor = 0;
+                barra.setProgress(0);
+                handler.post(avancar);
+            }
+        });
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setGravity(Gravity.CENTER);
+        raiz.setPadding(50, 50, 50, 50);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(texto);
+        raiz.addView(barra);
+        raiz.addView(reiniciar);
+        setContentView(raiz);
+
+        handler.post(avancar);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        handler.removeCallbacks(avancar);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'datahora',
+        titulo: 'Escolher data e hora',
+        icone: 'calendar-clock',
+        descricao: 'Dois botões que abrem o seletor de data e o de hora do Android e mostram o que a pessoa escolheu.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.app.DatePickerDialog;
+import android.app.TimePickerDialog;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.DatePicker;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.TimePicker;
+import java.util.Calendar;
+
+public class MainActivity extends Activity {
+
+    private TextView resultado;
+    private String data = "";
+    private String hora = "";
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        resultado = new TextView(this);
+        resultado.setText("Nada escolhido ainda");
+        resultado.setTextColor(Color.WHITE);
+        resultado.setTextSize(22);
+        resultado.setGravity(Gravity.CENTER);
+        resultado.setPadding(0, 50, 0, 0);
+
+        Button botaoData = new Button(this);
+        botaoData.setText("Escolher data");
+        botaoData.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                escolherData();
+            }
+        });
+
+        Button botaoHora = new Button(this);
+        botaoHora.setText("Escolher hora");
+        botaoHora.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                escolherHora();
+            }
+        });
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setGravity(Gravity.CENTER);
+        raiz.setPadding(50, 50, 50, 50);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(botaoData);
+        raiz.addView(botaoHora);
+        raiz.addView(resultado);
+        setContentView(raiz);
+    }
+
+    private void escolherData() {
+        Calendar hoje = Calendar.getInstance();
+        new DatePickerDialog(this, new DatePickerDialog.OnDateSetListener() {
+            @Override
+            public void onDateSet(DatePicker tela, int ano, int mes, int dia) {
+                // O mês começa em 0 (janeiro), por isso o +1
+                data = dia + "/" + (mes + 1) + "/" + ano;
+                mostrar();
+            }
+        }, hoje.get(Calendar.YEAR), hoje.get(Calendar.MONTH), hoje.get(Calendar.DAY_OF_MONTH)).show();
+    }
+
+    private void escolherHora() {
+        Calendar agora = Calendar.getInstance();
+        new TimePickerDialog(this, new TimePickerDialog.OnTimeSetListener() {
+            @Override
+            public void onTimeSet(TimePicker tela, int h, int min) {
+                hora = String.format("%02d:%02d", h, min);
+                mostrar();
+            }
+        }, agora.get(Calendar.HOUR_OF_DAY), agora.get(Calendar.MINUTE), true).show();
+    }
+
+    private void mostrar() {
+        resultado.setText("Data: " + data + "\nHora: " + hora);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'desenhar',
+        titulo: 'Desenhar com o dedo',
+        icone: 'draw',
+        descricao: 'Uma tela em branco pra desenhar com o dedo. Tem botão pra trocar a cor e pra limpar. Mostra como criar uma View própria com Canvas e Path.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.os.Bundle;
+import android.view.MotionEvent;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
+
+public class MainActivity extends Activity {
+
+    // A tela de desenho: guarda o traço num Path e redesenha a cada movimento
+    static class Quadro extends View {
+        private final Path caminho = new Path();
+        private final Paint tinta = new Paint();
+
+        Quadro(Context contexto) {
+            super(contexto);
+            tinta.setColor(Color.WHITE);
+            tinta.setStyle(Paint.Style.STROKE);
+            tinta.setStrokeWidth(8);
+            tinta.setStrokeCap(Paint.Cap.ROUND);
+            tinta.setStrokeJoin(Paint.Join.ROUND);
+            tinta.setAntiAlias(true);
+        }
+
+        void trocarCor(int cor) {
+            tinta.setColor(cor);
+        }
+
+        void limpar() {
+            caminho.reset();
+            invalidate();
+        }
+
+        @Override
+        protected void onDraw(Canvas tela) {
+            tela.drawPath(caminho, tinta);
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent e) {
+            float x = e.getX();
+            float y = e.getY();
+            if (e.getAction() == MotionEvent.ACTION_DOWN) {
+                caminho.moveTo(x, y);
+                return true;
+            } else if (e.getAction() == MotionEvent.ACTION_MOVE) {
+                caminho.lineTo(x, y);
+                invalidate();
+                return true;
+            }
+            return false;
+        }
+    }
+
+    private int posicaoCor = 0;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        final int[] cores = {Color.WHITE, Color.parseColor("#ff2fc6"),
+                Color.parseColor("#8fd6ff"), Color.parseColor("#ffd479")};
+        final Quadro quadro = new Quadro(this);
+
+        Button cor = new Button(this);
+        cor.setText("Trocar cor");
+        cor.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                posicaoCor = (posicaoCor + 1) % cores.length;
+                quadro.trocarCor(cores[posicaoCor]);
+            }
+        });
+
+        Button limpar = new Button(this);
+        limpar.setText("Limpar");
+        limpar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                quadro.limpar();
+            }
+        });
+
+        LinearLayout botoes = new LinearLayout(this);
+        botoes.setOrientation(LinearLayout.HORIZONTAL);
+        botoes.addView(cor, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        botoes.addView(limpar, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(botoes);
+        raiz.addView(quadro, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        setContentView(raiz);
+    }
+}`,
+        }],
+      },
+    ],
+  },
+  // ═══════════════ INTEGRAÇÃO COM O CELULAR ═══════════════
+  {
+    categoria: 'Integração com o celular',
+    icone: 'connection',
+    itens: [
+      {
+        id: 'ligar',
+        titulo: 'Abrir o discador',
+        icone: 'phone-outline',
+        descricao: 'Digite um número e o botão abre o discador do celular já com ele preenchido. Não precisa de permissão porque quem liga é a própria pessoa.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
+import android.graphics.Color;
+import android.net.Uri;
+import android.os.Bundle;
+import android.text.InputType;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.Toast;
+
+public class MainActivity extends Activity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        final EditText numero = new EditText(this);
+        numero.setHint("Número de telefone");
+        numero.setHintTextColor(Color.GRAY);
+        numero.setTextColor(Color.WHITE);
+        numero.setInputType(InputType.TYPE_CLASS_PHONE);
+
+        Button ligar = new Button(this);
+        ligar.setText("Abrir discador");
+        ligar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String n = numero.getText().toString().trim();
+                if (n.length() == 0) {
+                    Toast.makeText(MainActivity.this, "Digite um número", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                try {
+                    startActivity(new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + n)));
+                } catch (ActivityNotFoundException e) {
+                    Toast.makeText(MainActivity.this, "Sem app de telefone", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setPadding(50, 100, 50, 50);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(numero);
+        raiz.addView(ligar);
+        setContentView(raiz);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'email',
+        titulo: 'Enviar e-mail',
+        icone: 'email-outline',
+        descricao: 'Preenche destinatário, assunto e mensagem e abre o app de e-mail da pessoa pronto pra enviar. Não precisa de permissão nem de internet no seu app.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
+import android.graphics.Color;
+import android.net.Uri;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.Toast;
+
+public class MainActivity extends Activity {
+
+    private EditText para;
+    private EditText assunto;
+    private EditText mensagem;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        para = novoCampo("Para (e-mail)");
+        assunto = novoCampo("Assunto");
+        mensagem = novoCampo("Mensagem");
+
+        Button enviar = new Button(this);
+        enviar.setText("Enviar e-mail");
+        enviar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent email = new Intent(Intent.ACTION_SENDTO);
+                email.setData(Uri.parse("mailto:" + para.getText().toString().trim()));
+                email.putExtra(Intent.EXTRA_SUBJECT, assunto.getText().toString());
+                email.putExtra(Intent.EXTRA_TEXT, mensagem.getText().toString());
+                try {
+                    startActivity(Intent.createChooser(email, "Enviar e-mail com"));
+                } catch (ActivityNotFoundException e) {
+                    Toast.makeText(MainActivity.this, "Sem app de e-mail", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setPadding(50, 80, 50, 50);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(para);
+        raiz.addView(assunto);
+        raiz.addView(mensagem);
+        raiz.addView(enviar);
+        setContentView(raiz);
+    }
+
+    private EditText novoCampo(String dica) {
+        EditText c = new EditText(this);
+        c.setHint(dica);
+        c.setHintTextColor(Color.GRAY);
+        c.setTextColor(Color.WHITE);
+        return c;
+    }
+}`,
+        }],
+      },
+      {
+        id: 'copiar',
+        titulo: 'Copiar e colar',
+        icone: 'content-copy',
+        descricao: 'Copia o texto digitado pra área de transferência e cola o que estiver copiado de outro app.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.Toast;
+
+public class MainActivity extends Activity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        final ClipboardManager area =
+                (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+
+        final EditText campo = new EditText(this);
+        campo.setHint("Digite algo");
+        campo.setHintTextColor(Color.GRAY);
+        campo.setTextColor(Color.WHITE);
+
+        Button copiar = new Button(this);
+        copiar.setText("Copiar");
+        copiar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                area.setPrimaryClip(ClipData.newPlainText("texto", campo.getText().toString()));
+                Toast.makeText(MainActivity.this, "Copiado!", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        Button colar = new Button(this);
+        colar.setText("Colar");
+        colar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (area.hasPrimaryClip() && area.getPrimaryClip().getItemCount() > 0) {
+                    CharSequence texto = area.getPrimaryClip().getItemAt(0).coerceToText(MainActivity.this);
+                    campo.setText(texto);
+                } else {
+                    Toast.makeText(MainActivity.this, "Nada copiado", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setPadding(50, 80, 50, 50);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(campo);
+        raiz.addView(copiar);
+        raiz.addView(colar);
+        setContentView(raiz);
+    }
+}`,
+        }],
+      },
+      {
+        id: 'bateria',
+        titulo: 'Nível da bateria',
+        icone: 'battery-70',
+        descricao: 'Mostra a porcentagem da bateria e se está carregando, e atualiza sozinho quando muda. Usa um BroadcastReceiver que só fica ligado com o app na tela.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.graphics.Color;
+import android.os.BatteryManager;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.widget.TextView;
+
+public class MainActivity extends Activity {
+
+    private TextView tela;
+
+    private BroadcastReceiver receptor = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context contexto, Intent intent) {
+            mostrar(intent);
+        }
+    };
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        tela = new TextView(this);
+        tela.setTextColor(Color.WHITE);
+        tela.setTextSize(36);
+        tela.setGravity(Gravity.CENTER);
+        tela.setBackgroundColor(Color.parseColor("#03050a"));
+        setContentView(tela);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // O Android entrega o último valor na hora de registrar
+        Intent atual = registerReceiver(receptor, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        if (atual != null) {
+            mostrar(atual);
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        unregisterReceiver(receptor);
+    }
+
+    private void mostrar(Intent intent) {
+        int nivel = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+        int escala = intent.getIntExtra(BatteryManager.EXTRA_SCALE, 100);
+        int status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+        boolean carregando = status == BatteryManager.BATTERY_STATUS_CHARGING
+                || status == BatteryManager.BATTERY_STATUS_FULL;
+
+        int porcento = escala > 0 ? nivel * 100 / escala : 0;
+        tela.setText("Bateria: " + porcento + "%\n" + (carregando ? "Carregando" : "Na bateria"));
+    }
+}`,
+        }],
+      },
+      {
+        id: 'rede',
+        titulo: 'Está com internet?',
+        icone: 'wifi',
+        descricao: 'Verifica se o celular está conectado e se é por Wi-Fi ou dados móveis. Útil antes de baixar alguma coisa.',
+        blocos: [
+          {
+            rotulo: 'AndroidManifest.xml — adicione antes de <application>',
+            codigo: JAVA`<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />`,
+          },
+          {
+            rotulo: 'MainActivity.java',
+            codigo: JAVA`import android.app.Activity;
+import android.content.Context;
+import android.graphics.Color;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+public class MainActivity extends Activity {
+
+    private TextView tela;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        tela = new TextView(this);
+        tela.setTextColor(Color.WHITE);
+        tela.setTextSize(26);
+        tela.setGravity(Gravity.CENTER);
+
+        Button conferir = new Button(this);
+        conferir.setText("Verificar de novo");
+        conferir.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                verificar();
+            }
+        });
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setGravity(Gravity.CENTER);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(tela);
+        raiz.addView(conferir);
+        setContentView(raiz);
+
+        verificar();
+    }
+
+    private void verificar() {
+        ConnectivityManager gerente =
+                (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo rede = gerente.getActiveNetworkInfo();
+
+        if (rede != null && rede.isConnected()) {
+            tela.setText("Conectado\n(" + rede.getTypeName() + ")");
+        } else {
+            tela.setText("Sem internet");
+        }
+    }
+}`,
+          },
+        ],
+      },
+      {
+        id: 'falar',
+        titulo: 'Falar o texto (voz)',
+        icone: 'text-to-speech',
+        descricao: 'Digite uma frase e o celular lê em voz alta, em português do Brasil. Usa o TextToSpeech do Android, sem permissão.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.speech.tts.TextToSpeech;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.Toast;
+import java.util.Locale;
+
+public class MainActivity extends Activity {
+
+    private TextToSpeech voz;
+    private boolean pronta = false;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        voz = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
+            @Override
+            public void onInit(int status) {
+                if (status == TextToSpeech.SUCCESS) {
+                    voz.setLanguage(new Locale("pt", "BR"));
+                    pronta = true;
+                }
+            }
+        });
+
+        final EditText campo = new EditText(this);
+        campo.setText("Olá! Esse app fala.");
+        campo.setTextColor(Color.WHITE);
+
+        Button falar = new Button(this);
+        falar.setText("Falar");
+        falar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (!pronta) {
+                    Toast.makeText(MainActivity.this, "A voz ainda não ficou pronta", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                voz.speak(campo.getText().toString(), TextToSpeech.QUEUE_FLUSH, null, "fala1");
+            }
+        });
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setPadding(50, 100, 50, 50);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(campo);
+        raiz.addView(falar);
+        setContentView(raiz);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (voz != null) {
+            voz.stop();
+            voz.shutdown();
+        }
+    }
+}`,
+        }],
+      },
+      {
+        id: 'bussola',
+        titulo: 'Bússola',
+        icone: 'compass-outline',
+        descricao: 'Uma seta que gira apontando pro norte e o ângulo em graus. Combina o acelerômetro com o sensor magnético. Segure o celular na horizontal.',
+        blocos: [{
+          rotulo: 'MainActivity.java',
+          codigo: JAVA`import android.app.Activity;
+import android.content.Context;
+import android.graphics.Color;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+public class MainActivity extends Activity implements SensorEventListener {
+
+    private SensorManager sensores;
+    private TextView seta;
+    private TextView texto;
+    private float[] gravidade = null;
+    private float[] campo = null;
+    private final String[] pontos = {"N", "NE", "L", "SE", "S", "SO", "O", "NO"};
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        sensores = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+
+        seta = new TextView(this);
+        seta.setText("▲");
+        seta.setTextColor(Color.parseColor("#ff2fc6"));
+        seta.setTextSize(120);
+        seta.setGravity(Gravity.CENTER);
+
+        texto = new TextView(this);
+        texto.setTextColor(Color.WHITE);
+        texto.setTextSize(28);
+        texto.setGravity(Gravity.CENTER);
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setGravity(Gravity.CENTER);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(seta);
+        raiz.addView(texto);
+        setContentView(raiz);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        Sensor acelerometro = sensores.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        Sensor magnetico = sensores.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+        if (acelerometro == null || magnetico == null) {
+            texto.setText("Este celular não tem bússola");
+            return;
+        }
+        sensores.registerListener(this, acelerometro, SensorManager.SENSOR_DELAY_GAME);
+        sensores.registerListener(this, magnetico, SensorManager.SENSOR_DELAY_GAME);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        sensores.unregisterListener(this);
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent e) {
+        if (e.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            gravidade = e.values.clone();
+        } else if (e.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
+            campo = e.values.clone();
+        }
+
+        if (gravidade != null && campo != null) {
+            float[] matriz = new float[9];
+            if (SensorManager.getRotationMatrix(matriz, null, gravidade, campo)) {
+                float[] orientacao = new float[3];
+                SensorManager.getOrientation(matriz, orientacao);
+                float graus = (float) Math.toDegrees(orientacao[0]);
+                if (graus < 0) {
+                    graus += 360;
+                }
+                seta.setRotation(-graus);
+                int indice = Math.round(graus / 45f) % 8;
+                texto.setText(Math.round(graus) + "° " + pontos[indice]);
+            }
+        }
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int precisao) {
+    }
+}`,
+        }],
+      },
+      {
+        id: 'internet',
+        titulo: 'Buscar dados na internet',
+        icone: 'cloud-download-outline',
+        descricao: 'Ao tocar no botão, o app baixa uma frase de uma API pública e mostra na tela. A chamada roda em outra thread pra não travar o app, e o resultado volta pra tela com runOnUiThread.',
+        blocos: [
+          {
+            rotulo: 'AndroidManifest.xml — adicione antes de <application>',
+            codigo: JAVA`<uses-permission android:name="android.permission.INTERNET" />`,
+          },
+          {
+            rotulo: 'MainActivity.java',
+            codigo: JAVA`import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+public class MainActivity extends Activity {
+
+    private TextView resposta;
+    private Button buscar;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        resposta = new TextView(this);
+        resposta.setTextColor(Color.WHITE);
+        resposta.setTextSize(22);
+        resposta.setGravity(Gravity.CENTER);
+        resposta.setPadding(40, 0, 40, 40);
+
+        buscar = new Button(this);
+        buscar.setText("Buscar frase");
+        buscar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                buscar.setEnabled(false);
+                resposta.setText("Buscando...");
+                baixar();
+            }
+        });
+
+        LinearLayout raiz = new LinearLayout(this);
+        raiz.setOrientation(LinearLayout.VERTICAL);
+        raiz.setGravity(Gravity.CENTER);
+        raiz.setBackgroundColor(Color.parseColor("#03050a"));
+        raiz.addView(resposta);
+        raiz.addView(buscar);
+        setContentView(raiz);
+    }
+
+    // Internet nunca roda na thread principal: o Android bloqueia
+    private void baixar() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String resultado;
+                try {
+                    URL url = new URL("https://api.github.com/zen");
+                    HttpURLConnection con = (HttpURLConnection) url.openConnection();
+                    con.setRequestProperty("User-Agent", "MeuApp");
+                    con.setConnectTimeout(8000);
+                    con.setReadTimeout(8000);
+
+                    BufferedReader leitor = new BufferedReader(
+                            new InputStreamReader(con.getInputStream(), "UTF-8"));
+                    StringBuilder texto = new StringBuilder();
+                    String linha;
+                    while ((linha = leitor.readLine()) != null) {
+                        texto.append(linha).append("\n");
+                    }
+                    leitor.close();
+                    con.disconnect();
+                    resultado = texto.toString().trim();
+                } catch (Exception e) {
+                    resultado = "Erro: " + e.getMessage();
+                }
+
+                final String mostrar = resultado;
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        resposta.setText(mostrar);
+                        buscar.setEnabled(true);
+                    }
+                });
+            }
+        }).start();
+    }
+}`,
+          },
+        ],
+      },
+    ],
+  },
 ];
+
+// Tira acento e põe em minúsculas, pra busca achar "calculadora" digitando "calcúladora".
+function semAcentoStudio(t) {
+  let x = String(t || '').toLowerCase();
+  try { x = x.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) { /* sem normalize: segue com acento */ }
+  return x;
+}
 
 // Copiar pra área de transferência. Usa o expo-clipboard se estiver
 // instalado no app; se não estiver, abre o menu de compartilhar do
@@ -6007,25 +8060,8 @@ function AtualizacaoForcada() {
   const [pendente, setPendente] = useState(false);
   const [baixando, setBaixando] = useState(false);
   const [erro, setErro] = useState('');
-  const avisadaRef = useRef(false);
   const verificandoRef = useRef(false);
   const pendenteRef = useRef(false);
-
-  const notificar = async () => {
-    if (!Notifications || avisadaRef.current) return;
-    avisadaRef.current = true;
-    try {
-      Notifications.setNotificationHandler({
-        handleNotification: async () => ({ shouldShowAlert: true, shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }),
-      });
-      const perm = await Notifications.requestPermissionsAsync();
-      if (perm && perm.status !== 'granted') return;
-      await Notifications.scheduleNotificationAsync({
-        content: { title: 'Atualização disponível', body: 'Tem uma versão nova do Cindra Studio. Toque para atualizar.' },
-        trigger: null,
-      });
-    } catch (e) {}
-  };
 
   const verificar = async () => {
     if (!Updates || !Updates.isEnabled || verificandoRef.current || pendenteRef.current) return;
@@ -6035,7 +8071,6 @@ function AtualizacaoForcada() {
       if (r && r.isAvailable) {
         pendenteRef.current = true;
         setPendente(true);
-        notificar();
       }
     } catch (e) {
       // sem internet: não bloqueia
@@ -6060,7 +8095,6 @@ function AtualizacaoForcada() {
           if (c && (c.isUpdateAvailable || c.isUpdatePending) && !pendenteRef.current) {
             pendenteRef.current = true;
             setPendente(true);
-            notificar();
           }
         });
       } catch (e) { ouvinte = null; }
@@ -6221,6 +8255,8 @@ function CindraStudioScreen({ visible, onClose }) {
   const trocouAba = abaAnteriorRef.current !== abaHome;
   useEffect(() => { abaAnteriorRef.current = abaHome; }, [abaHome]);
   const [exemploAberto, setExemploAberto] = useState(null); // id do exemplo aberto na aba Aprender
+  const [buscaAprender, setBuscaAprender] = useState('');
+  const [buscaAprenderAberta, setBuscaAprenderAberta] = useState(false); // lupa da aba Aprender
   const [copiadoChave, setCopiadoChave] = useState(null); // bloco que acabou de ser copiado (mostra "Copiado!")
   const [confirmarSaida, setConfirmarSaida] = useState(false); // folha "Sair do app?" (botão voltar na tela inicial)
   const [avisoRecuperarVisivel, setAvisoRecuperarVisivel] = useState(false); // só depois de ler as prefs
@@ -6537,26 +8573,29 @@ function CindraStudioScreen({ visible, onClose }) {
   // Stepper do painel de compilação: acha a etapa mais avançada citada no
   // log ("N/6 ...") e anima a barra até lá. Quando o APK sai pronto, força
   // as 6 etapas preenchidas (o "6/6" às vezes nem aparece no log nativo).
-  const etapaCompilacaoAtual = useMemo(() => {
-    let max = 0;
+  const progressoLog = useMemo(() => {
     for (let i = logCompilacao.length - 1; i >= 0; i -= 1) {
-      const m = /^(\d+)\/6/.exec(logCompilacao[i]);
-      if (m) { max = parseInt(m[1], 10); break; }
+      const pr = lerLinhaProgresso(logCompilacao[i]);
+      if (pr) return pr;
     }
+    return { etapa: 0, valor: 0 };
+  }, [logCompilacao]);
+
+  const etapaCompilacaoAtual = useMemo(() => {
     if (apkGerado) return STEPS_COMPILACAO.length;
-    return Math.min(max, STEPS_COMPILACAO.length);
-  }, [logCompilacao, apkGerado]);
+    return progressoLog.etapa;
+  }, [progressoLog, apkGerado]);
 
   const logAmigavel = useMemo(() => montarLogAmigavel(logCompilacao), [logCompilacao]);
 
   useEffect(() => {
     Animated.timing(progressoCompilacao, {
-      toValue: etapaCompilacaoAtual,
+      toValue: apkGerado ? STEPS_COMPILACAO.length : progressoLog.valor,
       duration: 380,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false, // anima largura (%), não dá pra usar o driver nativo
     }).start();
-  }, [etapaCompilacaoAtual]);
+  }, [progressoLog, apkGerado]);
 
   useEffect(() => {
     if (!painelCompilacao) { pulsoCompilacao.setValue(1); return undefined; }
@@ -6687,7 +8726,7 @@ function CindraStudioScreen({ visible, onClose }) {
       setListaProjetos(lista);
       return true;
     } catch (err) {
-      exibirAviso('Não deu pra salvar', String(err && err.message ? err.message : err), 'erro');
+      exibirAviso(TITULO_MANUTENCAO, MSG_MANUTENCAO, 'erro');
       return false;
     }
   };
@@ -6833,7 +8872,7 @@ function CindraStudioScreen({ visible, onClose }) {
         'sucesso'
       );
     } catch (e) {
-      exibirAviso('Erro ao adicionar', String(e && e.message ? e.message : e), 'erro');
+      exibirAviso(TITULO_MANUTENCAO, MSG_MANUTENCAO, 'erro');
     }
   };
 
@@ -6921,7 +8960,7 @@ function CindraStudioScreen({ visible, onClose }) {
       const saida = await ImageManipulator.manipulateAsync(uri, acoes, { format: ImageManipulator.SaveFormat.PNG, compress: 1 });
       setFotoIcone(saida.uri);
     } catch (e) {
-      exibirAviso('Não deu pra usar a foto', String(e && e.message ? e.message : e), 'erro');
+      exibirAviso(TITULO_MANUTENCAO, MSG_MANUTENCAO, 'erro');
     } finally {
       setProcessandoFoto(false);
     }
@@ -7154,7 +9193,7 @@ function CindraStudioScreen({ visible, onClose }) {
     try {
       return await gravarProjetoStudio(alvo);
     } catch (e) {
-      exibirAviso('Erro ao salvar', String(e && e.message ? e.message : e), 'erro');
+      exibirAviso(TITULO_MANUTENCAO, MSG_MANUTENCAO, 'erro');
       return null;
     }
   };
@@ -7196,7 +9235,7 @@ function CindraStudioScreen({ visible, onClose }) {
         exibirAviso('Keystore .jks', 'O Android não abre .jks. Converta pra .p12 no PC (keytool -importkeystore ... -deststoretype PKCS12).', 'aviso');
       }
     } catch (e) {
-      exibirAviso('Erro ao escolher o keystore', String(e && e.message ? e.message : e), 'erro');
+      exibirAviso(TITULO_MANUTENCAO, MSG_MANUTENCAO, 'erro');
     }
   };
 
@@ -7209,7 +9248,7 @@ function CindraStudioScreen({ visible, onClose }) {
       if (!senhaKeystore) { exibirAviso('Falta a senha', 'Digite a senha do keystore.', 'aviso'); return; }
     }
     if (!ApkBuilder.disponivel) {
-      exibirAviso('Precisa de rebuild', 'O módulo nativo apk-builder ainda não está neste app. Faça o eas build uma vez (veja o LEIAME do módulo).', 'aviso');
+      exibirAviso(TITULO_MANUTENCAO, MSG_MANUTENCAO, 'aviso');
       return;
     }
     setCompilando(true);
@@ -7262,11 +9301,12 @@ function CindraStudioScreen({ visible, onClose }) {
         setApkGerado(caminhoLocalStudio(apkUri));
         registrarBuild({ id: idBuild, apkUri, release });
       } else {
-        setErrosCompilacao(r.erros || []);
-        add(`Falhou na etapa: ${r.etapa}`);
+        const doCodigo = (r.erros || []).filter((er) => er && er.arquivo && !REGEX_LINHA_TECNICA.test(`${er.arquivo} ${er.mensagem || ''}`));
+        setErrosCompilacao(doCodigo);
+        add(`Falhou na etapa: ${MSG_MANUTENCAO}`);
       }
     } catch (e) {
-      add(`Erro: ${String(e && e.message ? e.message : e)}`);
+      add(`Erro: ${MSG_MANUTENCAO}`);
     } finally {
       assinatura.remove();
       setCompilando(false);
@@ -7365,7 +9405,7 @@ function CindraStudioScreen({ visible, onClose }) {
       avisoPastaPublicaRef.current = true;
       exibirAviso(
         'APK não foi pra cindra-studio',
-        `Libere "Acesso a todos os arquivos" pro Cindra (toque na pasta no topo da aba Gerados). Detalhe: ${r.motivo}`,
+        `Libere "Acesso a todos os arquivos" pro Cindra (toque na pasta no topo da aba Gerados).`,
         'aviso'
       );
     }
@@ -7384,7 +9424,7 @@ function CindraStudioScreen({ visible, onClose }) {
       if (r.falhou) {
         exibirAviso(
           'Sem permissão pra criar a pasta',
-          `Ative "Acesso a todos os arquivos" pro Cindra na tela que vai abrir e toque na pasta de novo. Detalhe: ${r.motivo}`,
+          `Ative "Acesso a todos os arquivos" pro Cindra na tela que vai abrir e toque na pasta de novo.`,
           'aviso'
         );
         abrirConfigAcessoArquivos();
@@ -7420,7 +9460,7 @@ function CindraStudioScreen({ visible, onClose }) {
         dialogTitle: `Compartilhar ${nome || 'APK'}`,
       });
     } catch (e) {
-      exibirAviso('Erro ao compartilhar', String(e && e.message ? e.message : e), 'erro');
+      exibirAviso(TITULO_MANUTENCAO, MSG_MANUTENCAO, 'erro');
     }
   };
 
@@ -7436,7 +9476,7 @@ function CindraStudioScreen({ visible, onClose }) {
         exibirAviso('Libere a instalação', 'Ative "Permitir desta fonte" pro Cindra na tela que abriu e toque em Instalar de novo.', 'aviso');
       }
     } catch (e) {
-      exibirAviso('Erro ao instalar', String(e && e.message ? e.message : e), 'erro');
+      exibirAviso(TITULO_MANUTENCAO, MSG_MANUTENCAO, 'erro');
     }
   };
 
@@ -7513,7 +9553,7 @@ function CindraStudioScreen({ visible, onClose }) {
         exibirAviso('Libere a instalação', 'Ative "Permitir desta fonte" pro Cindra na tela que abriu e toque em Instalar de novo.', 'aviso');
       }
     } catch (e) {
-      exibirAviso('Erro ao instalar', String(e && e.message ? e.message : e), 'erro');
+      exibirAviso(TITULO_MANUTENCAO, MSG_MANUTENCAO, 'erro');
     }
   };
 
@@ -8127,6 +10167,7 @@ function CindraStudioScreen({ visible, onClose }) {
       return;
     }
     if (abaHome === 'aprender') {
+      if (buscaAprenderAberta) { setBuscaAprenderAberta(false); setBuscaAprender(''); return; }
       if (exemploAberto) setExemploAberto(null); else setAbaHome('apps');
       return;
     }
@@ -8689,51 +10730,99 @@ function CindraStudioScreen({ visible, onClose }) {
     );
   };
 
-  const renderAbaAprender = () => (
-    <>
-      <View style={studioStyles.homeHeader}>
-        <View style={{ flex: 1 }}>
-          <Text style={studioStyles.homeOverline}>CINDRA-STUDIO</Text>
-          <Text style={studioStyles.homeTitulo} numberOfLines={1}>Aprender</Text>
+  const renderAbaAprender = () => {
+    const termo = semAcentoStudio(buscaAprender.trim());
+    const categoriasVisiveis = EXEMPLOS_APRENDER
+      .map((cat) => ({
+        ...cat,
+        itens: termo
+          ? cat.itens.filter((item) =>
+              semAcentoStudio(`${item.titulo} ${item.descricao} ${item.id} ${cat.categoria}`).includes(termo))
+          : cat.itens,
+      }))
+      .filter((cat) => cat.itens.length > 0);
+    const totalExemplos = EXEMPLOS_APRENDER.reduce((n, cat) => n + cat.itens.length, 0);
+    const totalAchados = categoriasVisiveis.reduce((n, cat) => n + cat.itens.length, 0);
+    const fecharBuscaAprender = () => { setBuscaAprenderAberta(false); setBuscaAprender(''); };
+
+    return (
+      <>
+        <View style={studioStyles.homeHeader}>
+          {buscaAprenderAberta ? (
+            <View style={studioStyles.homeBuscaPilula}>
+              <MaterialCommunityIcons name="magnify" size={20} color={COLORS.dim} />
+              <TextInput
+                style={studioStyles.buscaInput}
+                value={buscaAprender}
+                onChangeText={setBuscaAprender}
+                placeholder="Buscar exemplo..."
+                placeholderTextColor={COLORS.dim}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoFocus
+              />
+              <TouchableOpacity onPress={fecharBuscaAprender} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <MaterialCommunityIcons name="close" size={20} color={COLORS.ink} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <View style={{ flex: 1 }}>
+                <Text style={studioStyles.homeOverline}>CINDRA-STUDIO</Text>
+                <Text style={studioStyles.homeTitulo} numberOfLines={1}>Aprender</Text>
+              </View>
+              <TouchableOpacity style={studioStyles.homeIconBtn} onPress={() => setBuscaAprenderAberta(true)} activeOpacity={0.8}>
+                <MaterialCommunityIcons name="magnify" size={22} color={COLORS.ink} />
+              </TouchableOpacity>
+            </>
+          )}
         </View>
-      </View>
 
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 28 }}
-      >
-        <Text style={aprenderStyles.intro}>
-          Toque num exemplo pra ver o código. Depois é só copiar e colar no seu projeto.
-        </Text>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 28 }}
+        >
+          <Text style={aprenderStyles.intro}>
+            {termo
+              ? `${totalAchados} ${totalAchados === 1 ? 'exemplo encontrado' : 'exemplos encontrados'} para "${buscaAprender.trim()}".`
+              : `${totalExemplos} exemplos. Toque num pra ver o código, depois é só copiar e colar no seu projeto.`}
+          </Text>
 
-        {EXEMPLOS_APRENDER.map((cat) => (
-          <View key={cat.categoria}>
-            <View style={aprenderStyles.catLinha}>
-              <MaterialCommunityIcons name={cat.icone} size={20} color={COLORS.ember} />
-              <Text style={aprenderStyles.catTitulo}>{cat.categoria}</Text>
+          {categoriasVisiveis.length === 0 && (
+            <Text style={[aprenderStyles.intro, { textAlign: 'center', marginTop: 30 }]}>
+              Nenhum exemplo encontrado. Tente outra palavra, como "botão", "som" ou "internet".
+            </Text>
+          )}
+
+          {categoriasVisiveis.map((cat) => (
+            <View key={cat.categoria}>
+              <View style={aprenderStyles.catLinha}>
+                <MaterialCommunityIcons name={cat.icone} size={20} color={COLORS.ember} />
+                <Text style={aprenderStyles.catTitulo}>{cat.categoria}</Text>
+              </View>
+              <View style={aprenderStyles.chips}>
+                {cat.itens.map((item) => {
+                  const ativo = exemploAberto === item.id;
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[aprenderStyles.chip, ativo && aprenderStyles.chipAtivo]}
+                      onPress={() => setExemploAberto(ativo ? null : item.id)}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialCommunityIcons name={item.icone} size={16} color={ativo ? '#d9a2ff' : COLORS.dim} />
+                      <Text style={[aprenderStyles.chipTexto, ativo && aprenderStyles.chipTextoAtivo]}>{item.titulo}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {cat.itens.map((item) => (exemploAberto === item.id ? renderPainelExemplo(item) : null))}
             </View>
-            <View style={aprenderStyles.chips}>
-              {cat.itens.map((item) => {
-                const ativo = exemploAberto === item.id;
-                return (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={[aprenderStyles.chip, ativo && aprenderStyles.chipAtivo]}
-                    onPress={() => setExemploAberto(ativo ? null : item.id)}
-                    activeOpacity={0.8}
-                  >
-                    <MaterialCommunityIcons name={item.icone} size={16} color={ativo ? '#d9a2ff' : COLORS.dim} />
-                    <Text style={[aprenderStyles.chipTexto, ativo && aprenderStyles.chipTextoAtivo]}>{item.titulo}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            {cat.itens.map((item) => (exemploAberto === item.id ? renderPainelExemplo(item) : null))}
-          </View>
-        ))}
-      </ScrollView>
-    </>
-  );
+          ))}
+        </ScrollView>
+      </>
+    );
+  };
 
   // Barra de baixo: "Meus apps", "Aprender" e o botão "Criar".
   const renderNavHome = () => (
@@ -10203,5 +12292,44 @@ function CindraStudioScreen({ visible, onClose }) {
   );
 }
 
+// Se qualquer tela quebrar ao desenhar, em vez do erro real aparece o aviso de
+// manutenção (com botão pra tentar de novo).
+class ErroSeguroStudio extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { quebrou: false };
+  }
+  static getDerivedStateFromError() {
+    return { quebrou: true };
+  }
+  componentDidCatch() {
+    // o erro real fica só no log interno, nunca na tela
+  }
+  render() {
+    if (!this.state.quebrou) return this.props.children;
+    return (
+      <View style={{ flex: 1, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+        <MaterialCommunityIcons name="wrench-outline" size={52} color={COLORS.ember} />
+        <Text style={{ color: '#ffffff', fontSize: 20, fontWeight: '800', textAlign: 'center', marginTop: 18 }}>{TITULO_MANUTENCAO}</Text>
+        <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 14, lineHeight: 20, textAlign: 'center', marginTop: 8 }}>{MSG_MANUTENCAO}</Text>
+        <Pressable
+          onPress={() => this.setState({ quebrou: false })}
+          style={{ marginTop: 24, paddingHorizontal: 26, height: 46, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Text style={{ color: '#ffffff', fontSize: 14.5, fontWeight: '700' }}>Tentar de novo</Text>
+        </Pressable>
+      </View>
+    );
+  }
+}
+
+function CindraStudioSeguro(props) {
+  return (
+    <ErroSeguroStudio>
+      <CindraStudioScreen {...props} />
+    </ErroSeguroStudio>
+  );
+}
+
 export { NoticeCardHost };
-export default CindraStudioScreen;
+export default CindraStudioSeguro;
