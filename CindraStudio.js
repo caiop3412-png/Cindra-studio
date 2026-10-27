@@ -9102,10 +9102,11 @@ function BotaoWhatsFlutuante({ bottom }) {
 }
 
 // ─────────────────────────────────────────────────────────
-// Avisos do servidor: o painel admin publica, o app mostra o card no topo.
-// App aberto → consulta /api/avisos (a cada 60 s e ao voltar pro app).
-// App fechado → push (precisa do expo-notifications + FCM; sem isso o aviso
-// aparece quando o app for aberto).
+// Avisos do servidor: o painel admin publica, o app mostra o card no topo E
+// uma notificação na barra do celular.
+// App aberto (ou ainda vivo em segundo plano) → consulta /api/avisos a cada
+// 30 s e ao voltar pro app. App fechado → push (precisa do expo-notifications
+// + FCM; sem isso o aviso aparece quando o app for aberto).
 // ─────────────────────────────────────────────────────────
 const ARQUIVO_AVISOS_STUDIO = `${FileSystem.documentDirectory}cindrastudio/_avisos.json`;
 
@@ -9124,6 +9125,67 @@ async function gravarEstadoAvisosStudio(estado) {
   try {
     await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}cindrastudio/`, { intermediates: true });
     await FileSystem.writeAsStringAsync(ARQUIVO_AVISOS_STUDIO, JSON.stringify(estado), { encoding: FileSystem.EncodingType.UTF8 });
+  } catch (e) {}
+}
+
+let notifPreparadasStudio = false;
+
+// Canal + permissão + regra de exibição. Devolve true se pode notificar.
+async function prepararNotificacoesStudio() {
+  if (!Notifications || Platform.OS !== 'android') return false;
+  try {
+    if (!notifPreparadasStudio) {
+      // Push que chega com o app aberto fica quieto (o card + a notificação
+      // local já cobrem); a notificação local do app aparece mesmo aberto.
+      Notifications.setNotificationHandler({
+        handleNotification: async (n) => {
+          const d = (n && n.request && n.request.content && n.request.content.data) || {};
+          const mostrar = !!d.local;
+          return { shouldShowAlert: mostrar, shouldShowBanner: mostrar, shouldShowList: mostrar, shouldPlaySound: mostrar, shouldSetBadge: false };
+        },
+      });
+      if (Notifications.setNotificationChannelAsync) {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Avisos',
+          importance: Notifications.AndroidImportance ? Notifications.AndroidImportance.MAX : 4,
+          sound: 'default',
+        });
+      }
+      notifPreparadasStudio = true;
+    }
+    let { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') ({ status } = await Notifications.requestPermissionsAsync());
+    return status === 'granted';
+  } catch (e) {
+    return false;
+  }
+}
+
+// Põe o aviso na barra de notificações do celular.
+async function notificarNaBarraStudio(aviso) {
+  if (!Notifications || Platform.OS !== 'android') return;
+  try {
+    if (!(await prepararNotificacoesStudio())) return;
+    // se o push desse aviso já está na barra, não duplica
+    if (Notifications.getPresentedNotificationsAsync) {
+      const ativas = await Notifications.getPresentedNotificationsAsync();
+      const jaTem = (ativas || []).some((x) => {
+        const d = x && x.request && x.request.content && x.request.content.data;
+        return d && Number(d.avisoId) === Number(aviso.id);
+      });
+      if (jaTem) return;
+    }
+    const content = {
+      title: String(aviso.titulo || 'Aviso'),
+      body: String(aviso.mensagem || ''),
+      sound: 'default',
+      data: { local: true, avisoId: aviso.id },
+    };
+    try {
+      await Notifications.scheduleNotificationAsync({ content, trigger: { channelId: 'default' } });
+    } catch (e) {
+      await Notifications.scheduleNotificationAsync({ content, trigger: null });
+    }
   } catch (e) {}
 }
 
@@ -9148,6 +9210,7 @@ function AvisosDoServidor() {
         if (!novos.length) return;
         await gravarEstadoAvisosStudio({ ...estado, ultimo: topo });
         novos.slice(-3).forEach((a, i) => {
+          notificarNaBarraStudio(a);
           setTimeout(() => {
             if (vivo) exibirAviso(String(a.titulo || 'Aviso'), String(a.mensagem || ''), 'aviso');
           }, i * 4800);
@@ -9162,17 +9225,9 @@ function AvisosDoServidor() {
     const registrarPush = async () => {
       if (!Notifications || Platform.OS !== 'android') return;
       try {
+        if (!(await prepararNotificacoesStudio())) return;
         const estado = (await lerEstadoAvisosStudio()) || {};
         if (estado.push) return; // já registrado neste aparelho
-        let { status } = await Notifications.getPermissionsAsync();
-        if (status !== 'granted') ({ status } = await Notifications.requestPermissionsAsync());
-        if (status !== 'granted') return;
-        if (Notifications.setNotificationChannelAsync) {
-          await Notifications.setNotificationChannelAsync('default', {
-            name: 'Avisos',
-            importance: Notifications.AndroidImportance ? Notifications.AndroidImportance.MAX : 4,
-          });
-        }
         const t = await Notifications.getExpoPushTokenAsync();
         if (!t || !t.data) return;
         const r = await nuvemFetch('/api/push/registrar', { metodo: 'POST', corpo: { token: t.data }, timeoutMs: 10000 });
@@ -9185,9 +9240,10 @@ function AvisosDoServidor() {
       }
     };
 
+    prepararNotificacoesStudio();
     verificar();
     registrarPush();
-    const rel = setInterval(verificar, 60000);
+    const rel = setInterval(verificar, 30000);
     const sub = AppState.addEventListener('change', (s) => { if (s === 'active') verificar(); });
     return () => {
       vivo = false;
