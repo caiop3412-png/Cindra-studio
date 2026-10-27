@@ -9101,6 +9101,104 @@ function BotaoWhatsFlutuante({ bottom }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────
+// Avisos do servidor: o painel admin publica, o app mostra o card no topo.
+// App aberto → consulta /api/avisos (a cada 60 s e ao voltar pro app).
+// App fechado → push (precisa do expo-notifications + FCM; sem isso o aviso
+// aparece quando o app for aberto).
+// ─────────────────────────────────────────────────────────
+const ARQUIVO_AVISOS_STUDIO = `${FileSystem.documentDirectory}cindrastudio/_avisos.json`;
+
+async function lerEstadoAvisosStudio() {
+  try {
+    const info = await FileSystem.getInfoAsync(ARQUIVO_AVISOS_STUDIO);
+    if (!info.exists) return null;
+    const obj = JSON.parse(await FileSystem.readAsStringAsync(ARQUIVO_AVISOS_STUDIO, { encoding: FileSystem.EncodingType.UTF8 }));
+    return obj && typeof obj === 'object' ? obj : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function gravarEstadoAvisosStudio(estado) {
+  try {
+    await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}cindrastudio/`, { intermediates: true });
+    await FileSystem.writeAsStringAsync(ARQUIVO_AVISOS_STUDIO, JSON.stringify(estado), { encoding: FileSystem.EncodingType.UTF8 });
+  } catch (e) {}
+}
+
+function AvisosDoServidor() {
+  const verificandoRef = useRef(false);
+
+  useEffect(() => {
+    let vivo = true;
+
+    const verificar = async () => {
+      if (verificandoRef.current) return;
+      verificandoRef.current = true;
+      try {
+        const estado = (await lerEstadoAvisosStudio()) || {};
+        const ultimo = typeof estado.ultimo === 'number' ? estado.ultimo : null;
+        const r = await nuvemFetch(`/api/avisos?desde=${ultimo == null ? 0 : ultimo}`, { timeoutMs: 10000 });
+        if (!r.ok || !r.dados) return;
+        const topo = Number(r.dados.ultimoId) || 0;
+        const novos = Array.isArray(r.dados.avisos) ? r.dados.avisos : [];
+        // primeira vez neste aparelho: só marca o ponto, não despeja avisos velhos
+        if (ultimo == null) { await gravarEstadoAvisosStudio({ ...estado, ultimo: topo }); return; }
+        if (!novos.length) return;
+        await gravarEstadoAvisosStudio({ ...estado, ultimo: topo });
+        novos.slice(-3).forEach((a, i) => {
+          setTimeout(() => {
+            if (vivo) exibirAviso(String(a.titulo || 'Aviso'), String(a.mensagem || ''), 'aviso');
+          }, i * 4800);
+        });
+      } catch (e) {
+        // sem internet: tenta de novo no próximo ciclo
+      } finally {
+        verificandoRef.current = false;
+      }
+    };
+
+    const registrarPush = async () => {
+      if (!Notifications || Platform.OS !== 'android') return;
+      try {
+        const estado = (await lerEstadoAvisosStudio()) || {};
+        if (estado.push) return; // já registrado neste aparelho
+        let { status } = await Notifications.getPermissionsAsync();
+        if (status !== 'granted') ({ status } = await Notifications.requestPermissionsAsync());
+        if (status !== 'granted') return;
+        if (Notifications.setNotificationChannelAsync) {
+          await Notifications.setNotificationChannelAsync('default', {
+            name: 'Avisos',
+            importance: Notifications.AndroidImportance ? Notifications.AndroidImportance.MAX : 4,
+          });
+        }
+        const t = await Notifications.getExpoPushTokenAsync();
+        if (!t || !t.data) return;
+        const r = await nuvemFetch('/api/push/registrar', { metodo: 'POST', corpo: { token: t.data }, timeoutMs: 10000 });
+        if (r.ok) {
+          const atual = (await lerEstadoAvisosStudio()) || {};
+          await gravarEstadoAvisosStudio({ ...atual, push: t.data });
+        }
+      } catch (e) {
+        // sem FCM/projectId configurado: segue só com o aviso dentro do app
+      }
+    };
+
+    verificar();
+    registrarPush();
+    const rel = setInterval(verificar, 60000);
+    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') verificar(); });
+    return () => {
+      vivo = false;
+      clearInterval(rel);
+      if (sub && sub.remove) sub.remove();
+    };
+  }, []);
+
+  return null;
+}
+
 function CindraStudioScreen({ visible, onClose }) {
   const insets = useSafeAreaInsets();
 
@@ -13428,6 +13526,7 @@ function CindraStudioScreen({ visible, onClose }) {
         onConfirmar={({ uri }) => { setFotoIcone(uri); setEditorFotoUri(null); }}
       />
       <AtualizacaoForcada />
+      <AvisosDoServidor />
     </View>
   );
 }
