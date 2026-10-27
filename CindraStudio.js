@@ -31,6 +31,8 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 // Módulo nativo local (modules/apk-builder): aapt2 + ECJ + D8 + apksig.
 import * as ApkBuilder from './modules/apk-builder';
+// Editor de imagem (cortar, zoom, girar, espelhar) usado na foto do ícone.
+import EditorImagem from './EditorImagem';
 
 // Foto do ícone do app (galeria → recorte quadrado → PNG 512×512). Precisa
 // de: npx expo install expo-image-picker expo-image-manipulator (e um build
@@ -8241,6 +8243,7 @@ function CindraStudioScreen({ visible, onClose }) {
   const [corIcone, setCorIcone] = useState(CORES_ICONE_STUDIO[0]);
   const [fotoIcone, setFotoIcone] = useState(null); // uri do PNG do ícone (foto da galeria), ou null = robozinho
   const [processandoFoto, setProcessandoFoto] = useState(false);
+  const [editorFotoUri, setEditorFotoUri] = useState(null);
   const [criandoProjeto, setCriandoProjeto] = useState(false);
   const [campoFoco, setCampoFoco] = useState(null); // 'nome' | 'pacote' | 'versao' | 'codigo'
   const [versaoNomeNovo, setVersaoNomeNovo] = useState('1.0'); // versão do app novo (tela de criação)
@@ -8956,8 +8959,8 @@ function CindraStudioScreen({ visible, onClose }) {
     exibirAviso('Arquivo excluído', caminho.split('/').pop(), 'sucesso');
   };
 
-  // Galeria → recorte quadrado (editor do próprio seletor) → PNG 512×512.
-  // Foto grande no ícone pesa no APK e trava o launcher, então reduz aqui.
+  // Galeria → editor próprio (cortar, zoom, girar, espelhar) → PNG até 512px.
+  // Foto grande no ícone pesa no APK e trava o launcher, então reduz no editor.
   const escolherFotoIcone = async () => {
     if (processandoFoto) return;
     if (!ImagePicker || !ImageManipulator) {
@@ -8971,27 +8974,13 @@ function CindraStudioScreen({ visible, onClose }) {
     try {
       const r = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaType ? ['images'] : ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
+        allowsEditing: false,
         quality: 1,
       });
       if (r.canceled || !r.assets || !r.assets.length) return;
-      setProcessandoFoto(true);
-      const uri = r.assets[0].uri;
-      const base = await ImageManipulator.manipulateAsync(uri, [], {});
-      const lado = Math.min(base.width, base.height);
-      const acoes = [];
-      if (base.width !== base.height) {
-        acoes.push({ crop: { originX: Math.floor((base.width - lado) / 2), originY: Math.floor((base.height - lado) / 2), width: lado, height: lado } });
-      }
-      const alvo = Math.min(512, lado);
-      acoes.push({ resize: { width: alvo, height: alvo } });
-      const saida = await ImageManipulator.manipulateAsync(uri, acoes, { format: ImageManipulator.SaveFormat.PNG, compress: 1 });
-      setFotoIcone(saida.uri);
+      setEditorFotoUri(r.assets[0].uri);
     } catch (e) {
       exibirAviso(TITULO_MANUTENCAO, MSG_MANUTENCAO, 'erro');
-    } finally {
-      setProcessandoFoto(false);
     }
   };
 
@@ -12405,6 +12394,15 @@ function CindraStudioScreen({ visible, onClose }) {
         {etapa === 'home' ? renderHome() : etapa === 'config' ? renderConfig() : renderWorkspace()}
       </EntradaAleatoria>
       {etapa === 'home' && <BotaoWhatsFlutuante bottom={Math.max(insets.bottom, 12) + 84} />}
+      <EditorImagem
+        visible={!!editorFotoUri}
+        uri={editorFotoUri}
+        titulo="Foto do ícone"
+        proporcaoInicial="1:1"
+        tamanhoInicial={512}
+        onCancelar={() => setEditorFotoUri(null)}
+        onConfirmar={({ uri }) => { setFotoIcone(uri); setEditorFotoUri(null); }}
+      />
       <AtualizacaoForcada />
     </View>
   );
