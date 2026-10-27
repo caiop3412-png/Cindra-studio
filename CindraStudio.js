@@ -15,6 +15,7 @@ import {
   Alert,
   Linking,
   Switch,
+  Modal,
   PixelRatio,
   Keyboard,
   Image,
@@ -1048,6 +1049,26 @@ function pastaProjetoStudio(pacote) {
 // manifest sempre poder apontar pra ela.
 const MARCA_DAGUA_CLASSE = 'CindraWatermarkApp';
 
+// Código secreto que tira a marca d'água. Fica guardado só como "assinatura"
+// (hash), então o código em si não aparece escrito no arquivo. Depois de
+// digitado certo UMA vez, o aparelho lembra pra sempre (salvo em _prefs.json).
+const ASSINATURA_CODIGO_SEM_MARCA = '601f6bc84784230e76';
+let MARCA_REMOVIDA_STUDIO = false;
+function assinaturaCodigoStudio(txt) {
+  let a = 2166136261;
+  let b = 5381;
+  for (let i = 0; i < txt.length; i++) {
+    const c = txt.charCodeAt(i);
+    a = Math.imul(a ^ c, 16777619) >>> 0;
+    b = (Math.imul(b, 33) + c) >>> 0;
+  }
+  const hex = (n) => ('00000000' + n.toString(16)).slice(-8);
+  return hex(a) + hex(b) + txt.length;
+}
+function codigoSemMarcaValido(txt) {
+  return assinaturaCodigoStudio(String(txt || '').trim()) === ASSINATURA_CODIGO_SEM_MARCA;
+}
+
 // Gera o Application.java que desenha a marca d'água "Cindra Studio"
 // por cima de QUALQUER Activity do app, sem depender de nada que o
 // MainActivity faça. Usa registerActivityLifecycleCallbacks: funciona
@@ -1075,6 +1096,7 @@ import android.widget.TextView;
 public class ${MARCA_DAGUA_CLASSE} extends Application {
 
     private static final String MARCA_TAG = "cindrastudio_marca_dagua";
+    private static final boolean MARCA_ATIVA = ${MARCA_REMOVIDA_STUDIO ? 'false' : 'true'};
 
     @Override
     public void onCreate() {
@@ -1105,6 +1127,7 @@ public class ${MARCA_DAGUA_CLASSE} extends Application {
     }
 
     private static void inserirMarca(final Activity activity) {
+        if (!MARCA_ATIVA) return;
         final View decorView = activity.getWindow().getDecorView();
         decorView.post(new Runnable() {
             @Override
@@ -8354,6 +8377,11 @@ function CindraStudioScreen({ visible, onClose }) {
   // Compilação (▶)
   const [compilando, setCompilando] = useState(false);
   const [painelCompilacao, setPainelCompilacao] = useState(false);
+  // Popup do código secreto (tira a marca d'água) — aparece ao tocar em compilar.
+  const [popupCodigo, setPopupCodigo] = useState(false);
+  const [codigoDigitado, setCodigoDigitado] = useState('');
+  const [erroCodigo, setErroCodigo] = useState('');
+  const modoPendenteRef = useRef('debug');
   const [logCompilacao, setLogCompilacao] = useState([]);
   const [errosCompilacao, setErrosCompilacao] = useState([]);
   const [apkGerado, setApkGerado] = useState(null);
@@ -8389,6 +8417,7 @@ function CindraStudioScreen({ visible, onClose }) {
     lerPrefsStudio().then((prefs) => {
       if (!vivo) return;
       prefsRef.current = prefs;
+      MARCA_REMOVIDA_STUDIO = prefs.marcaRemovida === true;
       setAvisoRecuperarVisivel(!prefs.avisoRecuperarDispensado);
       if (prefs.modoLista === 'grade' || prefs.modoLista === 'lista') setModoLista(prefs.modoLista);
       if (Object.prototype.hasOwnProperty.call(ROTULOS_ORDEM_STUDIO, prefs.ordenacao)) setOrdenacao(prefs.ordenacao);
@@ -9240,7 +9269,38 @@ function CindraStudioScreen({ visible, onClose }) {
   };
 
   // modo: 'debug' (chave interna do Cindra) ou 'release' (keystore escolhido).
-  const compilarProjeto = async (modo = 'debug') => {
+  // Toque em compilar: se a marca d'água ainda não foi removida neste
+  // aparelho, mostra o popup do código secreto antes de compilar.
+  const compilarProjeto = (modo = 'debug') => {
+    if (compilando) return;
+    if (MARCA_REMOVIDA_STUDIO) { compilarProjetoReal(modo); return; }
+    modoPendenteRef.current = modo;
+    setCodigoDigitado('');
+    setErroCodigo('');
+    setPopupCodigo(true);
+  };
+  const aplicarCodigoSecreto = () => {
+    if (!codigoSemMarcaValido(codigoDigitado)) {
+      setErroCodigo('Código incorreto. Confira e tente de novo.');
+      return;
+    }
+    MARCA_REMOVIDA_STUDIO = true;
+    salvarPref('marcaRemovida', true); // grava no aparelho: não pede mais
+    Keyboard.dismiss();
+    setPopupCodigo(false);
+    setCodigoDigitado('');
+    setErroCodigo('');
+    setTimeout(() => compilarProjetoReal(modoPendenteRef.current), 200);
+  };
+  const compilarComMarca = () => {
+    Keyboard.dismiss();
+    setPopupCodigo(false);
+    setCodigoDigitado('');
+    setErroCodigo('');
+    setTimeout(() => compilarProjetoReal(modoPendenteRef.current), 200);
+  };
+
+  const compilarProjetoReal = async (modo = 'debug') => {
     if (compilando) return;
     const release = modo === 'release';
     if (release) {
@@ -9261,13 +9321,13 @@ function CindraStudioScreen({ visible, onClose }) {
     try {
       // Traz pro projeto o que foi mexido por fora na pasta arquivos.
       const projSincronizado = await sincronizarPastaApp(true);
-      add("Aplicando marca d'água do CindraStudio...");
+      add(MARCA_REMOVIDA_STUDIO ? 'Preparando o projeto (sem marca d\'água)...' : "Aplicando marca d'água do CindraStudio...");
       const pasta = await salvarNoDisco(projSincronizado || undefined);
       if (!pasta) {
         add('Não foi possível gravar o projeto em disco.');
         return;
       }
-      add("Marca d'água aplicada.");
+      add(MARCA_REMOVIDA_STUDIO ? 'Projeto preparado.' : "Marca d'água aplicada.");
 
       const amb = await ApkBuilder.ambiente();
       if (amb && amb.sdk < 26) throw new Error('O compilador precisa de Android 8 (API 26) ou mais novo.');
@@ -12092,6 +12152,64 @@ function CindraStudioScreen({ visible, onClose }) {
           )}
         </FolhaInferiorStudio>
       )}
+
+      <Modal
+        visible={popupCodigo}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { Keyboard.dismiss(); setPopupCodigo(false); }}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-start', paddingTop: 110, paddingHorizontal: 22 }}>
+          <View style={{ backgroundColor: COLORS.panel2, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: COLORS.line }}>
+            <View style={{ alignItems: 'center', marginBottom: 10 }}>
+              <MaterialCommunityIcons name="key-variant" size={30} color={COLORS.ember} />
+            </View>
+            <Text style={{ color: COLORS.ink, fontSize: 17, fontWeight: '800', textAlign: 'center' }}>Código secreto</Text>
+            <Text style={{ color: COLORS.dim, fontSize: 13, textAlign: 'center', marginTop: 8, lineHeight: 19 }}>
+              Use o código secreto para remover a marca d'água do app. Você só precisa digitar uma vez neste aparelho.
+            </Text>
+            <TextInput
+              value={codigoDigitado}
+              onChangeText={(t) => { setCodigoDigitado(t); if (erroCodigo) setErroCodigo(''); }}
+              placeholder="Cole ou digite o código"
+              placeholderTextColor="rgba(255,255,255,0.35)"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="off"
+              spellCheck={false}
+              onSubmitEditing={aplicarCodigoSecreto}
+              style={{
+                marginTop: 14,
+                color: COLORS.ink,
+                backgroundColor: 'rgba(255,255,255,0.06)',
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: erroCodigo ? COLORS.error : COLORS.line,
+                paddingHorizontal: 14,
+                paddingVertical: 11,
+                fontSize: 14,
+              }}
+            />
+            {!!erroCodigo && (
+              <Text style={{ color: COLORS.error, fontSize: 12.5, marginTop: 8 }}>{erroCodigo}</Text>
+            )}
+            <TouchableOpacity
+              onPress={aplicarCodigoSecreto}
+              activeOpacity={0.85}
+              style={{ marginTop: 16, backgroundColor: COLORS.ember, borderRadius: 12, paddingVertical: 13, alignItems: 'center' }}
+            >
+              <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 14.5 }}>Remover marca d'água e compilar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={compilarComMarca}
+              activeOpacity={0.7}
+              style={{ marginTop: 8, paddingVertical: 11, alignItems: 'center' }}
+            >
+              <Text style={{ color: COLORS.dim, fontWeight: '600', fontSize: 13.5 }}>Compilar com marca d'água</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {painelCompilacao && (() => {
         const temErro = errosCompilacao.length > 0;
