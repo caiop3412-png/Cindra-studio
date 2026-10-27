@@ -9151,6 +9151,17 @@ async function prepararNotificacoesStudio() {
           sound: 'default',
         });
       }
+      if (Notifications.setNotificationChannelAsync) {
+        await Notifications.setNotificationChannelAsync('avisos', {
+          name: 'Avisos do Cindra Studio',
+          importance: Notifications.AndroidImportance ? Notifications.AndroidImportance.MAX : 4,
+          sound: 'default',
+          enableLights: true,
+          lightColor: '#C026D3',
+          enableVibrate: true,
+          vibrationPattern: [0, 250, 150, 250],
+        });
+      }
       if (Notifications.setNotificationCategoryAsync) {
         await Notifications.setNotificationCategoryAsync('aviso', [
           { identifier: 'abrir', buttonTitle: 'Abrir app', options: { opensAppToForeground: true } },
@@ -9186,10 +9197,12 @@ async function notificarNaBarraStudio(aviso) {
       sound: 'default',
       color: '#C026D3',
       categoryIdentifier: 'aviso',
+      priority: Notifications.AndroidNotificationPriority ? Notifications.AndroidNotificationPriority.MAX : 'max',
+      vibrate: [0, 250, 150, 250],
       data: { local: true, avisoId: aviso.id },
     };
     try {
-      await Notifications.scheduleNotificationAsync({ content, trigger: { channelId: 'default' } });
+      await Notifications.scheduleNotificationAsync({ content, trigger: { channelId: 'avisos' } });
     } catch (e) {
       await Notifications.scheduleNotificationAsync({ content, trigger: null });
     }
