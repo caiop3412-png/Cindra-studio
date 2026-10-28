@@ -1594,10 +1594,17 @@ async function notificarProgressoZipStudio(titulo, corpo, final) {
       ...(final ? { sound: 'default' } : {}),
     };
     const canal = final ? 'avisos' : 'progresso';
+    // Final = notificação NOVA (id próprio, canal com som). A de progresso
+    // é removida pra não ficar duas na barra.
+    let id = 'cindra-zip';
+    if (final) {
+      id = `cindra-zip-fim-${Date.now()}`;
+      try { if (Notifications.dismissNotificationAsync) await Notifications.dismissNotificationAsync('cindra-zip'); } catch (e) { /* já saiu */ }
+    }
     try {
-      await Notifications.scheduleNotificationAsync({ identifier: 'cindra-zip', content, trigger: { channelId: canal } });
+      await Notifications.scheduleNotificationAsync({ identifier: id, content, trigger: { channelId: canal } });
     } catch (e) {
-      await Notifications.scheduleNotificationAsync({ identifier: 'cindra-zip', content, trigger: null });
+      await Notifications.scheduleNotificationAsync({ identifier: id, content, trigger: null });
     }
   } catch (e) { /* notificação é opcional */ }
 }
@@ -10809,13 +10816,66 @@ function CindraStudioScreen({ visible, onClose }) {
         if (!existe) break;
         nomeArq = `${raiz}-${carimbo}-${n}.zip`;
       }
+      const destinoUri = pastaDownload + nomeArq;
+      const destinoTxt = `/storage/emulated/0/Download/${nomeArq}`;
+      const msgErro = (x) => String(x && x.message ? x.message : x);
+      let gravou = false;
+      let ultimoErro = '';
+      // 1) grava direto na pasta Download
       try {
-        await FileSystem.writeAsStringAsync(pastaDownload + nomeArq, b64, { encoding: FileSystem.EncodingType.Base64 });
-      } catch (erroGravar) {
+        await FileSystem.writeAsStringAsync(destinoUri, b64, { encoding: FileSystem.EncodingType.Base64 });
+        gravou = true;
+      } catch (e1) {
+        ultimoErro = msgErro(e1);
+      }
+      // 2) plano B: grava num arquivo temporário e copia (módulo nativo primeiro)
+      if (!gravou) {
+        const temp = `${FileSystem.cacheDirectory}${nomeArq}`;
+        const tempTxt = temp.replace(/^file:\/\//, '');
+        try {
+          await FileSystem.writeAsStringAsync(temp, b64, { encoding: FileSystem.EncodingType.Base64 });
+          if (ApkBuilder.temPastaNativa) {
+            try { await ApkBuilder.criarPasta('/storage/emulated/0/Download'); } catch (e) { /* já existe */ }
+            try {
+              await ApkBuilder.copiarSobrescrevendo(tempTxt, destinoUri);
+              gravou = true;
+            } catch (e2) {
+              try {
+                await ApkBuilder.copiarSobrescrevendo(tempTxt, destinoTxt);
+                gravou = true;
+              } catch (e3) {
+                ultimoErro = msgErro(e3);
+              }
+            }
+          }
+          if (!gravou) {
+            try {
+              await FileSystem.copyAsync({ from: temp, to: destinoUri });
+              gravou = true;
+            } catch (e4) {
+              ultimoErro = msgErro(e4);
+            }
+          }
+        } catch (e5) {
+          ultimoErro = msgErro(e5);
+        }
+        FileSystem.deleteAsync(temp, { idempotent: true }).catch(() => {});
+      }
+      if (!gravou) {
+        // Só culpa a permissão se o sistema disser mesmo que ela não está liberada.
+        let semPermissao = false;
+        if (ApkBuilder.temPastaNativa) {
+          try { semPermissao = (await ApkBuilder.temAcessoTodosArquivos()) === false; } catch (e) { semPermissao = false; }
+        }
         setProgressoZip(null);
-        exibirAviso('Sem permissão', 'Libere "Acesso a todos os arquivos" pro Cindra Studio e exporte de novo.', 'aviso');
-        notificarProgressoZipStudio('Exportação não concluída', 'Falta liberar "Acesso a todos os arquivos".', true);
-        abrirConfigAcessoArquivos();
+        if (semPermissao) {
+          exibirAviso('Sem permissão', 'Libere "Acesso a todos os arquivos" pro Cindra Studio e exporte de novo.', 'aviso');
+          notificarProgressoZipStudio('Exportação não concluída', 'Falta liberar "Acesso a todos os arquivos".', true);
+          abrirConfigAcessoArquivos();
+        } else {
+          exibirAviso('Não consegui gravar em Download', ultimoErro || 'erro desconhecido', 'erro');
+          notificarProgressoZipStudio('Exportação falhou', ultimoErro || 'não consegui gravar em Download', true);
+        }
         return;
       }
       reportarZip(titulo, 100, '', true);
