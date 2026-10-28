@@ -50,6 +50,11 @@ try { Clipboard = require('expo-clipboard'); } catch (e) { Clipboard = null; }
 // expo-sharing o botão só avisa o que instalar.
 let Sharing = null;
 try { Sharing = require('expo-sharing'); } catch (e) { Sharing = null; }
+// Navegador por cima do app (Chrome Custom Tabs) pros links da aba Publicar.
+// Precisa de: npx expo install expo-web-browser (e um build novo). Sem ele,
+// o link abre no navegador normal do aparelho.
+let WebBrowser = null;
+try { WebBrowser = require('expo-web-browser'); } catch (e) { WebBrowser = null; }
 
 // Notificação de "tem atualização": opcional (precisa do expo-notifications).
 // Sem ele o bloqueio de atualização funciona do mesmo jeito, só não notifica.
@@ -11442,10 +11447,23 @@ function CindraStudioScreen({ visible, onClose }) {
     if (!contaNuvem) setPublicados([]);
   }, [abaHome, contaNuvem]);
 
-  // Abre o link no navegador do aparelho (por cima do app).
+  // Abre o link num navegador por cima do app, sem sair dele (volta no X ou no botão voltar).
   const abrirLinkPublicado = async (url) => {
-    try { await Linking.openURL(url); }
-    catch (e) { exibirAviso('Não foi possível abrir', 'Tente de novo em instantes.', 'erro'); }
+    try {
+      if (WebBrowser && WebBrowser.openBrowserAsync) {
+        await WebBrowser.openBrowserAsync(url, {
+          toolbarColor: '#09050f',
+          controlsColor: '#ffffff',
+          showTitle: true,
+          enableBarCollapsing: true,
+          createTask: false, // fica dentro do app em vez de abrir outra janela do Chrome
+        });
+        return;
+      }
+      await Linking.openURL(url); // sem o expo-web-browser instalado, abre no navegador normal
+    } catch (e) {
+      exibirAviso('Não foi possível abrir', 'Tente de novo em instantes.', 'erro');
+    }
   };
 
   // Publica (ou atualiza) o último APK gerado do projeto.
