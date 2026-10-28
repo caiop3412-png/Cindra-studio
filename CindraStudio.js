@@ -65,6 +65,16 @@ try { Notifications = require('expo-notifications'); } catch (e) { Notifications
 let Updates = null;
 try { Updates = require('expo-updates'); } catch (e) { Updates = null; }
 
+// Versão nativa do APK instalado (versionCode). Se o módulo não existir (APK antigo), vira 0.
+let ExpoApplication = null;
+try { ExpoApplication = require('expo-application'); } catch (e) { ExpoApplication = null; }
+function versaoCodigoDoApk() {
+  try {
+    const n = parseInt(ExpoApplication && ExpoApplication.nativeBuildVersion, 10);
+    return Number.isFinite(n) ? n : 0;
+  } catch (e) { return 0; }
+}
+
 const SUGESTOES_AUTO_DESLIGADAS = [];
 const CODIGO_FONTE = 13; // fonte do editor (também usada pra calcular a largura do código)
 
@@ -3254,7 +3264,8 @@ const LIMITE_BINARIO_NUVEM = 15 * 1024 * 1024;
 function nuvemPadrao() {
   // pendentes: { pacote: quando mudou } · excluir: { pacote: true }
   // versoes: { pacote: última versão (do servidor) que este aparelho já tem }
-  return { token: null, nome: null, pendentes: {}, excluir: {}, versoes: {} };
+  // semCota: { pacote: { t, em, avisado } } · projetos que a nuvem (100 MB) recusou; continuam no celular
+  return { token: null, nome: null, pendentes: {}, excluir: {}, versoes: {}, semCota: {} };
 }
 
 async function lerNuvemStudio() {
@@ -3475,7 +3486,7 @@ async function sincronizarNuvemStudio({ abertoPacote } = {}) {
   let n = await lerNuvemStudio();
   if (!n.token) return { ok: false, semConta: true };
   const token = n.token;
-  const res = { ok: true, mudouLista: false, enviados: 0, baixados: 0, rejeitados: [], pendencias: false, semRede: false };
+  const res = { ok: true, mudouLista: false, enviados: 0, baixados: 0, rejeitados: [], semCota: [], pendencias: false, semRede: false };
   const aindaPendente = async () => {
     const x = await lerNuvemStudio();
     return Object.keys(x.pendentes || {}).length > 0 || Object.keys(x.excluir || {}).length > 0;
@@ -3487,7 +3498,7 @@ async function sincronizarNuvemStudio({ abertoPacote } = {}) {
     const r = await nuvemFetch(`/api/projetos/${encodeURIComponent(pacote)}`, { metodo: 'DELETE', token });
     if (r.status === 401) { await gravarNuvemStudio(nuvemPadrao()); return { ok: false, sessaoExpirada: true }; }
     if (r.ok || r.status === 404 || r.status === 400) {
-      await alterarNuvemStudio((x) => { delete x.excluir[pacote]; delete x.versoes[pacote]; });
+      await alterarNuvemStudio((x) => { delete x.excluir[pacote]; delete x.versoes[pacote]; x.semCota = {}; }); // liberou espaço: tenta subir de novo
     } else return falha(r);
   }
   n = await lerNuvemStudio();
@@ -3521,6 +3532,10 @@ async function sincronizarNuvemStudio({ abertoPacote } = {}) {
     }
     if (!acao) continue;
 
+    // projeto que a nuvem recusou por falta de espaço: não reenvia à toa (tenta de novo se mudar, se liberar espaço ou após 15 min)
+    const sc0 = acao === 'subir' ? (n.semCota || {})[pacote] : null;
+    if (sc0 && sc0.t === tLocal && Date.now() - sc0.em < 15 * 60 * 1000) continue;
+
     if (acao === 'subir') {
       const pacoteNuvem = await montarPacoteNuvem(pacote);
       if (!pacoteNuvem) { await alterarNuvemStudio((x) => { delete x.pendentes[pacote]; }); continue; }
@@ -3540,8 +3555,18 @@ async function sincronizarNuvemStudio({ abertoPacote } = {}) {
         await alterarNuvemStudio((x) => {
           x.versoes[pacote] = v;
           if ((x.pendentes[pacote] || 0) <= marca) delete x.pendentes[pacote];
+          if (x.semCota) delete x.semCota[pacote];
         });
         res.enviados += 1;
+      } else if (r.status === 413 && r.dados && r.dados.erro === 'cota_nuvem') {
+        // nuvem cheia: a última versão boa continua lá e o projeto continua no celular (nada é apagado)
+        const jaAvisado = !!(sc0 && sc0.t === tLocal && sc0.avisado);
+        await alterarNuvemStudio((x) => {
+          x.semCota = x.semCota || {};
+          x.semCota[pacote] = { t: tLocal, em: Date.now(), avisado: true };
+          delete x.pendentes[pacote];
+        });
+        if (!jaAvisado) res.semCota.push(pacote);
       } else if (r.status === 400 || r.status === 413) {
         await alterarNuvemStudio((x) => { delete x.pendentes[pacote]; });
         res.rejeitados.push(pacote);
@@ -9180,6 +9205,98 @@ function AtualizacaoForcada() {
   );
 }
 
+// ─────────────────────────────────────────────────────────
+// BLOQUEIO DE VERSÃO
+// Pergunta ao servidor (/api/versao) qual a versão mínima aceita. Se o APK
+// instalado for mais antigo, mostra pop-up + tela cheia mandando baixar a
+// versão nova em https://cindra-studio.shop. Sem internet: não bloqueia.
+// ─────────────────────────────────────────────────────────
+const LINK_NOVA_VERSAO = 'https://cindra-studio.shop';
+function BloqueioVersao() {
+  const [bloqueado, setBloqueado] = useState(false);
+  const [msgExtra, setMsgExtra] = useState('');
+  const verificandoRef = useRef(false);
+  const bloqueadoRef = useRef(false);
+
+  const verificar = async () => {
+    if (verificandoRef.current || bloqueadoRef.current) return;
+    verificandoRef.current = true;
+    try {
+      const r = await nuvemFetch('/api/versao', { timeoutMs: 10000 });
+      if (r.ok && r.dados) {
+        const minimo = Number(r.dados.minimo) || 0;
+        if (minimo > 0 && versaoCodigoDoApk() < minimo) {
+          bloqueadoRef.current = true;
+          setMsgExtra(typeof r.dados.mensagem === 'string' ? r.dados.mensagem : '');
+          setBloqueado(true);
+        }
+      }
+    } catch (e) {
+      // sem internet: não bloqueia
+    } finally {
+      verificandoRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    verificar();
+    const sub = AppState.addEventListener('change', (st) => { if (st === 'active') verificar(); });
+    return () => sub.remove();
+  }, []);
+
+  const abrirSite = async () => {
+    try {
+      await Linking.openURL(LINK_NOVA_VERSAO);
+    } catch (e) {
+      exibirAviso('Não foi possível abrir', `Abra no navegador: ${LINK_NOVA_VERSAO}`, 'erro');
+    }
+  };
+
+  // pop-up escrito "baixe a nova versão"
+  useEffect(() => {
+    if (!bloqueado) return;
+    Alert.alert(
+      'Baixe a nova versão',
+      'Esta versão do Cindra Studio não é mais aceita. Baixe a nova versão no site cindra-studio.shop para continuar.',
+      [{ text: 'Baixar agora', onPress: () => { abrirSite(); } }],
+      { cancelable: false }
+    );
+  }, [bloqueado]);
+
+  // botão voltar não fecha o bloqueio
+  useEffect(() => {
+    if (!bloqueado) return undefined;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => sub.remove();
+  }, [bloqueado]);
+
+  if (!bloqueado) return null;
+  return (
+    <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 10000, elevation: 10000, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 }}>
+      <View style={{ width: 84, height: 84, borderRadius: 26, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', marginBottom: 22 }}>
+        <Grad />
+        <MaterialCommunityIcons name="cellphone-arrow-down" size={42} color="#ffffff" />
+      </View>
+      <Text style={{ color: '#ffffff', fontSize: 22, fontWeight: '800', textAlign: 'center' }}>Baixe a nova versão</Text>
+      <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 14, lineHeight: 20, textAlign: 'center', marginTop: 10 }}>
+        Esta versão do Cindra Studio não é mais aceita. Baixe a nova versão no site cindra-studio.shop para continuar usando o app.
+      </Text>
+      {!!msgExtra && (
+        <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 13.5, lineHeight: 19, textAlign: 'center', marginTop: 12 }}>{msgExtra}</Text>
+      )}
+      <TouchableOpacity
+        onPress={abrirSite}
+        activeOpacity={0.85}
+        style={{ alignSelf: 'stretch', height: 52, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', marginTop: 24 }}
+      >
+        <Grad />
+        <Text style={{ color: '#ffffff', fontSize: 15.5, fontWeight: '800' }}>Baixar nova versão</Text>
+      </TouchableOpacity>
+      <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, textAlign: 'center', marginTop: 12 }}>cindra-studio.shop</Text>
+    </View>
+  );
+}
+
 // Botão flutuante do WhatsApp (suporte): abre a conversa direto no WhatsApp.
 const WHATS_SUPORTE = '5531983974632';
 const WHATS_MENSAGEM = 'Olá! Preciso de suporte no Cindra Studio.';
@@ -11402,6 +11519,9 @@ function CindraStudioScreen({ visible, onClose }) {
     if (r.mudouLista) lerListaProjetosStudio().then(setListaProjetos).catch(() => {});
     if (r.rejeitados && r.rejeitados.length) {
       exibirAviso('Alguns projetos não subiram', 'Estão grandes demais ou com arquivos inválidos para a nuvem.', 'erro');
+    }
+    if (r.semCota && r.semCota.length) {
+      exibirAviso('Sem espaço na nuvem', 'Sua nuvem (100 MB por conta) está cheia. O projeto continua salvo no seu celular e sobe sozinho quando você liberar espaço.', 'aviso');
     }
     setStatusNuvem(r.ok ? 'ok' : r.semRede ? 'offline' : 'erro');
     if (r.ok) setUltimaSyncNuvem(Date.now());
@@ -13923,6 +14043,7 @@ function CindraStudioScreen({ visible, onClose }) {
         onConfirmar={({ uri }) => { setFotoIcone(uri); setEditorFotoUri(null); }}
       />
       <AtualizacaoForcada />
+      <BloqueioVersao />
       <AvisosDoServidor />
     </View>
   );
