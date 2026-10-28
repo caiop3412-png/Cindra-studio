@@ -75,6 +75,14 @@ function versaoCodigoDoApk() {
   } catch (e) { return 0; }
 }
 
+// ID do aparelho (ANDROID_ID): o servidor limita quantas contas cada celular pode ter.
+function idDoAparelho() {
+  try {
+    const id = ExpoApplication && ExpoApplication.getAndroidId ? ExpoApplication.getAndroidId() : '';
+    return typeof id === 'string' && id.length >= 8 ? id : undefined;
+  } catch (e) { return undefined; }
+}
+
 const SUGESTOES_AUTO_DESLIGADAS = [];
 const CODIGO_FONTE = 13; // fonte do editor (também usada pra calcular a largura do código)
 
@@ -3328,6 +3336,7 @@ function mensagemErroNuvem(r) {
   if (e === 'senha_invalida') return 'A senha precisa ter de 6 a 100 caracteres.';
   if (e === 'nome_em_uso') return 'Esse nome já está em uso. Escolha outro.';
   if (e === 'login_incorreto') return 'Nome ou senha incorretos.';
+  if (e === 'limite_dispositivo') return 'Este aparelho já atingiu o limite de 2 contas. Fale com o suporte para liberar.';
   if (r.status === 429 || e === 'muitas_tentativas') return 'Muitas tentativas. Aguarde alguns minutos e tente de novo.';
   return 'Não foi possível conectar agora. Tente de novo em instantes.';
 }
@@ -3389,8 +3398,12 @@ async function removerLinkApkNuvem(token, slug) {
 
 // Botão único: o servidor entra se a conta existe, ou cria se não existe.
 async function entrarNuvemStudio(nome, senha) {
-  const r = await nuvemFetch('/api/conta/acessar', { metodo: 'POST', corpo: { nome, senha } });
+  const r = await nuvemFetch('/api/conta/acessar', { metodo: 'POST', corpo: { nome, senha, dispositivo: idDoAparelho() } });
   if (r.ok && r.dados && r.dados.token) return { ok: true, token: r.dados.token, nome: r.dados.nome || nome, criada: !!r.dados.criada };
+  if (r.dados && r.dados.erro === 'limite_dispositivo') {
+    // limite de contas no aparelho: mostra o aviso e já abre o WhatsApp do suporte
+    setTimeout(() => { abrirSuporteNuvem(nome, 'limite'); }, 1500);
+  }
   return { ok: false, mensagem: mensagemErroNuvem(r) };
 }
 
@@ -3747,8 +3760,9 @@ const loginStyles = StyleSheet.create({
 const NOME_VALIDO_NUVEM = /^[A-Za-z0-9][A-Za-z0-9_.-]{2,19}$/;
 
 // Abre o WhatsApp do suporte (redefinição de senha só pelo suporte).
-async function abrirSuporteNuvem(usuario) {
+async function abrirSuporteNuvem(usuario, motivo) {
   const texto = encodeURIComponent(
+    motivo === 'limite' ? `Olá! Meu aparelho atingiu o limite de 2 contas no Cindra Studio e preciso de ajuda.${usuario ? ` Usuário: ${usuario}` : ''}` :
     usuario ? `Olá! Preciso redefinir a senha da minha conta no Cindra Studio. Meu usuário é: ${usuario}` : 'Olá! Preciso de ajuda com a minha conta no Cindra Studio.'
   );
   try {
@@ -9467,11 +9481,11 @@ function AvisosDoServidor() {
         if (ultimo == null) { await gravarEstadoAvisosStudio({ ...estado, ultimo: topo }); return; }
         if (!novos.length) return;
         await gravarEstadoAvisosStudio({ ...estado, ultimo: topo });
-        novos.slice(-3).forEach((a, i) => {
+        // Aparelho com push registrado: o servidor já mandou a notificação (mesmo com
+        // o app fechado), então NÃO cria outra aqui. Só cria a local se não tem push.
+        if (estado.push) return;
+        novos.slice(-3).forEach((a) => {
           notificarNaBarraStudio(a);
-          setTimeout(() => {
-            if (vivo) exibirAviso(String(a.titulo || 'Aviso'), String(a.mensagem || ''), 'aviso');
-          }, i * 4800);
         });
       } catch (e) {
         // sem internet: tenta de novo no próximo ciclo
