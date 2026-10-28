@@ -3226,6 +3226,28 @@ async function gravarPrefsStudio(prefs) {
 const NUVEM_URL = 'https://cindra-studio.shop';
 // Quantos apps cada conta pode ter com link de download (o servidor também confere: MAX_PUBLICADOS_POR_USUARIO).
 const LIMITE_PUBLICADOS_STUDIO = 5;
+const URL_TERMOS_STUDIO = `${NUVEM_URL}/termos-de-uso`;
+const URL_PRIVACIDADE_STUDIO = `${NUVEM_URL}/privacidade`;
+
+// Abre um link num navegador por cima do app, sem sair dele (volta no X ou no botão voltar).
+// Sem o expo-web-browser instalado, abre no navegador normal do aparelho.
+async function abrirLinkNoApp(url) {
+  try {
+    if (WebBrowser && WebBrowser.openBrowserAsync) {
+      await WebBrowser.openBrowserAsync(url, {
+        toolbarColor: '#09050f',
+        controlsColor: '#ffffff',
+        showTitle: true,
+        enableBarCollapsing: true,
+        createTask: false, // fica dentro do app em vez de abrir outra janela do Chrome
+      });
+      return;
+    }
+    await Linking.openURL(url);
+  } catch (e) {
+    exibirAviso('Não foi possível abrir', 'Tente de novo em instantes.', 'erro');
+  }
+}
 const ARQUIVO_NUVEM_STUDIO = `${FileSystem.documentDirectory}cindrastudio/_nuvem.json`;
 const LIMITE_BINARIO_NUVEM = 15 * 1024 * 1024;
 
@@ -3656,6 +3678,8 @@ const loginStyles = StyleSheet.create({
   botaoTxt: { color: '#fff', fontWeight: '900', fontSize: 16.5, letterSpacing: 0.4 },
   carregaFaixa: { position: 'absolute', bottom: 0, left: 0, height: 3, width: '35%', backgroundColor: 'rgba(255,255,255,0.85)' },
   dicaBotao: { color: 'rgba(255,255,255,0.45)', fontSize: 12.5, textAlign: 'center', marginTop: 12 },
+  termosTxt: { color: 'rgba(255,255,255,0.5)', fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 12, paddingHorizontal: 8 },
+  termosLink: { color: '#d9a2ff', fontWeight: '700', textDecorationLine: 'underline' },
   linkSenha: { alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 10, marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 6 },
   linkSenhaTxt: { color: COLORS.syntaxAttr, fontSize: 13, fontWeight: '700' },
   beneficios: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 22 },
@@ -4005,6 +4029,13 @@ function LoginNuvemModal({ visible, convite, onFechar, onSucesso }) {
                       <Animated.View style={[loginStyles.carregaFaixa, { transform: [{ translateX: faixa.interpolate({ inputRange: [0, 1], outputRange: [-120, 380] }) }] }]} />
                     )}
                   </TouchableOpacity>
+
+                  <Text style={loginStyles.termosTxt}>
+                    Ao continuar, você concorda com os{' '}
+                    <Text style={loginStyles.termosLink} onPress={() => abrirLinkNoApp(URL_TERMOS_STUDIO)}>Termos de Uso</Text>
+                    {' '}e a{' '}
+                    <Text style={loginStyles.termosLink} onPress={() => abrirLinkNoApp(URL_PRIVACIDADE_STUDIO)}>Política de Privacidade</Text>.
+                  </Text>
 
                   <TouchableOpacity style={loginStyles.linkSenha} onPress={() => abrirSuporteNuvem(nomeTxt)} activeOpacity={0.7}>
                     <MaterialCommunityIcons name="lifebuoy" size={16} color={COLORS.syntaxAttr} />
@@ -11447,24 +11478,7 @@ function CindraStudioScreen({ visible, onClose }) {
     if (!contaNuvem) setPublicados([]);
   }, [abaHome, contaNuvem]);
 
-  // Abre o link num navegador por cima do app, sem sair dele (volta no X ou no botão voltar).
-  const abrirLinkPublicado = async (url) => {
-    try {
-      if (WebBrowser && WebBrowser.openBrowserAsync) {
-        await WebBrowser.openBrowserAsync(url, {
-          toolbarColor: '#09050f',
-          controlsColor: '#ffffff',
-          showTitle: true,
-          enableBarCollapsing: true,
-          createTask: false, // fica dentro do app em vez de abrir outra janela do Chrome
-        });
-        return;
-      }
-      await Linking.openURL(url); // sem o expo-web-browser instalado, abre no navegador normal
-    } catch (e) {
-      exibirAviso('Não foi possível abrir', 'Tente de novo em instantes.', 'erro');
-    }
-  };
+  const abrirLinkPublicado = (url) => abrirLinkNoApp(url);
 
   // Publica (ou atualiza) o último APK gerado do projeto.
   const publicarGrupo = async (g) => {
