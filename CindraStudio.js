@@ -3136,12 +3136,40 @@ const geradosStyles = StyleSheet.create({
     backgroundColor: COLORS.ember,
   },
   barraApagarTexto: { color: '#ffffff', fontSize: 12, fontWeight: '800' },
+  // aba Publicar
+  pubInfo: { color: COLORS.dim, fontSize: 10.5, marginTop: 3 },
+  pubLinkLinha: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 5 },
+  pubLink: { flex: 1, color: '#d9a2ff', fontSize: 12.5, fontWeight: '700', textDecorationLine: 'underline' },
+  pubBtn: {
+    minWidth: 82,
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: 11,
+    backgroundColor: COLORS.ember,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 5,
+  },
+  pubBtnTexto: { color: '#ffffff', fontSize: 12, fontWeight: '800' },
+  pubBtnInativo: { backgroundColor: 'rgba(255,255,255,0.09)' },
+  pubBtnApagar: { backgroundColor: 'rgba(255,107,107,0.14)' },
+  pubBtnApagarTexto: { color: '#ff8a80', fontSize: 12, fontWeight: '800' },
+  pubBtnIcone: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    backgroundColor: 'rgba(255,255,255,0.09)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
 
-// Barra de baixo da tela inicial: abas "Meus apps", "Gerados" e "Aprender" + botão "Criar".
+// Barra de baixo da tela inicial: abas "Meus apps", "Gerados", "Publicar" e "Aprender" + botão "Criar".
 const ABAS_HOME_STUDIO = [
   { id: 'apps', rotulo: 'Meus apps', icone: 'view-dashboard-outline', iconeAtivo: 'view-dashboard' },
   { id: 'gerados', rotulo: 'Gerados', icone: 'package-variant-closed', iconeAtivo: 'package-variant' },
+  { id: 'publicar', rotulo: 'Publicar', icone: 'rocket-launch-outline', iconeAtivo: 'rocket-launch' },
   { id: 'aprender', rotulo: 'Aprender', icone: 'school-outline', iconeAtivo: 'school' },
   { id: 'criar', rotulo: 'Criar', especial: true },
 ];
@@ -3191,6 +3219,8 @@ async function gravarPrefsStudio(prefs) {
 // Servidor: cada usuário tem uma pasta, e dentro dela uma pasta por projeto.
 // ─────────────────────────────────────────────────────────
 const NUVEM_URL = 'https://cindra-studio.shop';
+// Quantos apps cada conta pode ter com link de download (o servidor também confere: MAX_PUBLICADOS_POR_USUARIO).
+const LIMITE_PUBLICADOS_STUDIO = 5;
 const ARQUIVO_NUVEM_STUDIO = `${FileSystem.documentDirectory}cindrastudio/_nuvem.json`;
 const LIMITE_BINARIO_NUVEM = 15 * 1024 * 1024;
 
@@ -3270,7 +3300,7 @@ function mensagemErroNuvem(r) {
 function mensagemErroPublicar(r) {
   if (r.semRede) return 'Sem conexão com a internet. Tente de novo.';
   const e = r.dados && r.dados.erro;
-  if (e === 'limite_publicados') return 'Você chegou ao limite de 20 apps com link. Remova algum link antigo e tente de novo.';
+  if (e === 'limite_publicados') return `Você chegou ao limite de ${LIMITE_PUBLICADOS_STUDIO} apps publicados. Apague algum link e tente de novo.`;
   if (e === 'muito_grande') return 'O APK é grande demais para enviar (limite de 95 MB).';
   if (e === 'apk_invalido') return 'O arquivo gerado não parece ser um APK válido. Compile de novo.';
   if (r.status === 429 || e === 'muitas_tentativas') return 'Muitas tentativas. Aguarde alguns minutos e tente de novo.';
@@ -3305,6 +3335,13 @@ async function publicarApkNuvem({ token, pacote, nome, versao, apkCaminho, icone
     return { ok: false, status: 0, mensagem: mensagemErroPublicar({ semRede: true }) };
   }
   return { ok: true, slug: r.dados.slug, url: r.dados.url };
+}
+
+// Lista os apps que a conta já publicou (aba "Publicar").
+async function listarPublicadosNuvem(token) {
+  const r = await nuvemFetch('/api/publicar', { token, timeoutMs: 15000 });
+  if (r.ok && r.dados && Array.isArray(r.dados.lista)) return { ok: true, lista: r.dados.lista };
+  return { ok: false, status: r.status, mensagem: mensagemErroPublicar(r) };
 }
 
 async function removerLinkApkNuvem(token, slug) {
@@ -10608,74 +10645,6 @@ function CindraStudioScreen({ visible, onClose }) {
     }
   };
 
-  // ─── Link de download do APK (precisa de conta) ───
-  const [folhaLinkApk, setFolhaLinkApk] = useState(null); // null | { fase, url?, slug?, mensagem? }
-  const idEnvioLinkApk = useRef(0);
-
-  const fecharLinkApk = () => {
-    idEnvioLinkApk.current += 1; // ignora o resultado de um envio que ainda esteja rodando
-    setFolhaLinkApk(null);
-  };
-
-  const gerarLinkApk = async () => {
-    if (!apkGerado) return;
-    const n = nuvemRef.current;
-    if (!n || !n.token) { setFolhaLinkApk({ fase: 'semConta' }); return; }
-    const id = (idEnvioLinkApk.current += 1);
-    setFolhaLinkApk({ fase: 'enviando' });
-    try {
-      const uri = String(apkGerado).indexOf('file://') === 0 ? apkGerado : `file://${apkGerado}`;
-      const info = await FileSystem.getInfoAsync(uri);
-      if (!info.exists) {
-        if (idEnvioLinkApk.current === id) setFolhaLinkApk({ fase: 'erro', mensagem: 'Esse APK foi apagado do celular. Compile de novo pra gerar outro.' });
-        return;
-      }
-      const r = await publicarApkNuvem({
-        token: n.token,
-        pacote: (projeto && projeto.pacote) || nomePacote,
-        nome: nomeApp,
-        versao: lerVersaoProjeto(projeto).nome,
-        apkCaminho: apkGerado,
-        iconeUri: fotoIcone,
-      });
-      if (idEnvioLinkApk.current !== id) return;
-      if (r.ok) setFolhaLinkApk({ fase: 'pronto', url: r.url, slug: r.slug });
-      else if (r.status === 401) setFolhaLinkApk({ fase: 'semConta' });
-      else setFolhaLinkApk({ fase: 'erro', mensagem: r.mensagem });
-    } catch (e) {
-      if (idEnvioLinkApk.current === id) setFolhaLinkApk({ fase: 'erro', mensagem: mensagemErroPublicar({ semRede: true }) });
-    }
-  };
-
-  const copiarLinkApk = async () => {
-    if (!folhaLinkApk || !folhaLinkApk.url) return;
-    const r = await copiarTextoStudio(folhaLinkApk.url);
-    if (r === 'copiado') exibirAviso('Link copiado', folhaLinkApk.url.replace(/^https:\/\//, ''), 'sucesso');
-  };
-
-  const compartilharLinkApk = async () => {
-    if (!folhaLinkApk || !folhaLinkApk.url) return;
-    try { await Share.share({ message: `Baixe ${nomeApp}: ${folhaLinkApk.url}` }); } catch (e) { /* cancelou */ }
-  };
-
-  const removerLinkApk = () => {
-    const slug = folhaLinkApk && folhaLinkApk.slug;
-    const n = nuvemRef.current;
-    if (!slug || !n || !n.token) return;
-    Alert.alert('Remover link?', 'O APK sai do servidor e o link deixa de funcionar pra quem já recebeu.', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Remover',
-        style: 'destructive',
-        onPress: async () => {
-          const ok = await removerLinkApkNuvem(n.token, slug);
-          if (ok) { fecharLinkApk(); exibirAviso('Link removido', 'O download não está mais disponível.', 'sucesso'); }
-          else exibirAviso('Não foi possível remover', 'Tente de novo em instantes.', 'erro');
-        },
-      },
-    ]);
-  };
-
   const instalarBuild = async (b) => {
     try {
       const info = await FileSystem.getInfoAsync(b.apk);
@@ -11450,6 +11419,102 @@ function CindraStudioScreen({ visible, onClose }) {
     else setLoginNuvem('manual');
   };
 
+  // ─── Aba "Publicar": link de download dos apps (precisa de conta) ───
+  const [publicados, setPublicados] = useState([]); // [{ slug, url, pacote, nome, ... }]
+  const [carregandoPublicados, setCarregandoPublicados] = useState(false);
+  const [erroPublicados, setErroPublicados] = useState('');
+  const [publicandoPacote, setPublicandoPacote] = useState(null); // pacote em envio
+  const [apagandoSlug, setApagandoSlug] = useState(null);
+
+  const carregarPublicados = async () => {
+    const n = nuvemRef.current;
+    if (!n || !n.token) { setPublicados([]); return; }
+    setCarregandoPublicados(true);
+    const r = await listarPublicadosNuvem(n.token);
+    setCarregandoPublicados(false);
+    if (r.ok) { setPublicados(r.lista); setErroPublicados(''); }
+    else if (r.status === 401) { setErroPublicados('Sessão expirada. Entre de novo na sua conta.'); }
+    else setErroPublicados(r.mensagem);
+  };
+
+  useEffect(() => {
+    if (abaHome === 'publicar' && contaNuvem) carregarPublicados();
+    if (!contaNuvem) setPublicados([]);
+  }, [abaHome, contaNuvem]);
+
+  // Abre o link no navegador do aparelho (por cima do app).
+  const abrirLinkPublicado = async (url) => {
+    try { await Linking.openURL(url); }
+    catch (e) { exibirAviso('Não foi possível abrir', 'Tente de novo em instantes.', 'erro'); }
+  };
+
+  // Publica (ou atualiza) o último APK gerado do projeto.
+  const publicarGrupo = async (g) => {
+    if (publicandoPacote) return;
+    const n = nuvemRef.current;
+    if (!n || !n.token) { setLoginNuvem('manual'); return; }
+    const jaPublicado = publicados.some((p) => p.pacote === g.pacote);
+    if (!jaPublicado && publicados.length >= LIMITE_PUBLICADOS_STUDIO) {
+      exibirAviso('Limite de publicações', `Você já tem ${LIMITE_PUBLICADOS_STUDIO} apps publicados. Apague um link pra publicar outro.`, 'aviso');
+      return;
+    }
+    const b = g.ultimo;
+    setPublicandoPacote(g.pacote);
+    try {
+      const uri = String(b.apk).indexOf('file://') === 0 ? b.apk : `file://${b.apk}`;
+      const info = await FileSystem.getInfoAsync(uri);
+      if (!info.exists) {
+        exibirAviso('APK não encontrado', 'Esse arquivo foi apagado do celular. Compile de novo pra gerar outro.', 'aviso');
+        return;
+      }
+      const ic = g.icone && g.icone.fotoIcone;
+      const r = await publicarApkNuvem({
+        token: n.token,
+        pacote: g.pacote,
+        nome: b.nomeApp,
+        versao: b.versaoNome || '',
+        apkCaminho: b.apk,
+        iconeUri: ic ? (String(ic).indexOf('file://') === 0 ? ic : `file://${ic}`) : undefined,
+      });
+      if (r.ok) {
+        exibirAviso(jaPublicado ? 'Link atualizado' : 'App publicado', String(r.url).replace(/^https:\/\//, ''), 'sucesso');
+      } else if (r.status === 401) {
+        setErroPublicados('Sessão expirada. Entre de novo na sua conta.');
+      } else {
+        exibirAviso('Não foi possível publicar', r.mensagem, 'erro');
+      }
+      await carregarPublicados();
+    } catch (e) {
+      exibirAviso('Não foi possível publicar', mensagemErroPublicar({ semRede: true }), 'erro');
+    } finally {
+      setPublicandoPacote(null);
+    }
+  };
+
+  const apagarLinkPublicado = (p) => {
+    const n = nuvemRef.current;
+    if (!n || !n.token) return;
+    Alert.alert('Apagar link?', `O APK sai do servidor e o link de ${p.nome} deixa de funcionar pra quem já recebeu.`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Apagar',
+        style: 'destructive',
+        onPress: async () => {
+          setApagandoSlug(p.slug);
+          const ok = await removerLinkApkNuvem(n.token, p.slug);
+          setApagandoSlug(null);
+          if (ok) {
+            setPublicados((l) => l.filter((x) => x.slug !== p.slug));
+            exibirAviso('Link apagado', 'O download não está mais disponível.', 'sucesso');
+          } else {
+            exibirAviso('Não foi possível apagar', 'Tente de novo em instantes.', 'erro');
+            carregarPublicados();
+          }
+        },
+      },
+    ]);
+  };
+
   // Ao abrir o app: carrega a conta (se tiver) e sincroniza; senão pergunta uma vez.
   useEffect(() => {
     let vivo = true;
@@ -11511,6 +11576,7 @@ function CindraStudioScreen({ visible, onClose }) {
       setAbaHome('apps');
       return;
     }
+    if (abaHome === 'publicar') { setAbaHome('apps'); return; }
     if (abaHome === 'aprender') {
       if (buscaAprenderAberta) { setBuscaAprenderAberta(false); setBuscaAprender(''); return; }
       if (exemploAberto) setExemploAberto(null); else setAbaHome('apps');
@@ -12170,6 +12236,123 @@ function CindraStudioScreen({ visible, onClose }) {
     );
   };
 
+  // Aba "Publicar": cada app gerado com o último APK. Publicado → link + apagar; senão → botão Publicar.
+  const renderAbaPublicar = () => {
+    const grupos = agruparBuildsStudio(builds);
+    const usados = publicados.length;
+    const limiteCheio = usados >= LIMITE_PUBLICADOS_STUDIO;
+    return (
+      <>
+        <View style={studioStyles.homeHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={studioStyles.homeOverline}>CINDRA-STUDIO</Text>
+            <Text style={studioStyles.homeTitulo} numberOfLines={1}>Publicar</Text>
+            {!!contaNuvem && (
+              <Text style={geradosStyles.resumo}>{usados}/{LIMITE_PUBLICADOS_STUDIO} apps publicados</Text>
+            )}
+          </View>
+          {!!contaNuvem && (
+            <TouchableOpacity style={studioStyles.homeIconBtn} onPress={carregarPublicados} activeOpacity={0.8}>
+              {carregandoPublicados ? (
+                <ActivityIndicator size="small" color={COLORS.ink} />
+              ) : (
+                <MaterialCommunityIcons name="refresh" size={22} color={COLORS.ink} />
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {!contaNuvem ? (
+          <View style={geradosStyles.vazio}>
+            <View style={geradosStyles.vazioIcone}>
+              <MaterialCommunityIcons name="account-lock-outline" size={36} color={COLORS.ember} />
+            </View>
+            <Text style={studioStyles.homeVazioTitulo}>Entre na sua conta</Text>
+            <Text style={studioStyles.homeVazioTexto}>
+              O link de download só funciona com conta. Entre pra publicar até {LIMITE_PUBLICADOS_STUDIO} apps.
+            </Text>
+            <TouchableOpacity style={[geradosStyles.pubBtn, { marginTop: 16, height: 40, paddingHorizontal: 22 }]} onPress={() => setLoginNuvem('manual')} activeOpacity={0.85}>
+              <Text style={geradosStyles.pubBtnTexto}>Entrar</Text>
+            </TouchableOpacity>
+          </View>
+        ) : grupos.length === 0 ? (
+          <View style={geradosStyles.vazio}>
+            <View style={geradosStyles.vazioIcone}>
+              <MaterialCommunityIcons name="rocket-launch-outline" size={36} color={COLORS.ember} />
+            </View>
+            <Text style={studioStyles.homeVazioTitulo}>Nada pra publicar ainda</Text>
+            <Text style={studioStyles.homeVazioTexto}>
+              Abra um app e toque em ▶ pra compilar. O último APK de cada app aparece aqui pra você publicar.
+            </Text>
+          </View>
+        ) : (
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={geradosStyles.lista} showsVerticalScrollIndicator={false}>
+            {!!erroPublicados && (
+              <Text style={{ color: COLORS.error, fontSize: 12, marginBottom: 10 }}>{erroPublicados}</Text>
+            )}
+            {grupos.map((g, i) => {
+              const pub = publicados.find((p) => p.pacote === g.pacote);
+              const enviando = publicandoPacote === g.pacote;
+              const apagando = !!pub && apagandoSlug === pub.slug;
+              const b = g.ultimo;
+              const bloqueado = !pub && limiteCheio;
+              return (
+                <ItemAnimadoStudio key={g.pacote} indice={i}>
+                  <View style={geradosStyles.grupo}>
+                    <View style={geradosStyles.grupoTopo}>
+                      <IconeAppStudio dados={g.icone} lado={42} icone={22} raio={12} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={geradosStyles.grupoNome} numberOfLines={1}>{b.nomeApp}</Text>
+                        <Text style={geradosStyles.pubInfo} numberOfLines={1}>
+                          Último APK: {b.versaoNome ? `v${b.versaoNome}` : 'APK'} · {formatarDataBuildStudio(b.criadoEm)}{b.tamanho ? ` · ${formatarTamanhoStudio(b.tamanho)}` : ''}
+                        </Text>
+                        {pub && (
+                          <View style={geradosStyles.pubLinkLinha}>
+                            <TouchableOpacity style={{ flex: 1 }} onPress={() => abrirLinkPublicado(pub.url)} activeOpacity={0.7}>
+                              <Text style={geradosStyles.pubLink} numberOfLines={1}>{String(pub.url).replace(/^https:\/\//, '')}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={geradosStyles.pubBtnIcone} onPress={() => publicarGrupo(g)} disabled={!!publicandoPacote} activeOpacity={0.8}>
+                              {enviando ? (
+                                <ActivityIndicator size="small" color={COLORS.ink} />
+                              ) : (
+                                <MaterialCommunityIcons name="cloud-upload-outline" size={18} color={COLORS.ink} />
+                              )}
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[geradosStyles.pubBtn, geradosStyles.pubBtnApagar]} onPress={() => apagarLinkPublicado(pub)} disabled={apagando} activeOpacity={0.8}>
+                              {apagando ? (
+                                <ActivityIndicator size="small" color="#ff8a80" />
+                              ) : (
+                                <Text style={geradosStyles.pubBtnApagarTexto}>Apagar</Text>
+                              )}
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                      </View>
+                      {!pub && (
+                        <TouchableOpacity
+                          style={[geradosStyles.pubBtn, bloqueado && geradosStyles.pubBtnInativo]}
+                          onPress={() => publicarGrupo(g)}
+                          disabled={!!publicandoPacote}
+                          activeOpacity={0.85}
+                        >
+                          {enviando ? (
+                            <ActivityIndicator size="small" color="#ffffff" />
+                          ) : (
+                            <Text style={[geradosStyles.pubBtnTexto, bloqueado && { color: COLORS.dim }]}>Publicar</Text>
+                          )}
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                </ItemAnimadoStudio>
+              );
+            })}
+          </ScrollView>
+        )}
+      </>
+    );
+  };
+
   // Barra de baixo: "Meus apps", "Aprender" e o botão "Criar".
   const renderNavHome = () => (
     <View style={[studioStyles.navHome, { paddingBottom: Math.max(insets.bottom, 8) + 6 }]}>
@@ -12202,7 +12385,7 @@ function CindraStudioScreen({ visible, onClose }) {
     <>
 
       <EntradaAleatoria key={abaHome} animar={trocouAba} style={{ flex: 1 }}>
-        {abaHome === 'aprender' ? renderAbaAprender() : abaHome === 'gerados' ? renderAbaGerados() : renderAbaApps()}
+        {abaHome === 'aprender' ? renderAbaAprender() : abaHome === 'gerados' ? renderAbaGerados() : abaHome === 'publicar' ? renderAbaPublicar() : renderAbaApps()}
       </EntradaAleatoria>
 
       {renderNavHome()}
@@ -12273,95 +12456,6 @@ function CindraStudioScreen({ visible, onClose }) {
         onFechar={fecharLoginNuvem}
         onSucesso={aoLogarNuvem}
       />
-      {folhaLinkApk && (
-        <FolhaInferiorStudio onFechar={fecharLinkApk} insetBottom={insets.bottom}>
-          {(fechar) => (
-            <>
-              {folhaLinkApk.fase === 'semConta' && (
-                <>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-                    <View style={geradosStyles.vazioIcone}>
-                      <MaterialCommunityIcons name="account-lock-outline" size={32} color={COLORS.ember} />
-                    </View>
-                    <Text style={[studioStyles.folhaTitulo, { flex: 1 }]}>Entre na sua conta</Text>
-                  </View>
-                  <Text style={{ color: COLORS.dim, fontSize: 13, lineHeight: 19, marginBottom: 16 }}>
-                    O link de download só funciona com conta. Entre pra enviar o APK ao servidor e receber o link do seu app.
-                  </Text>
-                  <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <TouchableOpacity style={studioStyles.folhaBtn} onPress={() => compartilharApk(apkGerado, nomeApp)} activeOpacity={0.85}>
-                      <Text style={studioStyles.folhaBtnTexto}>Só o arquivo</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[studioStyles.folhaBtn, { backgroundColor: COLORS.ember }]}
-                      onPress={() => { fechar(); setTimeout(() => setLoginNuvem('manual'), 260); }}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={[studioStyles.folhaBtnTexto, { color: '#ffffff' }]}>Entrar</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-
-              {folhaLinkApk.fase === 'enviando' && (
-                <View style={{ alignItems: 'center', paddingVertical: 18 }}>
-                  <ActivityIndicator size="large" color={COLORS.ember} />
-                  <Text style={[studioStyles.folhaTitulo, { marginTop: 16 }]}>Enviando o APK…</Text>
-                  <Text style={{ color: COLORS.dim, fontSize: 13, lineHeight: 19, marginTop: 6, textAlign: 'center' }}>
-                    Pode levar alguns segundos, dependendo do tamanho do app.
-                  </Text>
-                </View>
-              )}
-
-              {folhaLinkApk.fase === 'pronto' && (
-                <>
-                  <Text style={[studioStyles.folhaTitulo, { marginBottom: 6 }]}>Esse é o link de download</Text>
-                  <Text style={{ color: COLORS.dim, fontSize: 13, lineHeight: 19, marginBottom: 12 }}>
-                    Quem abrir vê uma página com o ícone e o nome do seu app, e o botão de baixar o APK.
-                  </Text>
-                  <View style={{ backgroundColor: 'rgba(180,60,255,0.12)', borderColor: 'rgba(180,60,255,0.35)', borderWidth: 1, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 14, marginBottom: 14 }}>
-                    <Text selectable style={{ color: COLORS.ink, fontSize: 15, fontWeight: '700', textAlign: 'center' }}>
-                      {String(folhaLinkApk.url).replace(/^https:\/\//, '')}
-                    </Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <TouchableOpacity style={studioStyles.folhaBtn} onPress={copiarLinkApk} activeOpacity={0.85}>
-                      <Text style={studioStyles.folhaBtnTexto}>Copiar link</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[studioStyles.folhaBtn, { backgroundColor: COLORS.ember }]} onPress={compartilharLinkApk} activeOpacity={0.85}>
-                      <Text style={[studioStyles.folhaBtnTexto, { color: '#ffffff' }]}>Compartilhar</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-                    <TouchableOpacity style={studioStyles.folhaBtn} onPress={() => compartilharApk(apkGerado, nomeApp)} activeOpacity={0.85}>
-                      <Text style={studioStyles.folhaBtnTexto}>Enviar o arquivo APK</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[studioStyles.folhaBtn, { backgroundColor: 'rgba(255,107,107,0.14)' }]} onPress={removerLinkApk} activeOpacity={0.85}>
-                      <Text style={[studioStyles.folhaBtnTexto, { color: '#ff8a80' }]}>Remover link</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-
-              {folhaLinkApk.fase === 'erro' && (
-                <>
-                  <Text style={[studioStyles.folhaTitulo, { marginBottom: 6 }]}>Não deu pra gerar o link</Text>
-                  <Text style={{ color: COLORS.dim, fontSize: 13, lineHeight: 19, marginBottom: 16 }}>{folhaLinkApk.mensagem}</Text>
-                  <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <TouchableOpacity style={studioStyles.folhaBtn} onPress={fechar} activeOpacity={0.85}>
-                      <Text style={studioStyles.folhaBtnTexto}>Fechar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[studioStyles.folhaBtn, { backgroundColor: COLORS.ember }]} onPress={gerarLinkApk} activeOpacity={0.85}>
-                      <Text style={[studioStyles.folhaBtnTexto, { color: '#ffffff' }]}>Tentar de novo</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-            </>
-          )}
-        </FolhaInferiorStudio>
-      )}
-
       <ContaNuvemModal
         visible={contaNuvemAberta && !!contaNuvem}
         nome={contaNuvem ? contaNuvem.nome : ''}
@@ -13771,16 +13865,6 @@ function CindraStudioScreen({ visible, onClose }) {
                 <TouchableOpacity style={[studioStyles.instalarBtn, { shadowColor: '#8bd450', shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 }]} onPress={instalarApk} activeOpacity={0.85}>
                   <MaterialCommunityIcons name="cellphone-arrow-down" size={18} color="#ffffff" />
                   <Text style={studioStyles.instalarBtnText}>Instalar APK</Text>
-                </TouchableOpacity>
-              )}
-              {apkGerado && !compilando && (
-                <TouchableOpacity
-                  style={[studioStyles.instalarBtn, { backgroundColor: 'rgba(255,255,255,0.09)', marginTop: 8 }]}
-                  onPress={gerarLinkApk}
-                  activeOpacity={0.85}
-                >
-                  <MaterialCommunityIcons name="link-variant" size={18} color={COLORS.ink} />
-                  <Text style={[studioStyles.instalarBtnText, { color: COLORS.ink }]}>Compartilhar APK</Text>
                 </TouchableOpacity>
               )}
             </View>
