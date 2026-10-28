@@ -3001,11 +3001,253 @@ const studioStyles = StyleSheet.create({
 // A indentação de cada nível vem do wrapper "treeIndent" (com sua linha-guia
 // à esquerda), então o componente não precisa mais calcular profundidade — o
 // aninhamento das Views já cuida disso, e cada nível ganha sua própria guia.
+// ───────── Tutorial guiado (aparece 1 vez, na primeira abertura) ─────────
+// Cada elemento destacado se registra aqui com tutRef('id') (num <View> com
+// collapsable={false}). O balão mede o elemento na tela e escurece o resto.
+const TUT_ALVOS = {};
+function tutRef(id) {
+  return (r) => { if (r) TUT_ALVOS[id] = r; else delete TUT_ALVOS[id]; };
+}
+function tutMedir(id) {
+  return new Promise((resolve) => {
+    const v = TUT_ALVOS[id];
+    if (!v || typeof v.measureInWindow !== 'function') { resolve(null); return; }
+    try {
+      v.measureInWindow((x, y, w, h) => {
+        resolve(isFinite(x) && isFinite(y) && w > 0 && h > 0 ? { x, y, w, h } : null);
+      });
+    } catch (e) { resolve(null); }
+  });
+}
+
+// alvo: id do elemento destacado (null = balão no centro) · furar: o toque passa
+// pro elemento destacado (a pessoa precisa tocar nele) · auto: avança sozinho ·
+// semFundo: sem escurecer a tela (pra ver o código sendo escrito).
+const PASSOS_TUTORIAL = [
+  { id: 'boasvindas', alvo: null, titulo: 'Bem-vindo ao Cindra Studio! 👋', texto: 'Vou te mostrar, em poucos toques, como criar e compilar seu primeiro app Android. Toque neste balão para avançar.', botao: 'Começar' },
+  { id: 'abaApps', alvo: 'navAba:apps', aba: 'apps', titulo: 'Aba Meus apps', texto: 'Aqui ficam todos os apps que você criou. Toque em um para continuar editando e segure o dedo para ver mais opções, como favoritar ou excluir.' },
+  { id: 'abaGerados', alvo: 'navAba:gerados', aba: 'gerados', titulo: 'Aba Gerados', texto: 'Mostra os APKs que você já compilou, agrupados por app. Daqui você pode instalar ou publicar cada um.' },
+  { id: 'abaPublicar', alvo: 'navAba:publicar', aba: 'publicar', titulo: 'Aba Publicar', texto: 'Cria um link para qualquer pessoa baixar o seu app. Para publicar, é preciso entrar na sua conta Cindra.' },
+  { id: 'abaAprender', alvo: 'navAba:aprender', aba: 'aprender', titulo: 'Aba Aprender', texto: 'Exemplos prontos de código para copiar e estudar. É a melhor forma de aprender fazendo.' },
+  { id: 'criar', alvo: 'navCriar', titulo: 'Criar um app', texto: 'Este é o botão principal: toque nele sempre que quiser começar um app novo. Vamos criar o seu primeiro agora!', botao: 'Criar agora' },
+  { id: 'cfgIcone', alvo: 'cfgIcone', titulo: 'Ícone do app', texto: 'Toque aqui para escolher uma foto da galeria como ícone. Se preferir, é só deixar o robozinho do Android.' },
+  { id: 'cfgNome', alvo: 'cfgNome', titulo: 'Nome do app', texto: 'É o nome que aparece embaixo do ícone na tela do celular.' },
+  { id: 'cfgPacote', alvo: 'cfgPacote', titulo: 'Nome do pacote', texto: 'É o identificador único do app, no formato com.seunome.app. Não use espaços nem acentos.' },
+  { id: 'cfgVersao', alvo: 'cfgVersao', titulo: 'Versão e código', texto: 'A versão (ex.: 1.0) é o que a pessoa vê ao instalar. O código é um número que só sobe a cada atualização.' },
+  { id: 'cfgCriar', alvo: 'cfgCriar', titulo: 'Criar projeto', texto: 'Tudo pronto! Toque neste balão e eu crio o projeto pra você.', botao: 'Criar projeto' },
+  { id: 'pastaBtn', alvo: 'wsPasta', titulo: 'Arquivos do projeto', texto: 'Este botão abre a lista com todos os arquivos do seu app. Vamos dar uma olhada em cada um?', botao: 'Abrir arquivos' },
+  { id: 'fManifest', alvo: 'no:AndroidManifest.xml', titulo: 'AndroidManifest.xml', texto: 'É a identidade do app: nome, permissões e qual tela abre primeiro.' },
+  { id: 'fRes', alvo: 'no:res', titulo: 'Pasta res', texto: 'Guarda os recursos do app: strings.xml (os textos), styles.xml (o tema visual) e ic_launcher.xml (o ícone).' },
+  { id: 'fAssets', alvo: 'no:assets', titulo: 'Pasta assets', texto: 'Coloque aqui arquivos extras, como imagens, sons e modelos 3D. Segure o dedo na pasta para adicionar.' },
+  { id: 'fGradle', alvo: 'no:build.gradle', titulo: 'build.gradle', texto: 'Guarda as configurações do app: pacote, versão e versões do Android suportadas.' },
+  { id: 'fMain', alvo: 'no:MainActivity.java', titulo: 'MainActivity.java ⭐', texto: 'Este é o arquivo principal! O código da tela do app fica aqui e roda assim que o app abre. Vou escrever um exemplo nele pra você ver.', botao: 'Ver o código' },
+  { id: 'digitando', alvo: null, semFundo: true, auto: true, antes: 'digitar', titulo: 'Escrevendo um exemplo…', texto: 'Olha o código aparecendo no editor! Ele cria um texto na tela que conta quantas vezes você toca nele.' },
+  { id: 'bUndo', alvo: 'wsUndo', titulo: 'Desfazer', texto: 'Volta o último passo que você fez no código.' },
+  { id: 'bRedo', alvo: 'wsRedo', titulo: 'Refazer', texto: 'Traz de volta o que você acabou de desfazer.' },
+  { id: 'bSave', alvo: 'wsSave', titulo: 'Salvar', texto: 'Grava o projeto no armazenamento do app agora mesmo.' },
+  { id: 'bCfg', alvo: 'wsCfg', titulo: 'Permissões', texto: 'A engrenagem abre as permissões do app (internet, câmera, localização...). Marque só o que o seu app precisa.' },
+  { id: 'bBuild', alvo: 'wsBuild', titulo: 'Tipo de build', texto: 'O escudo escolhe entre debug (rápido, ideal para testar) e release (versão final assinada, para publicar).' },
+  { id: 'bPlay', alvo: 'wsPlay', furar: true, titulo: 'Hora de compilar! ▶', texto: 'Toque no botão ▶ para compilar o código e gerar o APK do seu primeiro app.' },
+];
+const IDX_PASSO_DIGITANDO = PASSOS_TUTORIAL.findIndex((p) => p.id === 'digitando');
+
+// Código de exemplo "digitado" pelo tutorial no MainActivity.java.
+function codigoDemoTutorial(pkg) {
+  return `package ${pkg};
+
+import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.TextView;
+
+// Meu primeiro app feito no Cindra Studio!
+public class MainActivity extends Activity {
+
+    int cliques = 0;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        final TextView texto = new TextView(this);
+        texto.setText("Olá, mundo! Toque aqui");
+        texto.setTextColor(Color.WHITE);
+        texto.setTextSize(22);
+        texto.setGravity(Gravity.CENTER);
+        texto.setBackgroundColor(Color.parseColor("#1a1236"));
+
+        texto.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                cliques++;
+                texto.setText("Você tocou " + cliques + " vezes!");
+            }
+        });
+
+        setContentView(texto);
+    }
+}
+`;
+}
+
+function TutorialStudio({ passo, indice, total, insets, onProximo, onPular }) {
+  const { height: alturaJanela } = useWindowDimensions();
+  const [rect, setRect] = useState(null);
+  const [pronto, setPronto] = useState(false);
+  const [caixa, setCaixa] = useState({ w: 0, h: 0 });
+  const raizRef = useRef(null);
+  const fade = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    let vivo = true;
+    let tentativas = 0;
+    let anterior = null;
+    let timer = null;
+    setPronto(false);
+    setRect(null);
+    fade.setValue(0);
+    const origemRaiz = () => new Promise((resolve) => {
+      const r = raizRef.current;
+      if (!r || typeof r.measureInWindow !== 'function') { resolve({ x: 0, y: 0 }); return; }
+      try { r.measureInWindow((x, y) => resolve({ x: isFinite(x) ? x : 0, y: isFinite(y) ? y : 0 })); } catch (e) { resolve({ x: 0, y: 0 }); }
+    });
+    const mostrar = async (r) => {
+      const o = await origemRaiz();
+      if (!vivo) return;
+      let ajustado = r ? { x: r.x - o.x, y: r.y - o.y, w: r.w, h: r.h } : null;
+      // elemento fora da tela (ex.: lista rolada) → balão no centro
+      if (ajustado && (ajustado.y >= alturaJanela - 4 || ajustado.y + ajustado.h <= 0)) ajustado = null;
+      setRect(ajustado);
+      setPronto(true);
+      Animated.timing(fade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+    };
+    const ciclo = async () => {
+      if (!vivo) return;
+      if (!passo.alvo) { mostrar(null); return; }
+      const r = await tutMedir(passo.alvo);
+      if (!vivo) return;
+      tentativas += 1;
+      const estavel = r && anterior
+        && Math.abs(r.x - anterior.x) < 1 && Math.abs(r.y - anterior.y) < 1
+        && Math.abs(r.w - anterior.w) < 1 && Math.abs(r.h - anterior.h) < 1;
+      if (estavel || tentativas >= 30) { mostrar(r); return; }
+      anterior = r;
+      timer = setTimeout(ciclo, 110);
+    };
+    timer = setTimeout(ciclo, passo.alvo ? 150 : 0);
+    return () => { vivo = false; clearTimeout(timer); };
+  }, [passo.id]);
+
+  const W = caixa.w;
+  const H = caixa.h;
+  const PAD = 6;
+  const temRect = pronto && !!rect && !passo.semFundo;
+  const hx = temRect ? Math.max(0, rect.x - PAD) : 0;
+  const hy = temRect ? Math.max(0, rect.y - PAD) : 0;
+  const hw = temRect ? Math.min(W - hx, rect.w + PAD * 2) : 0;
+  const hh = temRect ? rect.h + PAD * 2 : 0;
+  const DIM = 'rgba(0,0,0,0.78)';
+
+  let balaoEstilo = {};
+  let balaoEmCima = false;
+  if (temRect) {
+    balaoEmCima = passo.lado ? passo.lado === 'cima' : hy > H - (hy + hh);
+    balaoEstilo = balaoEmCima ? { bottom: H - hy + 14 } : { top: hy + hh + 14 };
+  } else if (passo.semFundo) {
+    balaoEstilo = { bottom: Math.max(insets.bottom, 12) + 24 };
+  } else {
+    balaoEstilo = { top: Math.max(H * 0.5 - 95, insets.top + 60) };
+  }
+  // "Pular tutorial" fica sempre do lado oposto ao balão
+  const pularEmCima = temRect ? balaoEmCima : !!passo.semFundo;
+  const setaX = temRect ? Math.max(18, Math.min(W - 32 - 36, hx + hw / 2 - 16 - 9)) : 0;
+  const mostrarBotao = !passo.furar && !passo.auto;
+
+  return (
+    <View
+      ref={raizRef}
+      collapsable={false}
+      pointerEvents="box-none"
+      style={[StyleSheet.absoluteFill, { zIndex: 200, elevation: 200 }]}
+      onLayout={(e) => setCaixa({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
+    >
+      {/* fundo escurecido: 4 faixas em volta do elemento (o elemento fica "aceso") */}
+      {temRect ? (
+        <>
+          <View style={{ position: 'absolute', left: 0, top: 0, width: W, height: hy, backgroundColor: DIM }} />
+          <View style={{ position: 'absolute', left: 0, top: hy + hh, width: W, height: Math.max(0, H - (hy + hh)), backgroundColor: DIM }} />
+          <View style={{ position: 'absolute', left: 0, top: hy, width: hx, height: hh, backgroundColor: DIM }} />
+          <View style={{ position: 'absolute', left: hx + hw, top: hy, width: Math.max(0, W - (hx + hw)), height: hh, backgroundColor: DIM }} />
+          {!passo.furar && <View style={{ position: 'absolute', left: hx, top: hy, width: hw, height: hh }} />}
+          <View pointerEvents="none" style={{ position: 'absolute', left: hx, top: hy, width: hw, height: hh, borderRadius: 14, borderWidth: 2, borderColor: COLORS.ember }} />
+        </>
+      ) : passo.semFundo ? (
+        <View style={StyleSheet.absoluteFill} />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: DIM }]} />
+      )}
+
+      {/* balão */}
+      {pronto && (
+        <Animated.View pointerEvents="box-none" style={[{ position: 'absolute', left: 16, right: 16, opacity: fade }, balaoEstilo]}>
+          <Pressable
+            onPress={mostrarBotao ? onProximo : undefined}
+            style={{ backgroundColor: '#1a1236', borderRadius: 18, borderWidth: 1.5, borderColor: COLORS.ember, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12 }}
+          >
+            {temRect && (
+              <View
+                pointerEvents="none"
+                style={[
+                  { position: 'absolute', left: setaX, width: 14, height: 14, backgroundColor: '#1a1236', borderColor: COLORS.ember, transform: [{ rotate: '45deg' }] },
+                  balaoEmCima
+                    ? { bottom: -8, borderRightWidth: 1.5, borderBottomWidth: 1.5 }
+                    : { top: -8, borderLeftWidth: 1.5, borderTopWidth: 1.5 },
+                ]}
+              />
+            )}
+            <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '800' }} maxFontSizeMultiplier={1.15}>{passo.titulo}</Text>
+            <Text style={{ color: 'rgba(255,255,255,0.86)', fontSize: 13.5, lineHeight: 19, marginTop: 6 }} maxFontSizeMultiplier={1.15}>{passo.texto}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+              <Text style={{ color: COLORS.dim, fontSize: 12, fontWeight: '700' }}>{indice + 1} / {total}</Text>
+              {mostrarBotao ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.ember, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 7 }}>
+                  <Text style={{ color: '#ffffff', fontSize: 13.5, fontWeight: '800' }}>{passo.botao || 'Próximo'}</Text>
+                  <MaterialCommunityIcons name="chevron-right" size={16} color="#ffffff" />
+                </View>
+              ) : (
+                <Text style={{ color: COLORS.gold, fontSize: 12.5, fontWeight: '700' }}>{passo.furar ? 'Toque no botão destacado' : 'Aguarde…'}</Text>
+              )}
+            </View>
+          </Pressable>
+        </Animated.View>
+      )}
+
+      {/* pular tutorial */}
+      <View
+        pointerEvents="box-none"
+        style={[{ position: 'absolute', left: 0, right: 0, alignItems: 'center' }, pularEmCima ? { top: insets.top + 10 } : { bottom: Math.max(insets.bottom, 12) + 14 }]}
+      >
+        <Pressable
+          onPress={onPular}
+          hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.16)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.28)', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 9 }}
+        >
+          <Text style={{ color: '#ffffff', fontSize: 13.5, fontWeight: '800' }}>Pular tutorial</Text>
+          <MaterialCommunityIcons name="close" size={15} color="#ffffff" />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 function NoArvoreArquivo({ no, pastasAbertas, alternarPasta, arquivoAtivo, onAbrirArquivo, aoSegurar }) {
   if (no.tipo === 'pasta') {
     const aberta = !!pastasAbertas[no.caminho];
     return (
       <View>
+        <View ref={tutRef('no:' + no.nome)} collapsable={false}>
         <TouchableOpacity
           onPress={() => alternarPasta(no.caminho)}
           onLongPress={() => aoSegurar && aoSegurar(no)}
@@ -3022,6 +3264,7 @@ function NoArvoreArquivo({ no, pastasAbertas, alternarPasta, arquivoAtivo, onAbr
             </View>
           )}
         </TouchableOpacity>
+        </View>
         {aberta && (
           <View style={studioStyles.treeIndent}>
             {no.filhos.map((filho) => (
@@ -3043,6 +3286,7 @@ function NoArvoreArquivo({ no, pastasAbertas, alternarPasta, arquivoAtivo, onAbr
   const ativo = no.caminho === arquivoAtivo;
   const { icon, color } = iconeArquivoStudio(no.nome);
   return (
+    <View ref={tutRef('no:' + no.nome)} collapsable={false}>
     <TouchableOpacity
       onPress={() => onAbrirArquivo(no.caminho)}
       onLongPress={() => aoSegurar && aoSegurar(no)}
@@ -3053,6 +3297,7 @@ function NoArvoreArquivo({ no, pastasAbertas, alternarPasta, arquivoAtivo, onAbr
       <MaterialCommunityIcons name={icon} size={16} color={color} style={{ marginRight: 8 }} />
       <Text style={[studioStyles.treeText, ativo && { color: COLORS.ink, fontWeight: '700' }]} numberOfLines={1} ellipsizeMode="middle" maxFontSizeMultiplier={1.15}>{no.nome}</Text>
     </TouchableOpacity>
+    </View>
   );
 }
 
@@ -9710,6 +9955,14 @@ function CindraStudioScreen({ visible, onClose }) {
   const [pastaEmCriacao, setPastaEmCriacao] = useState(false); // dentro do card: mostrando o campo de nome da nova pasta
   const [nomeNovaPasta, setNomeNovaPasta] = useState('');
   const estadoRef = useRef(null);
+  // ---- Tutorial guiado (1ª vez) ----
+  const [tutIdx, setTutIdx] = useState(null); // null = fechado
+  const [prefsLidas, setPrefsLidas] = useState(false);
+  const tutIniciadoRef = useRef(false);
+  const tutTimerRef = useRef(null); // "digitação" do código de exemplo
+  const tutArquivoRef = useRef(null);
+  const tutCodigoRef = useRef('');
+  const tutSidebarRef = useRef(false); // o tutorial abriu a barra de arquivos
 
   // Lê as preferências da tela inicial (aviso de recuperação dispensado ou não).
   useEffect(() => {
@@ -9717,6 +9970,7 @@ function CindraStudioScreen({ visible, onClose }) {
     lerPrefsStudio().then((prefs) => {
       if (!vivo) return;
       prefsRef.current = prefs;
+      setPrefsLidas(true);
       MARCA_REMOVIDA_STUDIO = prefs.marcaRemovida === true;
       setAvisoRecuperarVisivel(!prefs.avisoRecuperarDispensado);
       if (prefs.modoLista === 'grade' || prefs.modoLista === 'lista') setModoLista(prefs.modoLista);
@@ -11721,11 +11975,92 @@ function CindraStudioScreen({ visible, onClose }) {
   };
   const fecharBusca = () => { setBuscaProjeto(''); setBuscaAberta(false); };
 
+  // ===== Tutorial guiado =====
+  const escreverTutorial = (texto) => {
+    const arq = tutArquivoRef.current;
+    if (!arq) return;
+    conteudoAtivoRef.current = texto;
+    setProjeto((a) => (a ? { ...a, conteudos: { ...a.conteudos, [arq]: texto } } : a));
+  };
+  const terminarDigitacaoTutorial = () => {
+    if (!tutTimerRef.current) return;
+    clearInterval(tutTimerRef.current);
+    tutTimerRef.current = null;
+    escreverTutorial(tutCodigoRef.current); // pulou no meio: deixa o código completo (compila)
+  };
+  const concluirTutorial = () => {
+    terminarDigitacaoTutorial();
+    setTutIdx(null);
+    if (tutSidebarRef.current) { tutSidebarRef.current = false; setSidebarAberta(false); }
+    if (!prefsRef.current.tutorialVisto) salvarPref('tutorialVisto', true);
+  };
+  const iniciarDigitacaoTutorial = () => {
+    const arq = (projeto && projeto.arquivoInicial) || arquivoAtivo;
+    if (!arq) { setTutIdx((i) => (i === IDX_PASSO_DIGITANDO ? i + 1 : i)); return; }
+    const codigo = codigoDemoTutorial((projeto && projeto.pacote) || nomePacote);
+    tutArquivoRef.current = arq;
+    tutCodigoRef.current = codigo;
+    if (arq !== arquivoAtivo) setArquivoAtivo(arq);
+    escreverTutorial('');
+    let pos = 0;
+    clearInterval(tutTimerRef.current);
+    tutTimerRef.current = setInterval(() => {
+      pos = Math.min(codigo.length, pos + 6);
+      escreverTutorial(codigo.slice(0, pos));
+      if (pos >= codigo.length) {
+        clearInterval(tutTimerRef.current);
+        tutTimerRef.current = null;
+        setTimeout(() => setTutIdx((i) => (i === IDX_PASSO_DIGITANDO ? i + 1 : i)), 1000);
+      }
+    }, 45);
+  };
+  const abrirConfigTutorial = () => {
+    setAbaHome('apps');
+    abrirTelaConfigNova();
+    let pkg = 'com.dev.meuprimeiroapp';
+    let n = 2;
+    while (listaProjetos.some((p) => p && p.pacote === pkg)) pkg = `com.dev.meuprimeiroapp${n++}`;
+    setNomeApp('Meu Primeiro App');
+    setNomePacote(pkg);
+  };
+  const avancarTutorial = () => {
+    const p = PASSOS_TUTORIAL[tutIdx];
+    if (!p) return;
+    if (p.id === 'criar') abrirConfigTutorial();
+    else if (p.id === 'cfgCriar') { if (!prefsRef.current.tutorialVisto) salvarPref('tutorialVisto', true); criarProjeto(); }
+    else if (p.id === 'pastaBtn') { tutSidebarRef.current = true; setSidebarAberta(true); }
+    else if (p.id === 'fMain') { tutSidebarRef.current = false; setSidebarAberta(false); }
+    if (tutIdx + 1 >= PASSOS_TUTORIAL.length) { concluirTutorial(); return; }
+    const prox = PASSOS_TUTORIAL[tutIdx + 1];
+    if (prox && prox.aba) setAbaHome(prox.aba);
+    setTutIdx(tutIdx + 1);
+  };
+  const tutAoCompilar = () => {
+    if (tutIdx !== null && PASSOS_TUTORIAL[tutIdx] && PASSOS_TUTORIAL[tutIdx].id === 'bPlay') concluirTutorial();
+  };
+  // começa sozinho na 1ª abertura (tela inicial, sem outros avisos por cima)
+  useEffect(() => {
+    if (tutIniciadoRef.current || tutIdx !== null) return undefined;
+    if (!visible || !prefsLidas || !estadoCarregado || etapa !== 'home') return undefined;
+    if (prefsRef.current.tutorialVisto) { tutIniciadoRef.current = true; return undefined; }
+    if (pedirAcessoArquivos || loginNuvem || conviteNuvemPendente) return undefined;
+    const t = setTimeout(() => { tutIniciadoRef.current = true; setTutIdx(0); }, 900);
+    return () => clearTimeout(t);
+  }, [visible, prefsLidas, estadoCarregado, etapa, pedirAcessoArquivos, loginNuvem, conviteNuvemPendente, tutIdx]);
+  useEffect(() => {
+    if (tutIdx !== null && PASSOS_TUTORIAL[tutIdx] && PASSOS_TUTORIAL[tutIdx].antes === 'digitar') iniciarDigitacaoTutorial();
+  }, [tutIdx]);
+  useEffect(() => {
+    if (!visible && tutIdx !== null) concluirTutorial();
+  }, [visible]);
+  useEffect(() => () => { clearInterval(tutTimerRef.current); }, []);
+
   // Botão voltar do celular: primeiro fecha o que estiver aberto por cima
   // (cards, menus, painéis) e depois volta UMA tela por vez, em vez de
   // jogar a pessoa pra fora do app. Na tela inicial, pergunta se quer sair.
   const voltarCelularRef = useRef(null);
   voltarCelularRef.current = () => {
+    if (tutIdx !== null) { concluirTutorial(); return; }
     if (pedirAcessoArquivos) { pedidoRecusadoRef.current = true; setPedirAcessoArquivos(false); return; }
     if (confirmarSaida) { setConfirmarSaida(false); return; }
     if (cardProjeto) { setCardProjeto(null); return; }
@@ -12524,27 +12859,29 @@ function CindraStudioScreen({ visible, onClose }) {
 
   // Barra de baixo: "Meus apps", "Aprender" e o botão "Criar".
   const renderNavHome = () => (
-    <View style={[studioStyles.navHome, { paddingBottom: Math.max(insets.bottom, 8) + 6 }]}>
+    <View ref={tutRef('navAbas')} collapsable={false} style={[studioStyles.navHome, { paddingBottom: Math.max(insets.bottom, 8) + 6 }]}>
       {ABAS_HOME_STUDIO.map((a) => {
         if (a.especial) {
           return (
-            <TouchableOpacity key={a.id} style={studioStyles.navBotaoCriar} onPress={abrirTelaConfigNova} activeOpacity={0.85}>
-              <Grad />
-              <MaterialCommunityIcons name="plus" size={20} color="#ffffff" />
-              <Text style={studioStyles.navBotaoCriarTexto} numberOfLines={1}>{a.rotulo}</Text>
-            </TouchableOpacity>
+            <View key={a.id} ref={tutRef('navCriar')} collapsable={false} style={{ flex: 1, height: 50 }}>
+              <TouchableOpacity style={studioStyles.navBotaoCriar} onPress={abrirTelaConfigNova} activeOpacity={0.85}>
+                <Grad />
+                <MaterialCommunityIcons name="plus" size={20} color="#ffffff" />
+                <Text style={studioStyles.navBotaoCriarTexto} numberOfLines={1}>{a.rotulo}</Text>
+              </TouchableOpacity>
+            </View>
           );
         }
         const ativo = abaHome === a.id;
         return (
-          <TouchableOpacity key={a.id} style={[studioStyles.navAba, ativo && studioStyles.navAbaAtiva]} onPress={() => setAbaHome(a.id)} activeOpacity={0.8}>
+          <View key={a.id} ref={tutRef('navAba:' + a.id)} collapsable={false} style={{ flex: 1, height: 50 }}><TouchableOpacity style={[studioStyles.navAba, ativo && studioStyles.navAbaAtiva]} onPress={() => setAbaHome(a.id)} activeOpacity={0.8}>
             <MaterialCommunityIcons
               name={ativo ? a.iconeAtivo : a.icone}
               size={20}
               color={ativo ? '#d9a2ff' : COLORS.dim}
             />
             <Text style={[studioStyles.navAbaTexto, ativo && studioStyles.navAbaTextoAtivo]} numberOfLines={1}>{a.rotulo}</Text>
-          </TouchableOpacity>
+          </TouchableOpacity></View>
         );
       })}
     </View>
@@ -12726,7 +13063,7 @@ function CindraStudioScreen({ visible, onClose }) {
         showsVerticalScrollIndicator={false}
       >
         {/* Ícone grande: toque pra escolher a foto da galeria */}
-        <View style={studioStyles.cfgHero}>
+        <View ref={tutRef('cfgIcone')} collapsable={false} style={studioStyles.cfgHero}>
           <TouchableOpacity activeOpacity={0.85} onPress={escolherFotoIcone} style={studioStyles.cfgIconeWrap}>
             {fotoIcone ? (
               <Image source={{ uri: fotoIcone }} style={studioStyles.cfgIconeFoto} />
@@ -12748,7 +13085,7 @@ function CindraStudioScreen({ visible, onClose }) {
         {/* Dados do app */}
         <View style={studioStyles.cfgCard}>
           <Text style={[studioStyles.cfgLabel, { marginTop: 0 }]}>Nome do app</Text>
-          <View style={[studioStyles.cfgCampo, campoFoco === 'nome' && studioStyles.cfgCampoFoco]}>
+          <View ref={tutRef('cfgNome')} collapsable={false} style={[studioStyles.cfgCampo, campoFoco === 'nome' && studioStyles.cfgCampoFoco]}>
             <MaterialCommunityIcons name="application-outline" size={18} color={campoFoco === 'nome' ? COLORS.ember : COLORS.dim} />
             <TextInput
               style={studioStyles.cfgCampoInput}
@@ -12762,7 +13099,7 @@ function CindraStudioScreen({ visible, onClose }) {
           </View>
 
           <Text style={studioStyles.cfgLabel}>Nome do pacote</Text>
-          <View style={[studioStyles.cfgCampo, campoFoco === 'pacote' && studioStyles.cfgCampoFoco]}>
+          <View ref={tutRef('cfgPacote')} collapsable={false} style={[studioStyles.cfgCampo, campoFoco === 'pacote' && studioStyles.cfgCampoFoco]}>
             <MaterialCommunityIcons name="package-variant-closed" size={18} color={campoFoco === 'pacote' ? COLORS.ember : COLORS.dim} />
             <TextInput
               style={studioStyles.cfgCampoInput}
@@ -12778,7 +13115,7 @@ function CindraStudioScreen({ visible, onClose }) {
           </View>
           <Text style={studioStyles.cfgHint}>Identificador único do app (convenção: com.seunome.nomedoapp). Evite espaços e acentos.</Text>
 
-          <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View ref={tutRef('cfgVersao')} collapsable={false} style={{ flexDirection: 'row', gap: 10 }}>
             <View style={{ flex: 1.4 }}>
               <Text style={studioStyles.cfgLabel}>Versão</Text>
               <View style={[studioStyles.cfgCampo, campoFoco === 'versao' && studioStyles.cfgCampoFoco]}>
@@ -12859,13 +13196,13 @@ function CindraStudioScreen({ visible, onClose }) {
 
       {!tecladoVisivel && (
         <View style={[studioStyles.cfgFooter, { paddingBottom: Math.max(insets.bottom, 12) + 4 }]}>
-          <TouchableOpacity style={[studioStyles.criarBtn, criandoProjeto && { opacity: 0.7 }]} onPress={criarProjeto} activeOpacity={0.85} disabled={criandoProjeto}>
+          <View ref={tutRef('cfgCriar')} collapsable={false}><TouchableOpacity style={[studioStyles.criarBtn, criandoProjeto && { opacity: 0.7 }]} onPress={criarProjeto} activeOpacity={0.85} disabled={criandoProjeto}>
             <Grad />
             {criandoProjeto
               ? <ActivityIndicator size="small" color="#ffffff" />
               : <MaterialCommunityIcons name="rocket-launch-outline" size={19} color="#ffffff" />}
             <Text style={studioStyles.criarBtnText}>Criar projeto</Text>
-          </TouchableOpacity>
+          </TouchableOpacity></View>
         </View>
       )}
     </View>
@@ -12880,13 +13217,13 @@ function CindraStudioScreen({ visible, onClose }) {
           <TouchableOpacity style={studioStyles.topBarIconBtn} onPress={voltarParaHome} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.75}>
             <MaterialCommunityIcons name="arrow-left" size={18} color={COLORS.ink} />
           </TouchableOpacity>
-          <TouchableOpacity style={studioStyles.topBarIconBtn} onPress={() => setSidebarAberta(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.75}>
+          <View ref={tutRef('wsPasta')} collapsable={false}><TouchableOpacity style={studioStyles.topBarIconBtn} onPress={() => setSidebarAberta(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.75}>
             <MaterialCommunityIcons name="folder-outline" size={18} color={COLORS.ember} />
-          </TouchableOpacity>
+          </TouchableOpacity></View>
           <Text style={studioStyles.topBarTitle} numberOfLines={1}>{nomeApp || 'Meu App'}</Text>
 
           <View style={studioStyles.topBarActionsCard}>
-            <TouchableOpacity
+            <View ref={tutRef('wsUndo')} collapsable={false}><TouchableOpacity
               style={[studioStyles.topBarIconBtn, !podeDesfazer && { opacity: 0.35 }]}
               onPress={desfazer}
               disabled={!podeDesfazer}
@@ -12894,8 +13231,8 @@ function CindraStudioScreen({ visible, onClose }) {
               activeOpacity={0.75}
             >
               <MaterialCommunityIcons name="undo" size={17} color={podeDesfazer ? COLORS.ink : COLORS.dim} />
-            </TouchableOpacity>
-            <TouchableOpacity
+            </TouchableOpacity></View>
+            <View ref={tutRef('wsRedo')} collapsable={false}><TouchableOpacity
               style={[studioStyles.topBarIconBtn, !podeRefazer && { opacity: 0.35 }]}
               onPress={refazer}
               disabled={!podeRefazer}
@@ -12903,8 +13240,8 @@ function CindraStudioScreen({ visible, onClose }) {
               activeOpacity={0.75}
             >
               <MaterialCommunityIcons name="redo" size={17} color={podeRefazer ? COLORS.ink : COLORS.dim} />
-            </TouchableOpacity>
-            <TouchableOpacity
+            </TouchableOpacity></View>
+            <View ref={tutRef('wsSave')} collapsable={false}><TouchableOpacity
               style={studioStyles.topBarIconBtn}
               onPress={async () => {
                 const pasta = await salvarNoDisco();
@@ -12914,34 +13251,34 @@ function CindraStudioScreen({ visible, onClose }) {
               activeOpacity={0.75}
             >
               <MaterialCommunityIcons name="content-save-outline" size={17} color={COLORS.dim} />
-            </TouchableOpacity>
-            <TouchableOpacity
+            </TouchableOpacity></View>
+            <View ref={tutRef('wsCfg')} collapsable={false}><TouchableOpacity
               style={studioStyles.topBarIconBtn}
               onPress={() => setPermissoesAberto(true)}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.75}
             >
               <MaterialCommunityIcons name="cog-outline" size={18} color={COLORS.dim} />
-            </TouchableOpacity>
+            </TouchableOpacity></View>
             <View style={studioStyles.topBarDivider} />
-            <TouchableOpacity
+            <View ref={tutRef('wsBuild')} collapsable={false}><TouchableOpacity
               style={studioStyles.topBarIconBtn}
               onPress={() => setFolhaBuildAberta(true)}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.75}
             >
               <MaterialCommunityIcons name={tipoBuild === 'release' ? 'shield-key' : 'shield-key-outline'} size={19} color={tipoBuild === 'release' ? '#8bd450' : COLORS.dim} />
-            </TouchableOpacity>
-            <TouchableOpacity
+            </TouchableOpacity></View>
+            <View ref={tutRef('wsPlay')} collapsable={false}><TouchableOpacity
               style={studioStyles.topBarIconBtn}
-              onPress={() => compilarProjeto(tipoBuild)}
+              onPress={() => { tutAoCompilar(); compilarProjeto(tipoBuild); }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.75}
             >
               {compilando
                 ? <ActivityIndicator size="small" color="#8bd450" />
                 : <MaterialCommunityIcons name="play-circle" size={22} color="#8bd450" />}
-            </TouchableOpacity>
+            </TouchableOpacity></View>
           </View>
         </View>
 
@@ -14050,6 +14387,16 @@ function CindraStudioScreen({ visible, onClose }) {
         {etapa === 'home' ? renderHome() : etapa === 'config' ? renderConfig() : renderWorkspace()}
       </EntradaAleatoria>
       {etapa === 'home' && <BotaoWhatsFlutuante bottom={Math.max(insets.bottom, 12) + 84} />}
+      {tutIdx !== null && PASSOS_TUTORIAL[tutIdx] && (
+        <TutorialStudio
+          passo={PASSOS_TUTORIAL[tutIdx]}
+          indice={tutIdx}
+          total={PASSOS_TUTORIAL.length}
+          insets={insets}
+          onProximo={avancarTutorial}
+          onPular={concluirTutorial}
+        />
+      )}
       <EditorImagem
         visible={!!editorFotoUri}
         uri={editorFotoUri}
