@@ -78,7 +78,10 @@ function versaoCodigoDoApk() {
 // ID do aparelho (ANDROID_ID): o servidor limita quantas contas cada celular pode ter.
 function idDoAparelho() {
   try {
-    const id = ExpoApplication && ExpoApplication.getAndroidId ? ExpoApplication.getAndroidId() : '';
+    // SDKs novos: getAndroidId(); SDKs mais antigos: propriedade androidId
+    let id = '';
+    if (ExpoApplication && typeof ExpoApplication.getAndroidId === 'function') id = ExpoApplication.getAndroidId();
+    if ((!id || typeof id !== 'string') && ExpoApplication) id = ExpoApplication.androidId;
     return typeof id === 'string' && id.length >= 8 ? id : undefined;
   } catch (e) { return undefined; }
 }
