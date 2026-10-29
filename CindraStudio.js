@@ -1166,7 +1166,6 @@ const MARCA_DAGUA_CLASSE = 'CindraWatermarkApp';
 // (hash), então o código em si não aparece escrito no arquivo. Depois de
 // digitado certo UMA vez, o aparelho lembra pra sempre (salvo em _prefs.json).
 const ASSINATURA_CODIGO_SEM_MARCA = '601f6bc84784230e76';
-let MARCA_REMOVIDA_STUDIO = false;
 function assinaturaCodigoStudio(txt) {
   let a = 2166136261;
   let b = 5381;
@@ -1181,12 +1180,34 @@ function assinaturaCodigoStudio(txt) {
 function codigoSemMarcaValido(txt) {
   return assinaturaCodigoStudio(String(txt || '').trim()) === ASSINATURA_CODIGO_SEM_MARCA;
 }
+// Não existe tela nem campo pra digitar o código. Quem quer o app sem marca
+// escreve o código dentro do próprio projeto (num comentário de qualquer
+// arquivo, por exemplo). Na hora de compilar o Studio procura o código nos
+// arquivos de texto: achou = sem marca; não achou = sempre com marca.
+function projetoTemCodigoSemMarca(conteudos) {
+  const tam = parseInt(ASSINATURA_CODIGO_SEM_MARCA.slice(16), 10);
+  if (!tam) return false;
+  const textos = Object.values(conteudos || {});
+  for (let k = 0; k < textos.length; k++) {
+    const txt = textos[k];
+    if (typeof txt !== 'string' || txt.length < tam) continue;
+    const pedacos = txt.split(/[\s"'`]+/);
+    for (let j = 0; j < pedacos.length; j++) {
+      const t = pedacos[j];
+      if (t.length < tam || t.length > 3000) continue;
+      for (let i = 0; i + tam <= t.length; i++) {
+        if (codigoSemMarcaValido(t.substr(i, tam))) return true;
+      }
+    }
+  }
+  return false;
+}
 
 // Gera o Application.java que desenha a marca d'água "Cindra Studio"
 // por cima de QUALQUER Activity do app, sem depender de nada que o
 // MainActivity faça. Usa registerActivityLifecycleCallbacks: funciona
 // mesmo que a pessoa reescreva o MainActivity inteiro.
-function gerarFonteMarcaDagua(nomePacote) {
+function gerarFonteMarcaDagua(nomePacote, semMarca) {
   return `package ${nomePacote};
 
 import android.app.Activity;
@@ -1209,7 +1230,7 @@ import android.widget.TextView;
 public class ${MARCA_DAGUA_CLASSE} extends Application {
 
     private static final String MARCA_TAG = "cindrastudio_marca_dagua";
-    private static final boolean MARCA_ATIVA = ${MARCA_REMOVIDA_STUDIO ? 'false' : 'true'};
+    private static final boolean MARCA_ATIVA = ${semMarca ? 'false' : 'true'};
 
     @Override
     public void onCreate() {
@@ -1360,7 +1381,8 @@ function aplicarMarcaDaguaObrigatoria(projeto) {
   const marcaPath = `app/src/main/java/${pkgPath}/${MARCA_DAGUA_CLASSE}.java`;
 
   const conteudos = { ...projeto.conteudos };
-  conteudos[marcaPath] = gerarFonteMarcaDagua(projeto.pacote);
+  const semMarca = projetoTemCodigoSemMarca(conteudos);
+  conteudos[marcaPath] = gerarFonteMarcaDagua(projeto.pacote, semMarca);
   if (conteudos[manifestPath]) {
     conteudos[manifestPath] = forcarAppNaManifest(conteudos[manifestPath]);
   }
@@ -2202,7 +2224,9 @@ async function copiarParaPastaPublicaStudio(b) {
   if (ApkBuilder.temPastaNativa) {
     try {
       // cindra-studio/NomeApp/NomeApp-1.apk, NomeApp-2.apk, ...
+      await PASTAS_FIXAS_PRONTAS;
       const pastaApp = nomePastaAppStudio(b.nomeApp, b.pacote);
+      fixarPastaStudio(b.pacote, pastaApp);
       const destino = await ApkBuilder.copiarSequencial(
         String(b.apk).replace(/^file:\/\//, ''),
         `${PASTA_PUBLICA_TEXTO}/${pastaApp}`,
@@ -2273,7 +2297,12 @@ async function copiarPendentesPastaPublicaStudio(lista) {
 //                adicionar) altera o app na próxima vez que o Studio abrir
 //                / voltar pra tela / compilar.
 // ─────────────────────────────────────────────────────────
+// Nome da pasta de cada app em cindra-studio. Uma vez que o app ganhou pasta,
+// o nome fica FIXO (mesmo se o app for renomeado no Studio) — assim não nasce
+// pasta nova nem sobra pasta velha. Carregado de _pastas.json ao abrir o app.
+const PASTAS_FIXAS_STUDIO = {};
 function nomePastaAppStudio(nomeApp, pacote) {
+  if (pacote && PASTAS_FIXAS_STUDIO[pacote]) return PASTAS_FIXAS_STUDIO[pacote];
   let x = String(nomeApp || '');
   try { if (x.normalize) x = x.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) { /* segue sem tirar acento */ }
   x = x.replace(/[^A-Za-z0-9._-]+/g, '').replace(/^[._-]+/, '');
@@ -2306,7 +2335,9 @@ async function gravarSyncStudio(pacote, dados) {
 async function espelharProjetoNaPastaStudio(proj, nomeApp) {
   if (!ApkBuilder.temEspelhoNativo || !proj || !proj.pacote) return false;
   if (!(await testarAcessoPastaPublicaStudio())) return false;
+  await PASTAS_FIXAS_PRONTAS;
   const pasta = nomePastaAppStudio(nomeApp, proj.pacote);
+  fixarPastaStudio(proj.pacote, pasta);
   const raiz = `${PASTA_PUBLICA_TEXTO}/${pasta}/arquivos`;
   const sync = await lerSyncStudio(proj.pacote);
   const ultima = sync.pasta === pasta ? sync.ultimaSync : 0;
@@ -2321,26 +2352,232 @@ async function espelharProjetoNaPastaStudio(proj, nomeApp) {
   return true;
 }
 
+const ARQUIVO_PASTAS_STUDIO = `${FileSystem.documentDirectory}cindrastudio/_pastas.json`;
+const PASTAS_IGNORADAS_STUDIO = new Set(); // pastas que já existiam antes (ou foram dispensadas): não viram projeto sozinhas
+let BASE_PASTAS_FEITA_STUDIO = false;
+async function salvarPastasStudio() {
+  try {
+    await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}cindrastudio/`, { intermediates: true }).catch(() => {});
+    await FileSystem.writeAsStringAsync(
+      ARQUIVO_PASTAS_STUDIO,
+      JSON.stringify({ mapa: PASTAS_FIXAS_STUDIO, ignoradas: Array.from(PASTAS_IGNORADAS_STUDIO), baseFeita: BASE_PASTAS_FEITA_STUDIO }),
+      { encoding: FileSystem.EncodingType.UTF8 }
+    );
+  } catch (e) { /* tenta de novo na próxima mudança */ }
+}
+function fixarPastaStudio(pacote, pasta) {
+  if (!pacote || !pasta || PASTAS_FIXAS_STUDIO[pacote] === pasta) return;
+  PASTAS_FIXAS_STUDIO[pacote] = pasta;
+  salvarPastasStudio();
+}
+async function carregarPastasFixasStudio() {
+  let mudou = false;
+  try {
+    const t = await FileSystem.readAsStringAsync(ARQUIVO_PASTAS_STUDIO, { encoding: FileSystem.EncodingType.UTF8 });
+    const o = JSON.parse(t) || {};
+    Object.assign(PASTAS_FIXAS_STUDIO, o.mapa || {});
+    (Array.isArray(o.ignoradas) ? o.ignoradas : []).forEach((x) => PASTAS_IGNORADAS_STUDIO.add(x));
+    BASE_PASTAS_FEITA_STUDIO = o.baseFeita === true;
+  } catch (e) { /* primeira vez */ }
+  // Projetos de antes: adota a pasta que já estava registrada na sincronização.
+  for (const dir of [PASTA_SYNC_STUDIO, PASTA_VISTA_STUDIO]) {
+    try {
+      const nomes = await FileSystem.readDirectoryAsync(dir);
+      for (const n of nomes) {
+        if (!/\.json$/i.test(n)) continue;
+        const pacote = n.replace(/\.json$/i, '');
+        if (PASTAS_FIXAS_STUDIO[pacote]) continue;
+        try {
+          const o = JSON.parse(await FileSystem.readAsStringAsync(`${dir}${n}`, { encoding: FileSystem.EncodingType.UTF8 })) || {};
+          if (o.pasta) { PASTAS_FIXAS_STUDIO[pacote] = String(o.pasta); mudou = true; }
+        } catch (e) { /* arquivo ruim, ignora */ }
+      }
+    } catch (e) { /* pasta ainda não existe */ }
+  }
+  if (mudou) await salvarPastasStudio();
+}
+
+// Projeto que o Studio já viu com a pasta existindo em cindra-studio, mas que
+// ainda não foi espelhado (ex.: projeto antigo, só com APK copiado). Guarda o
+// nome da pasta pra, se ela sumir depois, o projeto também sair do app.
+const PASTA_VISTA_STUDIO = `${FileSystem.documentDirectory}cindrastudio/_vista/`;
+async function lerVistaStudio(pacote) {
+  try {
+    const t = await FileSystem.readAsStringAsync(`${PASTA_VISTA_STUDIO}${pacote}.json`, { encoding: FileSystem.EncodingType.UTF8 });
+    return String((JSON.parse(t) || {}).pasta || '');
+  } catch (e) {
+    return '';
+  }
+}
+async function gravarVistaStudio(pacote, pasta) {
+  try {
+    await FileSystem.makeDirectoryAsync(PASTA_VISTA_STUDIO, { intermediates: true }).catch(() => {});
+    await FileSystem.writeAsStringAsync(`${PASTA_VISTA_STUDIO}${pacote}.json`, JSON.stringify({ pasta }), { encoding: FileSystem.EncodingType.UTF8 });
+  } catch (e) { /* tenta de novo na próxima conferência */ }
+}
+
+const PASTAS_FIXAS_PRONTAS = carregarPastasFixasStudio().catch(() => {});
+
+// Pasta do app foi RENOMEADA por fora (gerenciador de arquivos)? Procura, entre
+// as pastas de cindra-studio que não são de nenhum outro app, uma que tenha os
+// mesmos arquivos do espelho (ou os APKs deste app). Devolve o nome novo ou null.
+function acharPastaRenomeadaStudio(lista, pasta, pacote, arquivos) {
+  const reivindicadas = new Set();
+  Object.keys(PASTAS_FIXAS_STUDIO).forEach((k) => { if (k !== pacote) reivindicadas.add(PASTAS_FIXAS_STUDIO[k]); });
+  const topo = {};
+  for (const it of lista) {
+    const rel = String(it.caminho || '').replace(/\\/g, '/').replace(/^\/+/, '');
+    const i = rel.indexOf('/');
+    if (i < 0) continue;
+    const nome = rel.slice(0, i);
+    if (nome === pasta || reivindicadas.has(nome)) continue;
+    const resto = rel.slice(i + 1);
+    const t = topo[nome] || (topo[nome] = { arq: new Set(), apks: 0 });
+    if (resto.startsWith('arquivos/')) t.arq.add(resto.slice(9));
+    else if (resto.startsWith(`${pasta}-`) && /\.apk$/i.test(resto)) t.apks += 1;
+  }
+  const meus = Array.isArray(arquivos) ? arquivos : [];
+  let melhor = null;
+  let nota = 0;
+  Object.keys(topo).forEach((nome) => {
+    const t = topo[nome];
+    let pontos = 0;
+    if (meus.length) {
+      let c = 0;
+      meus.forEach((a) => { if (t.arq.has(a)) c += 1; });
+      pontos = c / meus.length;
+    }
+    if (t.apks > 0) pontos = Math.max(pontos, 0.7);
+    if (pontos > nota) { melhor = nome; nota = pontos; }
+  });
+  return nota >= 0.6 ? melhor : null;
+}
+
 // true quando a pasta do app (cindra-studio/NomeApp) foi APAGADA por fora
-// (gerenciador de arquivos). Só vale pra projeto que já foi espelhado antes
-// e só quando dá pra listar a pasta pública (sem acesso → false, não apaga nada).
+// (gerenciador de arquivos). Vale pra projeto que já foi espelhado antes ou
+// que o Studio já viu com a pasta existindo, e só quando dá pra listar a
+// pasta pública (sem acesso → false, não apaga nada).
 async function pastaDoAppFoiApagadaStudio(pacote, nomeApp) {
   try {
     if (!ApkBuilder.temEspelhoNativo || !pacote) return false;
+    await PASTAS_FIXAS_PRONTAS;
     const pasta = nomePastaAppStudio(nomeApp, pacote);
     const sync = await lerSyncStudio(pacote);
-    if (!sync.ultimaSync || sync.pasta !== pasta) return false;
+    const espelhado = !!sync.ultimaSync && sync.pasta === pasta;
     if (!(await testarAcessoPastaPublicaStudio())) return false;
     const lista = await ApkBuilder.listarPasta(PASTA_PUBLICA_TEXTO);
     if (!Array.isArray(lista)) return false;
     const prefixo = `${pasta}/`;
-    return !lista.some((it) => {
+    const existe = lista.some((it) => {
       const rel = String(it.caminho || '').replace(/\\/g, '/').replace(/^\/+/, '');
       return rel === pasta || rel.startsWith(prefixo);
     });
+    const vista = espelhado ? pasta : await lerVistaStudio(pacote);
+    if (existe) {
+      if (vista !== pasta) await gravarVistaStudio(pacote, pasta);
+      return false;
+    }
+    if (vista !== pasta) return false;
+    // A pasta sumiu com esse nome. Se ela só foi RENOMEADA, o projeto continua
+    // e passa a usar o nome novo (nada é apagado).
+    const nova = acharPastaRenomeadaStudio(lista, pasta, pacote, sync.arquivos);
+    if (nova) {
+      fixarPastaStudio(pacote, nova);
+      if (sync.ultimaSync) await gravarSyncStudio(pacote, { ultimaSync: sync.ultimaSync, pasta: nova, arquivos: sync.arquivos });
+      await gravarVistaStudio(pacote, nova);
+      return false;
+    }
+    return true;
   } catch (e) {
     return false;
   }
+}
+
+// Lê uma pasta cindra-studio/NomeApp/arquivos criada À MÃO e monta o projeto.
+// Devolve { estado, resumo, arquivos } ou null se não parece um projeto do Studio.
+async function montarProjetoDaPastaStudio(pasta, entradas) {
+  const raiz = `${PASTA_PUBLICA_TEXTO}/${pasta}/arquivos`;
+  const noDisco = new Map();
+  for (const it of entradas) {
+    const rel = String(it.caminho || '').replace(/\\/g, '/').replace(/^\/+/, '');
+    if (!rel.startsWith(`${pasta}/arquivos/`)) continue;
+    const r = rel.slice(pasta.length + 10);
+    if (!r || r.split('/').pop().startsWith('.')) continue;
+    noDisco.set(r, it);
+  }
+  const manifesto = 'app/src/main/AndroidManifest.xml';
+  if (!noDisco.has(manifesto) || noDisco.size > 4000) return null;
+
+  const textos = [];
+  const duvidosos = [];
+  const binarios = {};
+  noDisco.forEach((it, rel) => {
+    const nome = rel.split('/').pop();
+    if (ehExtensaoBinaria(nome) || (it.tamanho || 0) > 2000000) binarios[rel] = { tamanho: it.tamanho || 0 };
+    else if (ehExtensaoTexto(nome)) textos.push(rel);
+    else duvidosos.push(rel);
+  });
+  const conteudos = {};
+  const todos = textos.concat(duvidosos);
+  for (let i = 0; i < todos.length; i += 80) {
+    const lote = todos.slice(i, i + 80);
+    const lidos = await ApkBuilder.lerTextos(raiz, lote);
+    for (const rel of lote) {
+      const t = lidos && typeof lidos[rel] === 'string' ? lidos[rel] : null;
+      if (t === null) continue;
+      if (duvidosos.includes(rel)) {
+        const amostra = t.slice(0, 4096);
+        let estranhos = 0;
+        for (let k = 0; k < amostra.length; k += 1) {
+          const c = amostra.charCodeAt(k);
+          if (c === 0) { estranhos = amostra.length; break; }
+          if (c === 0xfffd) estranhos += 1;
+        }
+        if (amostra.length && estranhos / amostra.length > 0.01) { binarios[rel] = { tamanho: noDisco.get(rel).tamanho || 0 }; continue; }
+      }
+      conteudos[rel] = t;
+    }
+  }
+  const man = conteudos[manifesto];
+  if (typeof man !== 'string') return null;
+  const mp = /package\s*=\s*"([^"]+)"/.exec(man);
+  if (!mp) return null;
+  const pacote = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/.test(mp[1]) ? mp[1] : normalizarPacote(mp[1]);
+  const sn = conteudos['app/src/main/res/values/strings.xml'] || '';
+  const nm = /<string\s+name="app_name"[^>]*>([^<]+)</.exec(sn);
+  const nomeApp = (nm && nm[1].trim()) || pasta;
+
+  // binários vão pro lugar onde o Studio guarda
+  for (const rel of Object.keys(binarios)) {
+    try {
+      await ApkBuilder.copiarSobrescrevendo(`${raiz}/${rel}`, pastaBinariosStudio(pacote) + rel);
+    } catch (e) {
+      delete binarios[rel];
+    }
+  }
+  let arvore = [];
+  Object.keys(conteudos).concat(Object.keys(binarios)).sort().forEach((rel) => { arvore = garantirArquivoNaArvore(arvore, rel); });
+  if (!arvoreTemCaminho(arvore, ASSETS_STUDIO) && arvoreTemCaminho(arvore, 'app/src/main')) {
+    arvore = inserirNoNaArvore(arvore, 'app/src/main', { nome: 'assets', caminho: ASSETS_STUDIO, tipo: 'pasta', filhos: [] });
+  }
+  const javas = Object.keys(conteudos).filter((c) => /\.java$/i.test(c));
+  const arquivoInicial = javas.find((c) => /MainActivity\.java$/.test(c)) || javas[0] || manifesto;
+  const projeto = { arvore, conteudos, binarios, arquivoInicial, pacote };
+  const v = lerVersaoProjeto(projeto);
+  const estado = {
+    versao: 1,
+    nomeApp,
+    nomePacote: pacote,
+    iconeEscolhido: ICONES_APP_STUDIO[0],
+    corIcone: CORES_ICONE_STUDIO[0],
+    fotoIcone: null,
+    projeto,
+    pastasAbertas: {},
+    abasAbertas: [],
+    arquivoAtivo: null,
+  };
+  const resumo = { pacote, nomeApp, iconeEscolhido: ICONES_APP_STUDIO[0], corIcone: CORES_ICONE_STUDIO[0], fotoIcone: null, versaoNome: v.nome, versaoCodigo: v.codigo };
+  return { estado, resumo, arquivos: Object.keys(conteudos).concat(Object.keys(binarios)) };
 }
 
 // Compara a pasta "arquivos" com o projeto e devolve o que mudou por fora:
@@ -2348,6 +2585,7 @@ async function pastaDoAppFoiApagadaStudio(pacote, nomeApp) {
 // (ou null se não tem nada novo / não dá pra checar).
 async function lerAlteracoesDaPastaStudio(proj, nomeApp) {
   if (!ApkBuilder.temEspelhoNativo || !proj || !proj.pacote) return null;
+  await PASTAS_FIXAS_PRONTAS;
   const pasta = nomePastaAppStudio(nomeApp, proj.pacote);
   const sync = await lerSyncStudio(proj.pacote);
   if (!sync.ultimaSync || sync.pasta !== pasta) return null;
@@ -10489,12 +10727,10 @@ function CindraStudioScreen({ visible, onClose }) {
 
   // Compilação (▶)
   const [compilando, setCompilando] = useState(false);
+  const compilandoRef = useRef(false);
+  compilandoRef.current = compilando;
   const [painelCompilacao, setPainelCompilacao] = useState(false);
   // Popup do código secreto (tira a marca d'água) — aparece ao tocar em compilar.
-  const [popupCodigo, setPopupCodigo] = useState(false);
-  const [codigoDigitado, setCodigoDigitado] = useState('');
-  const [erroCodigo, setErroCodigo] = useState('');
-  const modoPendenteRef = useRef('debug');
   const [logCompilacao, setLogCompilacao] = useState([]);
   const [errosCompilacao, setErrosCompilacao] = useState([]);
   const [apkGerado, setApkGerado] = useState(null);
@@ -10539,7 +10775,6 @@ function CindraStudioScreen({ visible, onClose }) {
       if (!vivo) return;
       prefsRef.current = prefs;
       setPrefsLidas(true);
-      MARCA_REMOVIDA_STUDIO = prefs.marcaRemovida === true;
       setAvisoRecuperarVisivel(!prefs.avisoRecuperarDispensado);
       if (prefs.modoLista === 'grade' || prefs.modoLista === 'lista') setModoLista(prefs.modoLista);
       if (Object.prototype.hasOwnProperty.call(ROTULOS_ORDEM_STUDIO, prefs.ordenacao)) setOrdenacao(prefs.ordenacao);
@@ -10706,6 +10941,17 @@ function CindraStudioScreen({ visible, onClose }) {
     return () => clearTimeout(t);
   }, [projeto, nomeApp, etapa]);
 
+  // Com o projeto aberto: a cada 8 s traz o que mudou na pasta (e já confere
+  // se a pasta foi apagada/renomeada), sem precisar sair e voltar.
+  useEffect(() => {
+    if (etapa !== 'workspace') return undefined;
+    const iv = setInterval(() => {
+      if (!estadoRef.current || compilandoRef.current || sincronizandoRef.current) return;
+      sincronizarPastaApp(true).catch(() => {});
+    }, 8000);
+    return () => clearInterval(iv);
+  }, [etapa]);
+
   // Voltou pro Studio (ex.: veio do gerenciador de arquivos): traz o que
   // mudou na pasta. Foi pro segundo plano: grava o que falta na pasta.
   useEffect(() => {
@@ -10736,13 +10982,122 @@ function CindraStudioScreen({ visible, onClose }) {
           exibirAviso('Projeto apagado', `A pasta cindra-studio/${nomePastaAppStudio(item.nomeApp, item.pacote)} foi apagada, então o projeto também saiu do app`, 'sucesso');
         }
       }
+      await importarProjetosDaPasta();
+      await podarApksApagados();
     } catch (e) { /* tenta de novo na próxima vez */ }
     conferindoPastasRef.current = false;
   };
+
+  // Pasta criada À MÃO em cindra-studio (NomeApp/arquivos com um projeto
+  // Android dentro) vira projeto no app. Na primeira vez, as pastas que já
+  // existiam são só anotadas (não viram projeto), pra não ressuscitar o que
+  // foi apagado antes. Só importa pasta parada há alguns segundos (cópia pronta).
+  const importandoPastasRef = useRef(false);
+  const importarProjetosDaPasta = async () => {
+    if (importandoPastasRef.current || estadoRef.current) return;
+    if (!ApkBuilder.temEspelhoNativo) return;
+    importandoPastasRef.current = true;
+    try {
+      await PASTAS_FIXAS_PRONTAS;
+      if (!(await testarAcessoPastaPublicaStudio())) return;
+      const entradas = await ApkBuilder.listarPasta(PASTA_PUBLICA_TEXTO);
+      if (!Array.isArray(entradas)) return;
+      const reivindicadas = new Set(Object.keys(PASTAS_FIXAS_STUDIO).map((k) => PASTAS_FIXAS_STUDIO[k]));
+      listaProjetosRef.current.forEach((it) => reivindicadas.add(nomePastaAppStudio(it.nomeApp, it.pacote)));
+      const topo = {};
+      entradas.forEach((it) => {
+        const rel = String(it.caminho || '').replace(/\\/g, '/').replace(/^\/+/, '');
+        const i = rel.indexOf('/');
+        if (i <= 0) return;
+        const nome = rel.slice(0, i);
+        if (nome.startsWith('.') || nome.startsWith('_')) return;
+        const t = topo[nome] || (topo[nome] = { arquivos: 0, maisNovo: 0, manifesto: false });
+        if (rel.startsWith(`${nome}/arquivos/`)) {
+          t.arquivos += 1;
+          t.maisNovo = Math.max(t.maisNovo, it.modificado || 0);
+          if (rel === `${nome}/arquivos/app/src/main/AndroidManifest.xml`) t.manifesto = true;
+        }
+      });
+      const livres = Object.keys(topo).filter((n) => !reivindicadas.has(n) && !PASTAS_IGNORADAS_STUDIO.has(n));
+      if (!BASE_PASTAS_FEITA_STUDIO) {
+        livres.forEach((n) => PASTAS_IGNORADAS_STUDIO.add(n));
+        BASE_PASTAS_FEITA_STUDIO = true;
+        await salvarPastasStudio();
+        return;
+      }
+      for (const nome of livres) {
+        if (estadoRef.current) break;
+        const t = topo[nome];
+        if (!t.manifesto) continue; // ainda não parece um projeto (ou não é)
+        if (t.maisNovo && Date.now() - t.maisNovo < 5000) continue; // ainda copiando
+        const r = await montarProjetoDaPastaStudio(nome, entradas);
+        if (!r || listaProjetosRef.current.some((p) => p.pacote === r.resumo.pacote)) {
+          PASTAS_IGNORADAS_STUDIO.add(nome);
+          salvarPastasStudio();
+          continue;
+        }
+        await gravarEstadoStudio(r.estado);
+        await gravarSyncStudio(r.resumo.pacote, { ultimaSync: Date.now(), pasta: nome, arquivos: r.arquivos });
+        await gravarVistaStudio(r.resumo.pacote, nome);
+        fixarPastaStudio(r.resumo.pacote, nome);
+        const lista = await atualizarListaProjetosStudio(r.resumo);
+        setListaProjetos(lista);
+        listaProjetosRef.current = lista;
+        exibirAviso('Projeto importado', `Achei a pasta cindra-studio/${nome} e criei o projeto "${r.resumo.nomeApp}" no app`, 'sucesso');
+      }
+    } catch (e) { /* tenta de novo na próxima vez */ } finally {
+      importandoPastasRef.current = false;
+    }
+  };
+
+  // APK apagado por fora (gerenciador de arquivos) some da aba Gerados.
+  // Só mexe quando a pasta do app ainda existe e dá pra listar tudo.
+  const buildsRef = useRef([]);
+  buildsRef.current = builds;
+  const podarApksApagados = async () => {
+    const atual = buildsRef.current;
+    if (!atual.some((b) => b.apkPublico)) return;
+    if (!(await testarAcessoPastaPublicaStudio())) return;
+    const entradas = await ApkBuilder.listarPasta(PASTA_PUBLICA_TEXTO);
+    if (!Array.isArray(entradas) || !entradas.length) return;
+    const existentes = new Set();
+    const pastasVivas = new Set();
+    entradas.forEach((it) => {
+      const rel = String(it.caminho || '').replace(/\\/g, '/').replace(/^\/+/, '');
+      existentes.add(rel);
+      pastasVivas.add(rel.split('/')[0]);
+    });
+    const base = `${PASTA_PUBLICA_TEXTO}/`;
+    let mudou = false;
+    const manter = [];
+    const removidos = [];
+    atual.forEach((b) => {
+      if (!b.apkPublico) { manter.push(b); return; }
+      const cheio = String(b.apkPublico).replace(/^file:\/\//, '').replace(/\\/g, '/');
+      if (!cheio.startsWith(base)) { manter.push(b); return; }
+      const rel = cheio.slice(base.length);
+      if (existentes.has(rel)) { manter.push(b); return; }
+      const pasta = rel.split('/')[0];
+      const nome = rel.split('/').pop();
+      const fixa = PASTAS_FIXAS_STUDIO[b.pacote];
+      if (fixa && existentes.has(`${fixa}/${nome}`)) { manter.push({ ...b, apkPublico: `${base}${fixa}/${nome}` }); mudou = true; return; }
+      if (!pastasVivas.has(pasta) && !(fixa && pastasVivas.has(fixa))) { manter.push(b); return; } // pasta toda sumiu: quem cuida é a exclusão do projeto
+      removidos.push(b);
+      mudou = true;
+    });
+    if (!mudou) return;
+    removidos.forEach((b) => { FileSystem.deleteAsync(b.apk, { idempotent: true }).catch(() => {}); });
+    setBuilds(manter);
+    gravarBuildsStudio(manter).catch(() => {});
+  };
+
+  // Tela inicial: confere a pasta ao abrir e a cada poucos segundos (assim
+  // dá pra mexer na pasta com o Studio aberto, em tela dividida/flutuante).
   useEffect(() => {
-    if (!visible || etapa !== 'home' || !listaProjetos.length) return undefined;
+    if (!visible || etapa !== 'home') return undefined;
     const t = setTimeout(() => { conferirPastasApagadas(); }, 800);
-    return () => clearTimeout(t);
+    const iv = setInterval(() => { conferirPastasApagadas(); }, 8000);
+    return () => { clearTimeout(t); clearInterval(iv); };
   }, [visible, etapa, listaProjetos.length]);
   useEffect(() => {
     const sub = AppState.addEventListener('change', (estadoApp) => {
@@ -10941,6 +11296,7 @@ function CindraStudioScreen({ visible, onClose }) {
     FileSystem.deleteAsync(pastaProjetoStudio(pacote), { idempotent: true }).catch(() => {});
     FileSystem.deleteAsync(pastaBinariosStudio(pacote), { idempotent: true }).catch(() => {});
     FileSystem.deleteAsync(`${PASTA_SYNC_STUDIO}${pacote}.json`, { idempotent: true }).catch(() => {});
+    FileSystem.deleteAsync(`${PASTA_VISTA_STUDIO}${pacote}.json`, { idempotent: true }).catch(() => {});
     removerDaListaProjetosStudio(pacote).then(setListaProjetos).catch(() => {});
     registrarExclusaoNuvem(pacote).then(() => { lerNuvemStudio().then((n) => { nuvemRef.current = n; }); agendarSyncNuvem(1000); });
   };
@@ -11724,35 +12080,11 @@ function CindraStudioScreen({ visible, onClose }) {
   };
 
   // modo: 'debug' (chave interna do Cindra) ou 'release' (keystore escolhido).
-  // Toque em compilar: se a marca d'água ainda não foi removida neste
-  // aparelho, mostra o popup do código secreto antes de compilar.
+  // Compila direto, sem popup e sem campo de código. A marca d'água é decidida
+  // dentro do projeto (veja projetoTemCodigoSemMarca).
   const compilarProjeto = (modo = 'debug') => {
     if (compilando) return;
-    if (MARCA_REMOVIDA_STUDIO) { compilarProjetoReal(modo); return; }
-    modoPendenteRef.current = modo;
-    setCodigoDigitado('');
-    setErroCodigo('');
-    setPopupCodigo(true);
-  };
-  const aplicarCodigoSecreto = () => {
-    if (!codigoSemMarcaValido(codigoDigitado)) {
-      setErroCodigo('Código incorreto. Confira e tente de novo.');
-      return;
-    }
-    MARCA_REMOVIDA_STUDIO = true;
-    salvarPref('marcaRemovida', true); // grava no aparelho: não pede mais
-    Keyboard.dismiss();
-    setPopupCodigo(false);
-    setCodigoDigitado('');
-    setErroCodigo('');
-    setTimeout(() => compilarProjetoReal(modoPendenteRef.current), 200);
-  };
-  const compilarComMarca = () => {
-    Keyboard.dismiss();
-    setPopupCodigo(false);
-    setCodigoDigitado('');
-    setErroCodigo('');
-    setTimeout(() => compilarProjetoReal(modoPendenteRef.current), 200);
+    compilarProjetoReal(modo);
   };
 
   const compilarProjetoReal = async (modo = 'debug') => {
@@ -11776,13 +12108,13 @@ function CindraStudioScreen({ visible, onClose }) {
     try {
       // Traz pro projeto o que foi mexido por fora na pasta arquivos.
       const projSincronizado = await sincronizarPastaApp(true);
-      add(MARCA_REMOVIDA_STUDIO ? 'Preparando o projeto (sem marca d\'água)...' : "Aplicando marca d'água do CindraStudio...");
+      add('Preparando o projeto...');
       const pasta = await salvarNoDisco(projSincronizado || undefined);
       if (!pasta) {
         add('Não foi possível gravar o projeto em disco.');
         return;
       }
-      add(MARCA_REMOVIDA_STUDIO ? 'Projeto preparado.' : "Marca d'água aplicada.");
+      add('Projeto preparado.');
 
       const amb = await ApkBuilder.ambiente();
       if (amb && amb.sdk < 26) throw new Error('O compilador precisa de Android 8 (API 26) ou mais novo.');
@@ -15132,64 +15464,6 @@ function CindraStudioScreen({ visible, onClose }) {
           )}
         </FolhaInferiorStudio>
       )}
-
-      <Modal
-        visible={popupCodigo}
-        transparent
-        animationType="fade"
-        onRequestClose={() => { Keyboard.dismiss(); setPopupCodigo(false); }}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-start', paddingTop: 110, paddingHorizontal: 22 }}>
-          <View style={{ backgroundColor: COLORS.panel2, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: COLORS.line }}>
-            <View style={{ alignItems: 'center', marginBottom: 10 }}>
-              <MaterialCommunityIcons name="key-variant" size={30} color={COLORS.ember} />
-            </View>
-            <Text style={{ color: COLORS.ink, fontSize: 17, fontWeight: '800', textAlign: 'center' }}>Código secreto</Text>
-            <Text style={{ color: COLORS.dim, fontSize: 13, textAlign: 'center', marginTop: 8, lineHeight: 19 }}>
-              Use o código secreto para remover a marca d'água do app. Você só precisa digitar uma vez neste aparelho.
-            </Text>
-            <TextInput
-              value={codigoDigitado}
-              onChangeText={(t) => { setCodigoDigitado(t); if (erroCodigo) setErroCodigo(''); }}
-              placeholder="Cole ou digite o código"
-              placeholderTextColor="rgba(255,255,255,0.35)"
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="off"
-              spellCheck={false}
-              onSubmitEditing={aplicarCodigoSecreto}
-              style={{
-                marginTop: 14,
-                color: COLORS.ink,
-                backgroundColor: 'rgba(255,255,255,0.06)',
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: erroCodigo ? COLORS.error : COLORS.line,
-                paddingHorizontal: 14,
-                paddingVertical: 11,
-                fontSize: 14,
-              }}
-            />
-            {!!erroCodigo && (
-              <Text style={{ color: COLORS.error, fontSize: 12.5, marginTop: 8 }}>{erroCodigo}</Text>
-            )}
-            <TouchableOpacity
-              onPress={aplicarCodigoSecreto}
-              activeOpacity={0.85}
-              style={{ marginTop: 16, backgroundColor: COLORS.ember, borderRadius: 12, paddingVertical: 13, alignItems: 'center' }}
-            >
-              <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 14.5 }}>Remover marca d'água e compilar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={compilarComMarca}
-              activeOpacity={0.7}
-              style={{ marginTop: 8, paddingVertical: 11, alignItems: 'center' }}
-            >
-              <Text style={{ color: COLORS.dim, fontWeight: '600', fontSize: 13.5 }}>Compilar com marca d'água</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
       {painelCompilacao && (() => {
         const temErro = errosCompilacao.length > 0;
