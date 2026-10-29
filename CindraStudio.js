@@ -9755,6 +9755,138 @@ function montarSugestoesEditor(ling, palavra, palavrasArquivo) {
 }
 
 // ─────────────────────────────────────────────────────────
+// Pop-up bonito (no lugar do alerta cinza do sistema): o app continua
+// visível atrás, escurecido, e o cartão entra com animação.
+// Usado pela atualização OTA e pelo bloqueio de versão.
+// ─────────────────────────────────────────────────────────
+function PopAtualizacaoStudio({ z = 9999, icone = 'cellphone-arrow-down', titulo, texto, extra, rotulo, onPress, carregando, erro, dica, rodape }) {
+  const entrada = useRef(new Animated.Value(0)).current;
+  const pulso = useRef(new Animated.Value(0)).current;
+  const barra = useRef(new Animated.Value(0)).current;
+  const [larguraBarra, setLarguraBarra] = useState(0);
+
+  useEffect(() => {
+    Animated.spring(entrada, { toValue: 1, friction: 7, tension: 70, useNativeDriver: true }).start();
+    const p = Animated.loop(Animated.sequence([
+      Animated.timing(pulso, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      Animated.timing(pulso, { toValue: 0, duration: 1400, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+    ]));
+    p.start();
+    return () => p.stop();
+  }, []);
+
+  useEffect(() => {
+    if (!carregando) { barra.setValue(0); return undefined; }
+    const l = Animated.loop(Animated.timing(barra, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }));
+    l.start();
+    return () => l.stop();
+  }, [carregando]);
+
+  const fundo = entrada.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: 'clamp' });
+  const trecho = larguraBarra * 0.4;
+
+  return (
+    <View style={{ ...StyleSheet.absoluteFillObject, zIndex: z, elevation: z, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 22 }}>
+      <Animated.View pointerEvents="none" style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(4,2,14,0.78)', opacity: fundo }} />
+      <Animated.View
+        style={{
+          width: '100%',
+          maxWidth: 370,
+          borderRadius: 28,
+          overflow: 'hidden',
+          backgroundColor: '#120d26',
+          borderWidth: 1,
+          borderColor: 'rgba(180,60,255,0.35)',
+          paddingHorizontal: 24,
+          paddingTop: 34,
+          paddingBottom: 22,
+          alignItems: 'center',
+          shadowColor: COLORS.ember,
+          shadowOpacity: 0.55,
+          shadowRadius: 28,
+          shadowOffset: { width: 0, height: 10 },
+          elevation: 24,
+          opacity: fundo,
+          transform: [
+            { scale: entrada.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) },
+            { translateY: entrada.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) },
+          ],
+        }}
+      >
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3 }}>
+          <Grad />
+        </View>
+
+        <View style={{ width: 96, height: 96, alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              width: 96,
+              height: 96,
+              borderRadius: 48,
+              backgroundColor: COLORS.emberGlow,
+              opacity: pulso.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.6] }),
+              transform: [{ scale: pulso.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1.12] }) }],
+            }}
+          />
+          <View style={{ width: 72, height: 72, borderRadius: 24, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
+            <Grad />
+            <MaterialCommunityIcons name={icone} size={36} color="#ffffff" />
+          </View>
+        </View>
+
+        <Text style={{ color: '#ffffff', fontSize: 21, fontWeight: '800', textAlign: 'center' }}>{titulo}</Text>
+        <Text style={{ color: 'rgba(255,255,255,0.68)', fontSize: 14, lineHeight: 20, textAlign: 'center', marginTop: 10 }}>{texto}</Text>
+        {!!extra && (
+          <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13.5, lineHeight: 19, textAlign: 'center', marginTop: 12 }}>{extra}</Text>
+        )}
+
+        {carregando && (
+          <View style={{ alignSelf: 'stretch', marginTop: 20 }}>
+            <View
+              onLayout={(ev) => setLarguraBarra(ev.nativeEvent.layout.width)}
+              style={{ height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.12)', overflow: 'hidden' }}
+            >
+              <Animated.View
+                style={{
+                  width: trecho,
+                  height: 6,
+                  borderRadius: 3,
+                  overflow: 'hidden',
+                  transform: [{ translateX: barra.interpolate({ inputRange: [0, 1], outputRange: [-trecho, larguraBarra] }) }],
+                }}
+              >
+                <Grad />
+              </Animated.View>
+            </View>
+            {!!dica && <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, textAlign: 'center', marginTop: 9 }}>{dica}</Text>}
+          </View>
+        )}
+
+        {!!erro && (
+          <Text style={{ color: COLORS.error, fontSize: 12.5, lineHeight: 18, textAlign: 'center', marginTop: 14 }}>{erro}</Text>
+        )}
+
+        <TouchableOpacity
+          onPress={onPress}
+          disabled={!!carregando}
+          activeOpacity={0.85}
+          style={{ alignSelf: 'stretch', height: 52, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', marginTop: 22, opacity: carregando ? 0.75 : 1 }}
+        >
+          <Grad />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+            {carregando && <ActivityIndicator size="small" color="#ffffff" />}
+            <Text style={{ color: '#ffffff', fontSize: 15.5, fontWeight: '800' }}>{rotulo}</Text>
+          </View>
+        </TouchableOpacity>
+        {!!rodape && <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, textAlign: 'center', marginTop: 12 }}>{rodape}</Text>}
+      </Animated.View>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
 // Atualização forçada (OTA): toda vez que o app abre (ou volta pro primeiro
 // plano) ele pergunta se tem update novo publicado (e repete a cada 5 segundos com o app aberto). Se tiver, bloqueia o app
 // com a tela "Atualizar agora" e manda uma notificação. Ao tocar, baixa o
@@ -9810,17 +9942,6 @@ function AtualizacaoForcada() {
     };
   }, []);
 
-  // pop-up pedindo pra atualizar (além da tela de bloqueio)
-  useEffect(() => {
-    if (!pendente) return;
-    Alert.alert(
-      'Atualização disponível',
-      'Tem uma versão nova do Cindra Studio. Toque em Atualizar para continuar.',
-      [{ text: 'Atualizar', onPress: () => { atualizar(); } }],
-      { cancelable: false }
-    );
-  }, [pendente]);
-
   // enquanto tiver atualização pendente, o botão voltar não fecha o bloqueio
   useEffect(() => {
     if (!pendente) return undefined;
@@ -9843,30 +9964,17 @@ function AtualizacaoForcada() {
 
   if (!pendente) return null;
   return (
-    <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 9999, elevation: 9999, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 }}>
-      <View style={{ width: 84, height: 84, borderRadius: 26, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', marginBottom: 22 }}>
-        <Grad />
-        <MaterialCommunityIcons name="cellphone-arrow-down" size={42} color="#ffffff" />
-      </View>
-      <Text style={{ color: '#ffffff', fontSize: 22, fontWeight: '800', textAlign: 'center' }}>Atualização obrigatória</Text>
-      <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 14, lineHeight: 20, textAlign: 'center', marginTop: 10 }}>
-        Tem uma versão nova do Cindra Studio. Atualize para continuar usando o app.
-      </Text>
-      {!!erro && (
-        <Text style={{ color: COLORS.error, fontSize: 12.5, lineHeight: 18, textAlign: 'center', marginTop: 14 }}>{erro}</Text>
-      )}
-      <TouchableOpacity
-        onPress={atualizar}
-        disabled={baixando}
-        activeOpacity={0.85}
-        style={{ alignSelf: 'stretch', height: 52, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', marginTop: 24, opacity: baixando ? 0.7 : 1 }}
-      >
-        <Grad />
-        <Text style={{ color: '#ffffff', fontSize: 15.5, fontWeight: '800' }}>
-          {baixando ? 'Atualizando...' : 'Atualizar agora'}
-        </Text>
-      </TouchableOpacity>
-    </View>
+    <PopAtualizacaoStudio
+      z={9999}
+      icone="cellphone-arrow-down"
+      titulo="Atualização disponível"
+      texto="Tem uma versão nova do Cindra Studio com novidades e melhorias. Atualize pra continuar usando o app."
+      rotulo={baixando ? 'Baixando atualização…' : 'Atualizar agora'}
+      carregando={baixando}
+      erro={erro}
+      dica="Não feche o app. Ele reinicia sozinho quando terminar."
+      onPress={atualizar}
+    />
   );
 }
 
@@ -9917,17 +10025,6 @@ function BloqueioVersao() {
     }
   };
 
-  // pop-up escrito "baixe a nova versão"
-  useEffect(() => {
-    if (!bloqueado) return;
-    Alert.alert(
-      'Baixe a nova versão',
-      'Esta versão do Cindra Studio não é mais aceita. Baixe a nova versão no site cindra-studio.shop para continuar.',
-      [{ text: 'Baixar agora', onPress: () => { abrirSite(); } }],
-      { cancelable: false }
-    );
-  }, [bloqueado]);
-
   // botão voltar não fecha o bloqueio
   useEffect(() => {
     if (!bloqueado) return undefined;
@@ -9937,28 +10034,16 @@ function BloqueioVersao() {
 
   if (!bloqueado) return null;
   return (
-    <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 10000, elevation: 10000, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 }}>
-      <View style={{ width: 84, height: 84, borderRadius: 26, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', marginBottom: 22 }}>
-        <Grad />
-        <MaterialCommunityIcons name="cellphone-arrow-down" size={42} color="#ffffff" />
-      </View>
-      <Text style={{ color: '#ffffff', fontSize: 22, fontWeight: '800', textAlign: 'center' }}>Baixe a nova versão</Text>
-      <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 14, lineHeight: 20, textAlign: 'center', marginTop: 10 }}>
-        Esta versão do Cindra Studio não é mais aceita. Baixe a nova versão no site cindra-studio.shop para continuar usando o app.
-      </Text>
-      {!!msgExtra && (
-        <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 13.5, lineHeight: 19, textAlign: 'center', marginTop: 12 }}>{msgExtra}</Text>
-      )}
-      <TouchableOpacity
-        onPress={abrirSite}
-        activeOpacity={0.85}
-        style={{ alignSelf: 'stretch', height: 52, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', marginTop: 24 }}
-      >
-        <Grad />
-        <Text style={{ color: '#ffffff', fontSize: 15.5, fontWeight: '800' }}>Baixar nova versão</Text>
-      </TouchableOpacity>
-      <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, textAlign: 'center', marginTop: 12 }}>cindra-studio.shop</Text>
-    </View>
+    <PopAtualizacaoStudio
+      z={10000}
+      icone="cloud-download-outline"
+      titulo="Baixe a nova versão"
+      texto="Esta versão do Cindra Studio não é mais aceita. Baixe a nova versão no site pra continuar usando o app."
+      extra={msgExtra}
+      rotulo="Baixar nova versão"
+      onPress={abrirSite}
+      rodape="cindra-studio.shop"
+    />
   );
 }
 
