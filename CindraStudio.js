@@ -538,6 +538,13 @@ function hexParaRgba(hex, alpha) {
 // compilador, módulo nativo ausente etc). O detalhe real nunca vai pra tela.
 const TITULO_MANUTENCAO = 'Em manutenção';
 const MSG_MANUTENCAO = 'Estamos em manutenção. Resolvemos em breve.';
+// true = o painel de compilação mostra o erro original; false = volta a
+// mostrar só a mensagem de manutenção (use false na versão pública).
+const MOSTRAR_ERRO_ORIGINAL_STUDIO = true;
+function textoErroStudio(original) {
+  const t = String(original || '').trim();
+  return MOSTRAR_ERRO_ORIGINAL_STUDIO && t ? t : MSG_MANUTENCAO;
+}
 
 const STEPS_COMPILACAO = [
   { icone: 'image-multiple-outline', titulo: 'Recursos', sub: 'Preparando imagens e textos' },
@@ -606,11 +613,11 @@ function montarLogAmigavel(logCru) {
     }
     const falhou = /^falhou na etapa:\s*(.*)$/i.exec(bruta);
     if (falhou) {
-      itens.push({ tipo: 'erro', texto: MSG_MANUTENCAO });
+      itens.push({ tipo: 'erro', texto: textoErroStudio(falhou[1]) });
       return;
     }
     if (/^erro:/i.test(bruta)) {
-      itens.push({ tipo: 'erro', texto: MSG_MANUTENCAO });
+      itens.push({ tipo: 'erro', texto: textoErroStudio(bruta.replace(/^erro:\s*/i, '')) });
       return;
     }
     if (REGEX_LINHA_TECNICA.test(bruta)) return; // linha técnica: esconde
@@ -11418,10 +11425,21 @@ function CindraStudioScreen({ visible, onClose }) {
       } else {
         const doCodigo = (r.erros || []).filter((er) => er && er.arquivo && !REGEX_LINHA_TECNICA.test(`${er.arquivo} ${er.mensagem || ''}`));
         setErrosCompilacao(doCodigo);
-        add(`Falhou na etapa: ${MSG_MANUTENCAO}`);
+        // Erro original: mensagem do módulo + cada erro do compilador (inclusive os técnicos).
+        const detalhes = [];
+        if (r && typeof r.mensagem === 'string' && r.mensagem.trim()) detalhes.push(r.mensagem.trim());
+        if (r && typeof r.erro === 'string' && r.erro.trim()) detalhes.push(r.erro.trim());
+        (r && r.erros ? r.erros : []).slice(0, 12).forEach((er) => {
+          if (!er) return;
+          const onde = er.arquivo ? `${er.arquivo}${er.linha ? `:${er.linha}` : ''} — ` : '';
+          const txt = `${onde}${er.mensagem || ''}`.trim();
+          if (txt) detalhes.push(txt);
+        });
+        if (!detalhes.length) { try { detalhes.push(JSON.stringify(r).slice(0, 600)); } catch (e2) { detalhes.push('o compilador não informou o motivo'); } }
+        detalhes.forEach((d) => add(`Falhou na etapa: ${d}`));
       }
     } catch (e) {
-      add(`Erro: ${MSG_MANUTENCAO}`);
+      add(`Erro: ${textoErroStudio(e && e.message ? e.message : e)}`);
     } finally {
       assinatura.remove();
       setCompilando(false);
@@ -14900,7 +14918,7 @@ function CindraStudioScreen({ visible, onClose }) {
                               <MaterialCommunityIcons name={erro ? 'close' : 'check'} size={11} color={cor} />
                             )}
                           </View>
-                          <Text style={[studioStyles.logItemTexto, emAndamento && { color: COLORS.ink }, erro && { color: '#ff8a80' }]}>{item.texto}</Text>
+                          <Text selectable={erro} style={[studioStyles.logItemTexto, emAndamento && { color: COLORS.ink }, erro && { color: '#ff8a80' }]}>{item.texto}</Text>
                         </View>
                       );
                     })}
