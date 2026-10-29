@@ -11052,8 +11052,6 @@ function CindraStudioScreen({ visible, onClose }) {
 
   // APK apagado por fora (gerenciador de arquivos) some da aba Gerados.
   // Só mexe quando a pasta do app ainda existe e dá pra listar tudo.
-  const buildsRef = useRef([]);
-  buildsRef.current = builds;
   const podarApksApagados = async () => {
     const atual = buildsRef.current;
     if (!atual.some((b) => b.apkPublico)) return;
