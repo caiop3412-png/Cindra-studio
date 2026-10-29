@@ -1422,6 +1422,15 @@ function inserirNoNaArvore(nos, pastaCaminho, novo) {
   });
 }
 
+// Mantém a pasta em `caminho`, mas tira tudo que está dentro dela.
+function esvaziarNoDaArvore(nos, caminho) {
+  return nos.map((no) => {
+    if (no.tipo !== 'pasta') return no;
+    if (no.caminho === caminho) return { ...no, filhos: [] };
+    return { ...no, filhos: esvaziarNoDaArvore(no.filhos, caminho) };
+  });
+}
+
 function removerNoDaArvore(nos, caminho) {
   return nos
     .filter((no) => no.caminho !== caminho)
@@ -2310,6 +2319,28 @@ async function espelharProjetoNaPastaStudio(proj, nomeApp) {
     arquivos: Object.keys(conteudos).concat(binarios),
   });
   return true;
+}
+
+// true quando a pasta do app (cindra-studio/NomeApp) foi APAGADA por fora
+// (gerenciador de arquivos). Só vale pra projeto que já foi espelhado antes
+// e só quando dá pra listar a pasta pública (sem acesso → false, não apaga nada).
+async function pastaDoAppFoiApagadaStudio(pacote, nomeApp) {
+  try {
+    if (!ApkBuilder.temEspelhoNativo || !pacote) return false;
+    const pasta = nomePastaAppStudio(nomeApp, pacote);
+    const sync = await lerSyncStudio(pacote);
+    if (!sync.ultimaSync || sync.pasta !== pasta) return false;
+    if (!(await testarAcessoPastaPublicaStudio())) return false;
+    const lista = await ApkBuilder.listarPasta(PASTA_PUBLICA_TEXTO);
+    if (!Array.isArray(lista)) return false;
+    const prefixo = `${pasta}/`;
+    return !lista.some((it) => {
+      const rel = String(it.caminho || '').replace(/\\/g, '/').replace(/^\/+/, '');
+      return rel === pasta || rel.startsWith(prefixo);
+    });
+  } catch (e) {
+    return false;
+  }
 }
 
 // Compara a pasta "arquivos" com o projeto e devolve o que mudou por fora:
@@ -10628,6 +10659,22 @@ function CindraStudioScreen({ visible, onClose }) {
     if (!proj || !proj.pacote || sincronizandoRef.current) return null;
     sincronizandoRef.current = true;
     try {
+      if ((importar || importouRef.current !== proj.pacote) && await pastaDoAppFoiApagadaStudio(proj.pacote, nomeDoApp)) {
+        // A pasta do app foi apagada por fora → apaga o projeto no app também.
+        const pacoteApagado = proj.pacote;
+        const nomeApagado = nomePastaAppStudio(nomeDoApp, pacoteApagado);
+        excluirProjetoDaLista(pacoteApagado);
+        importouRef.current = '';
+        setSidebarAberta(false);
+        setPainelCompilacao(false);
+        setProjeto(null);
+        setAbasAbertas([]);
+        setArquivoAtivo(null);
+        setPastasAbertas({});
+        setEtapa('home');
+        exibirAviso('Projeto apagado', `A pasta cindra-studio/${nomeApagado} foi apagada, então o projeto também saiu do app`, 'sucesso');
+        return null;
+      }
       if (importar || importouRef.current !== proj.pacote) {
         const d = await lerAlteracoesDaPastaStudio(proj, nomeDoApp);
         importouRef.current = proj.pacote;
@@ -10669,6 +10716,37 @@ function CindraStudioScreen({ visible, onClose }) {
       } else {
         sincronizarPastaApp(false).catch(() => {});
       }
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Na tela inicial: projeto cuja pasta em cindra-studio foi apagada por
+  // fora também some do app.
+  const listaProjetosRef = useRef([]);
+  listaProjetosRef.current = listaProjetos;
+  const conferindoPastasRef = useRef(false);
+  const conferirPastasApagadas = async () => {
+    if (conferindoPastasRef.current || estadoRef.current) return;
+    conferindoPastasRef.current = true;
+    try {
+      for (const item of listaProjetosRef.current.slice()) {
+        if (estadoRef.current) break;
+        if (await pastaDoAppFoiApagadaStudio(item.pacote, item.nomeApp)) {
+          excluirProjetoDaLista(item.pacote);
+          exibirAviso('Projeto apagado', `A pasta cindra-studio/${nomePastaAppStudio(item.nomeApp, item.pacote)} foi apagada, então o projeto também saiu do app`, 'sucesso');
+        }
+      }
+    } catch (e) { /* tenta de novo na próxima vez */ }
+    conferindoPastasRef.current = false;
+  };
+  useEffect(() => {
+    if (!visible || etapa !== 'home' || !listaProjetos.length) return undefined;
+    const t = setTimeout(() => { conferirPastasApagadas(); }, 800);
+    return () => clearTimeout(t);
+  }, [visible, etapa, listaProjetos.length]);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (estadoApp) => {
+      if (estadoApp === 'active') setTimeout(() => { conferirPastasApagadas(); }, 900);
     });
     return () => sub.remove();
   }, []);
@@ -10862,6 +10940,7 @@ function CindraStudioScreen({ visible, onClose }) {
     FileSystem.deleteAsync(caminhoEstadoProjeto(pacote), { idempotent: true }).catch(() => {});
     FileSystem.deleteAsync(pastaProjetoStudio(pacote), { idempotent: true }).catch(() => {});
     FileSystem.deleteAsync(pastaBinariosStudio(pacote), { idempotent: true }).catch(() => {});
+    FileSystem.deleteAsync(`${PASTA_SYNC_STUDIO}${pacote}.json`, { idempotent: true }).catch(() => {});
     removerDaListaProjetosStudio(pacote).then(setListaProjetos).catch(() => {});
     registrarExclusaoNuvem(pacote).then(() => { lerNuvemStudio().then((n) => { nuvemRef.current = n; }); agendarSyncNuvem(1000); });
   };
@@ -11145,7 +11224,11 @@ function CindraStudioScreen({ visible, onClose }) {
 
   // Menu ⋮ do projeto → "Importar projeto (.zip)": mistura os arquivos do
   // .zip dentro do projeto aberto (mesmo caminho = substitui).
-  const importarZip = async () => {
+  // Com `opcoes.pasta` ("app", por ex.), troca o CONTEÚDO daquela pasta pelo
+  // do .zip: o que existia lá dentro é apagado (depois que o .zip foi lido
+  // com sucesso, então um .zip ruim não destrói nada).
+  const importarZip = async (opcoes) => {
+    const pastaAlvo = opcoes && typeof opcoes.pasta === 'string' ? opcoes.pasta : '';
     if (!projeto || progressoZip) return;
     const titulo = 'Importando .zip';
     ULTIMA_NOTIF_ZIP_STUDIO.pct = -1;
@@ -11171,6 +11254,14 @@ function CindraStudioScreen({ visible, onClose }) {
       const IGNORAR = new Set(['__MACOSX', '.git', '.gradle', '.idea', '.DS_Store', 'Thumbs.db']);
       itens = itens.filter((x) => !x.partes.some((p) => IGNORAR.has(p)) && !(x.partes.length > 1 && (x.partes[0] === 'build' || (x.partes[0] === 'app' && x.partes[1] === 'build'))));
       if (!itens.length) throw new Error('não achei arquivos de projeto dentro desse .zip');
+
+      if (pastaAlvo) {
+        const nomePasta = pastaAlvo.split('/').pop();
+        // .zip com a pasta dentro (ex.: app/src/...) → pega só ela; senão usa tudo.
+        const daPasta = itens.filter((x) => x.partes.length > 1 && x.partes[0] === nomePasta);
+        if (daPasta.length) itens = daPasta.map((x) => ({ e: x.e, partes: x.partes.slice(1) }));
+        itens = itens.map((x) => ({ e: x.e, partes: pastaAlvo.split('/').concat(x.partes) }));
+      }
 
       const novosTextos = {};
       const novosBins = {};
@@ -11205,10 +11296,26 @@ function CindraStudioScreen({ visible, onClose }) {
         if (!caminho.includes('/')) return arvore.concat({ nome: caminho, caminho, tipo: 'arquivo' });
         return garantirArquivoNaArvore(arvore, caminho);
       };
+      if (pastaAlvo) {
+        const prefixo = `${pastaAlvo}/`;
+        const velhos = Object.keys(projeto.conteudos).concat(Object.keys(projeto.binarios || {})).filter((c) => c.startsWith(prefixo));
+        velhos.forEach((c) => { delete historicoRef.current[c]; });
+        abasAbertas.filter((c) => c.startsWith(prefixo) && !novosTextos[c] && !novosBins[c]).forEach((c) => fecharAba(c));
+        // binários antigos que não foram sobrescritos saem do disco
+        for (const c of velhos) {
+          if ((projeto.binarios || {})[c] && !novosBins[c]) FileSystem.deleteAsync(pastaBinariosStudio(projeto.pacote) + c, { idempotent: true }).catch(() => {});
+        }
+      }
       setProjeto((atual) => {
         const conteudos = { ...atual.conteudos };
         const bin = { ...(atual.binarios || {}) };
         let arvore = atual.arvore;
+        if (pastaAlvo) {
+          const prefixo = `${pastaAlvo}/`;
+          Object.keys(conteudos).forEach((c) => { if (c.startsWith(prefixo)) delete conteudos[c]; });
+          Object.keys(bin).forEach((c) => { if (c.startsWith(prefixo)) delete bin[c]; });
+          arvore = esvaziarNoDaArvore(arvore, pastaAlvo);
+        }
         for (const c of Object.keys(novosTextos)) { conteudos[c] = novosTextos[c]; delete bin[c]; arvore = colocarNaArvore(arvore, c); }
         for (const c of Object.keys(novosBins)) { delete conteudos[c]; bin[c] = novosBins[c]; arvore = colocarNaArvore(arvore, c); }
         return { ...atual, arvore, conteudos, binarios: bin };
@@ -11216,7 +11323,7 @@ function CindraStudioScreen({ visible, onClose }) {
       reportarZip(titulo, 100, '', true);
       setTimeout(() => setProgressoZip(null), 900);
       const qtd = Object.keys(novosTextos).length + Object.keys(novosBins).length;
-      exibirAviso('Projeto importado', `${qtd} ${qtd === 1 ? 'arquivo entrou' : 'arquivos entraram'} no projeto`, 'sucesso');
+      exibirAviso(pastaAlvo ? `Pasta ${pastaAlvo.split('/').pop()} trocada` : 'Projeto importado', `${qtd} ${qtd === 1 ? 'arquivo entrou' : 'arquivos entraram'} no projeto`, 'sucesso');
       notificarProgressoZipStudio('Projeto importado', `${qtd} ${qtd === 1 ? 'arquivo entrou' : 'arquivos entraram'} no projeto`, true);
     } catch (e) {
       setProgressoZip(null);
@@ -11275,6 +11382,47 @@ function CindraStudioScreen({ visible, onClose }) {
       return { ...atual, arvore: removerNoDaArvore(atual.arvore, caminho), conteudos, binarios: bin };
     });
     exibirAviso('Arquivo excluído', caminho.split('/').pop(), 'sucesso');
+  };
+
+  // Exclui uma PASTA inteira (com tudo que tem dentro): árvore, conteúdo,
+  // binários no disco, abas abertas e histórico. A mudança vai pro espelho
+  // cindra-studio/NomeApp/arquivos na próxima sincronização.
+  const excluirPasta = (caminho) => {
+    setCardNo(null);
+    setConfirmandoExclusao(null);
+    if (!projeto) return;
+    const prefixo = `${caminho}/`;
+    const dentro = (c) => c === caminho || c.startsWith(prefixo);
+    if (Object.keys(projeto.binarios || {}).some(dentro)) {
+      FileSystem.deleteAsync(pastaBinariosStudio(projeto.pacote) + caminho, { idempotent: true }).catch(() => {});
+    }
+    abasAbertas.filter(dentro).forEach((c) => fecharAba(c));
+    if (arquivoAtivo && dentro(arquivoAtivo) && !abasAbertas.includes(arquivoAtivo)) setArquivoAtivo(null);
+    Object.keys(historicoRef.current).forEach((c) => { if (dentro(c)) delete historicoRef.current[c]; });
+    setProjeto((atual) => {
+      const conteudos = { ...atual.conteudos };
+      const bin = { ...(atual.binarios || {}) };
+      Object.keys(conteudos).forEach((c) => { if (dentro(c)) delete conteudos[c]; });
+      Object.keys(bin).forEach((c) => { if (dentro(c)) delete bin[c]; });
+      return { ...atual, arvore: removerNoDaArvore(atual.arvore, caminho), conteudos, binarios: bin };
+    });
+    exibirAviso('Pasta excluída', caminho, 'sucesso');
+  };
+
+  // Troca o conteúdo da pasta por outro, vindo de um .zip. Pede confirmação
+  // antes de apagar o que já está lá.
+  const trocarPastaPorZip = (caminho) => {
+    setCardNo(null);
+    setConfirmandoExclusao(null);
+    if (!projeto) return;
+    Alert.alert(
+      `Trocar a pasta ${caminho.split('/').pop()}?`,
+      `Tudo que está dentro de "${caminho}" será apagado e substituído pelo conteúdo do .zip que você escolher. Se o .zip não abrir, nada é apagado.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Escolher .zip', onPress: () => setTimeout(() => importarZip({ pasta: caminho }), 200) },
+      ]
+    );
   };
 
   // Galeria → editor próprio (cortar, zoom, girar, espelhar) → PNG até 512px.
@@ -14558,7 +14706,7 @@ function CindraStudioScreen({ visible, onClose }) {
                 <MaterialCommunityIcons name="folder-zip-outline" size={20} color={COLORS.dim} />
                 <Text style={studioStyles.folhaLinhaTexto}>Exportar projeto (.zip)</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={studioStyles.folhaLinha} onPress={() => { fechar(); setTimeout(importarZip, 250); }} activeOpacity={0.8}>
+              <TouchableOpacity style={studioStyles.folhaLinha} onPress={() => { fechar(); setTimeout(() => importarZip(), 250); }} activeOpacity={0.8}>
                 <MaterialCommunityIcons name="file-import-outline" size={20} color={COLORS.dim} />
                 <Text style={studioStyles.folhaLinhaTexto}>Importar projeto (.zip)</Text>
               </TouchableOpacity>
@@ -14769,6 +14917,34 @@ function CindraStudioScreen({ visible, onClose }) {
                         <Text style={studioStyles.nodoOpcaoDesc}>Uma pasta nova dentro de {cardNo.nome}</Text>
                       </View>
                       <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.dim} />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={studioStyles.nodoOpcao} onPress={() => trocarPastaPorZip(cardNo.caminho)} activeOpacity={0.8}>
+                      <View style={studioStyles.nodoOpcaoIcone}>
+                        <MaterialCommunityIcons name="folder-swap-outline" size={20} color={COLORS.ember} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={studioStyles.folhaLinhaTexto}>Trocar por outra pasta (.zip)</Text>
+                        <Text style={studioStyles.nodoOpcaoDesc}>Apaga o conteúdo de {cardNo.nome} e coloca o do .zip no lugar</Text>
+                      </View>
+                      <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.dim} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[studioStyles.nodoOpcao, confirmandoExclusao === cardNo.caminho && { backgroundColor: 'rgba(255,107,107,0.12)' }]}
+                      onPress={() => (confirmandoExclusao === cardNo.caminho
+                        ? excluirPasta(cardNo.caminho)
+                        : setConfirmandoExclusao(cardNo.caminho))}
+                      activeOpacity={0.8}
+                    >
+                      <View style={studioStyles.nodoOpcaoIcone}>
+                        <MaterialCommunityIcons
+                          name={confirmandoExclusao === cardNo.caminho ? 'alert-outline' : 'trash-can-outline'}
+                          size={20}
+                          color="#ff8a80"
+                        />
+                      </View>
+                      <Text style={[studioStyles.folhaLinhaTexto, { color: '#ff8a80' }]}>
+                        {confirmandoExclusao === cardNo.caminho ? 'Toque de novo: apaga a pasta e tudo dentro' : 'Excluir pasta'}
+                      </Text>
                     </TouchableOpacity>
                   </>
                 )}
