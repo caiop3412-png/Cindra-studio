@@ -4724,7 +4724,26 @@ function ContaNuvemModal({ visible, nome, status, ultima, totalProjetos, onFecha
   const bloco = useEscalonadoNuvem(visible, 4);
   const [confirmarSaida, setConfirmarSaida] = useState(false);
   const [, setRelogio] = useState(0);
+  const [uso, setUso] = useState(null); // { usado, limite } em bytes, vindo do servidor
   useEffect(() => { if (!visible) setConfirmarSaida(false); }, [visible]);
+  // Espaço da nuvem: pergunta ao servidor ao abrir, quando muda o nº de projetos e a cada 20 s.
+  useEffect(() => {
+    if (!visible) return undefined;
+    let vivo = true;
+    const buscar = async () => {
+      try {
+        const n = await lerNuvemStudio();
+        if (!n || !n.token) return;
+        const r = await nuvemFetch('/api/nuvem/uso', { token: n.token, timeoutMs: 10000 });
+        if (vivo && r.ok && r.dados && Number.isFinite(r.dados.usado) && Number.isFinite(r.dados.limite)) {
+          setUso({ usado: r.dados.usado, limite: r.dados.limite });
+        }
+      } catch (e) { /* mantém o último valor */ }
+    };
+    buscar();
+    const t = setInterval(buscar, 20000);
+    return () => { vivo = false; clearInterval(t); };
+  }, [visible, totalProjetos]);
   // atualiza o "há X s" enquanto a tela está aberta
   useEffect(() => {
     if (!visible) return undefined;
@@ -4744,8 +4763,24 @@ function ContaNuvemModal({ visible, nome, status, ultima, totalProjetos, onFecha
   const selo = status === 'sincronizando' || status === 'offline' || status === 'erro' ? status : 'ok';
   const n = totalProjetos || 0;
 
+  let linhaEspaco;
+  if (uso && uso.limite > 0) {
+    const p = Math.max(0, Math.min(100, (uso.usado / uso.limite) * 100));
+    const pTxt = p > 0 && p < 10 ? p.toFixed(1).replace('.', ',') : String(Math.round(p));
+    linhaEspaco = {
+      icone: 'database-outline',
+      cor: p >= 90 ? '#ff6b6b' : p >= 70 ? '#e0a41b' : '#2fcf7a',
+      titulo: `${formatarTamanhoStudio(uso.usado)} de ${formatarTamanhoStudio(uso.limite)} usados`,
+      sub: p >= 100 ? 'Nuvem cheia: apague projetos pra voltar a salvar' : `${pTxt}% usado · ${formatarTamanhoStudio(Math.max(0, uso.limite - uso.usado))} livres`,
+      barra: p / 100,
+    };
+  } else {
+    linhaEspaco = { icone: 'database-outline', cor: '#7d8499', titulo: 'Espaço na nuvem', sub: 'Calculando…' };
+  }
+
   const linhas = [
     { icone: info.icone, cor: info.cor, titulo: info.titulo, sub: info.sub },
+    linhaEspaco,
     { icone: 'folder-multiple-outline', cor: COLORS.emberDeep, titulo: `${n} ${n === 1 ? 'projeto' : 'projetos'} no aparelho`, sub: 'Todos são salvos na sua pasta na nuvem' },
     { icone: 'timer-sand', cor: COLORS.ember, titulo: 'Sincronização automática', sub: 'Confere o servidor a cada 5 segundos' },
   ];
@@ -4775,6 +4810,11 @@ function ContaNuvemModal({ visible, nome, status, ultima, totalProjetos, onFecha
                     <View style={{ flex: 1 }}>
                       <Text style={loginStyles.contaLinhaTitulo}>{l.titulo}</Text>
                       <Text style={loginStyles.contaLinhaSub}>{l.sub}</Text>
+                      {l.barra !== undefined && (
+                        <View style={{ height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.12)', marginTop: 8, overflow: 'hidden' }}>
+                          <View style={{ height: 6, borderRadius: 3, width: `${Math.max(2, Math.min(100, l.barra * 100))}%`, backgroundColor: l.cor }} />
+                        </View>
+                      )}
                     </View>
                   </View>
                 ))}
