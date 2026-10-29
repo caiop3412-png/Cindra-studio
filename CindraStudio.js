@@ -3673,7 +3673,7 @@ function NoArvoreArquivo({ no, pastasAbertas, alternarPasta, arquivoAtivo, onAbr
 // painel; depois dá pra instalar o APK gerado.
 // Link do card "Gostando do CindraStudio?". Deixe vazio pra mostrar só o
 // aviso "em breve" ao tocar; coloque a URL (site, Instagram, Pix...) pra abrir.
-const STUDIO_LINK_APOIO = '';
+const STUDIO_LINK_APOIO = 'https://whatsapp.com/channel/0029Vb8GnMiFHWq4Sovp7E2J';
 
 // Estilos da aba "Gerados" (apps compilados + histórico de APKs).
 const geradosStyles = StyleSheet.create({
@@ -13095,11 +13095,11 @@ function CindraStudioScreen({ visible, onClose }) {
                 </View>
                 <View style={studioStyles.apoioLinha}>
                   <View style={studioStyles.apoioIcone}>
-                    <MaterialCommunityIcons name="heart" size={26} color={COLORS.gold} />
+                    <MaterialCommunityIcons name="whatsapp" size={26} color="#25D366" />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={studioStyles.apoioTitulo} numberOfLines={1}>Curtiu o CindraStudio?</Text>
-                    <Text style={studioStyles.apoioSub} numberOfLines={2}>Ajude a Cindra a crescer com o seu apoio.</Text>
+                    <Text style={studioStyles.apoioSub} numberOfLines={2}>Siga o canal no WhatsApp e fique por dentro das novidades.</Text>
                   </View>
                   <MaterialCommunityIcons name="chevron-right" size={24} color={COLORS.dim} />
                 </View>
