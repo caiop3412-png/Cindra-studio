@@ -2712,6 +2712,65 @@ function formatarDataBuildStudio(ms) {
   return `${dois(d.getDate())}/${dois(d.getMonth() + 1)}/${d.getFullYear()} às ${dois(d.getHours())}:${dois(d.getMinutes())}`;
 }
 
+// Aba Gerados: ordenação, filtros e busca.
+const ROTULOS_ORDEM_GERADOS = {
+  recentes: 'Mais recentes',
+  antigos: 'Mais antigos',
+  nome: 'Nome (A-Z)',
+  tamanho: 'Maior tamanho',
+};
+const ICONES_ORDEM_GERADOS = {
+  recentes: 'clock-outline',
+  antigos: 'history',
+  nome: 'sort-alphabetical-ascending',
+  tamanho: 'database-outline',
+};
+const FILTROS_GERADOS = [
+  { id: 'todos', rotulo: 'Todos', icone: 'view-grid-outline' },
+  { id: 'favoritos', rotulo: 'Favoritos', icone: 'star-outline' },
+  { id: 'release', rotulo: 'Release', icone: 'shield-check-outline' },
+  { id: 'debug', rotulo: 'Debug', icone: 'bug-outline' },
+  { id: 'pasta', rotulo: 'Na pasta', icone: 'folder-outline' },
+];
+
+function buildPassaFiltroGeradosStudio(b, filtro) {
+  if (filtro === 'favoritos') return !!b.favorito;
+  if (filtro === 'release') return b.tipo === 'release';
+  if (filtro === 'debug') return b.tipo !== 'release';
+  if (filtro === 'pasta') return !!b.apkPublico;
+  return true;
+}
+
+function buildPassaBuscaGeradosStudio(b, termo) {
+  if (!termo) return true;
+  const alvo = semAcentoStudio(
+    `${b.nomeApp || ''} ${b.pacote || ''} ${b.versaoNome || ''} ${b.tipo || ''} ${b.nota || ''}`
+  );
+  return alvo.indexOf(termo) !== -1;
+}
+
+// Ordena os grupos (apps) e os APKs dentro de cada um conforme o modo.
+function ordenarGruposGeradosStudio(grupos, modo) {
+  const porTamanho = (a, b) => (Number(b.tamanho) || 0) - (Number(a.tamanho) || 0);
+  const lista = grupos.map((g) => {
+    let itens = g.itens.slice();
+    if (modo === 'antigos') itens.sort((a, b) => a.criadoEm - b.criadoEm);
+    else if (modo === 'tamanho') itens.sort(porTamanho);
+    else itens.sort((a, b) => b.criadoEm - a.criadoEm);
+    return { ...g, itens };
+  });
+  const total = (g) => g.itens.reduce((n, x) => n + (Number(x.tamanho) || 0), 0);
+  lista.sort((a, b) => {
+    if (modo === 'antigos') return a.ultimo.criadoEm - b.ultimo.criadoEm;
+    if (modo === 'nome') {
+      return String(a.ultimo.nomeApp || '').localeCompare(String(b.ultimo.nomeApp || ''), 'pt-BR', { sensitivity: 'base' });
+    }
+    if (modo === 'tamanho') return total(b) - total(a);
+    return b.ultimo.criadoEm - a.ultimo.criadoEm;
+  });
+  return lista;
+}
+
 async function lerEstadoStudio(pacote) {
   try {
     const caminho = caminhoEstadoProjeto(pacote);
@@ -4087,6 +4146,92 @@ const geradosStyles = StyleSheet.create({
     backgroundColor: COLORS.ember,
   },
   barraApagarTexto: { color: '#ffffff', fontSize: 12, fontWeight: '800' },
+  // aba Gerados: painel de números, filtros, detalhes
+  statsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(180,60,255,0.10)',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(180,60,255,0.28)',
+    paddingVertical: 12,
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  statsItem: { flex: 1, alignItems: 'center' },
+  statsNumero: { color: COLORS.ink, fontSize: 18, fontWeight: '800' },
+  statsRotulo: { color: COLORS.dim, fontSize: 10.5, fontWeight: '600', marginTop: 1 },
+  statsDivisor: { width: 1, height: 26, backgroundColor: COLORS.line },
+  avisoSumiu: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,122,217,0.10)',
+    borderRadius: 14,
+    paddingLeft: 12,
+    paddingRight: 8,
+    paddingVertical: 8,
+    marginBottom: 10,
+  },
+  avisoSumiuTexto: { flex: 1, color: COLORS.ink, fontSize: 11.5, fontWeight: '600' },
+  avisoSumiuBtn: { paddingHorizontal: 12, height: 30, borderRadius: 10, backgroundColor: COLORS.ember, alignItems: 'center', justifyContent: 'center' },
+  avisoSumiuBtnTexto: { color: '#ffffff', fontSize: 11.5, fontWeight: '800' },
+  filtrosScroll: { marginHorizontal: -14, marginBottom: 10, flexGrow: 0 },
+  filtrosLinha: { paddingHorizontal: 14, gap: 8 },
+  filtro: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  filtroAtivo: { backgroundColor: 'rgba(180,60,255,0.20)', borderColor: 'rgba(180,60,255,0.55)' },
+  filtroTexto: { color: COLORS.dim, fontSize: 11.5, fontWeight: '600' },
+  filtroTextoAtivo: { color: COLORS.ink, fontWeight: '700' },
+  filtroQtd: { color: COLORS.dim, fontSize: 10.5, fontWeight: '800' },
+  semResultado: { alignItems: 'center', paddingVertical: 40, paddingHorizontal: 20 },
+  semResultadoTitulo: { color: COLORS.ink, fontSize: 15, fontWeight: '800', marginTop: 10 },
+  semResultadoTexto: { color: COLORS.dim, fontSize: 12, textAlign: 'center', marginTop: 4 },
+  semResultadoBtn: { marginTop: 14, paddingHorizontal: 16, height: 38, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.09)', alignItems: 'center', justifyContent: 'center' },
+  semResultadoBtnTexto: { color: COLORS.ink, fontSize: 12, fontWeight: '700' },
+  buildSumiu: { color: COLORS.error, fontSize: 9.5, fontWeight: '800', letterSpacing: 0.4, marginTop: 2 },
+  buildNota: { color: '#d9a2ff', fontSize: 10.5, fontStyle: 'italic', marginTop: 2 },
+  grupoRodape: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', columnGap: 16, rowGap: 2 },
+  rodapeBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8 },
+  rodapeBtnTexto: { fontSize: 10.5, fontWeight: '700' },
+  barraBtnIcone: { paddingHorizontal: 0, width: 42, justifyContent: 'center' },
+  detTopo: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
+  detEstrela: { width: 42, height: 42, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.07)', alignItems: 'center', justifyContent: 'center' },
+  infoCard: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 4, marginBottom: 14 },
+  infoLinha: { flexDirection: 'row', justifyContent: 'space-between', gap: 14, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: COLORS.lineSoft },
+  infoRotulo: { color: COLORS.dim, fontSize: 12, fontWeight: '600' },
+  infoValor: { flex: 1, color: COLORS.ink, fontSize: 12, fontWeight: '600', textAlign: 'right' },
+  detRotuloCampo: { color: COLORS.dim, fontSize: 10.5, fontWeight: '800', letterSpacing: 0.8, marginBottom: 6, marginLeft: 4 },
+  notaInput: {
+    height: 46,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    color: COLORS.ink,
+    fontSize: 13,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    marginBottom: 14,
+  },
+  acoesGrade: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingBottom: 4 },
+  acaoGrade: {
+    width: '48.5%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 48,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  acaoGradeTexto: { color: COLORS.ink, fontSize: 12.5, fontWeight: '700' },
   // aba Publicar
   pubInfo: { color: COLORS.dim, fontSize: 10.5, marginTop: 3 },
   pubLinkLinha: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 5 },
@@ -10615,6 +10760,16 @@ function CindraStudioScreen({ visible, onClose }) {
   const [modoSelecaoBuilds, setModoSelecaoBuilds] = useState(false); // seleção múltipla na aba Gerados
   const [selecionadosBuilds, setSelecionadosBuilds] = useState({}); // { [idBuild]: true }
   const [confirmarApagarLote, setConfirmarApagarLote] = useState(false);
+  const [buscaGerados, setBuscaGerados] = useState(''); // busca na aba Gerados
+  const [buscaGeradosAberta, setBuscaGeradosAberta] = useState(false);
+  const [filtroGerados, setFiltroGerados] = useState('todos'); // 'todos' | 'favoritos' | 'release' | 'debug' | 'pasta'
+  const [ordenacaoGerados, setOrdenacaoGerados] = useState('recentes'); // 'recentes' | 'antigos' | 'nome' | 'tamanho'
+  const [menuOrdenarGeradosAberto, setMenuOrdenarGeradosAberto] = useState(false);
+  const [detalheBuildId, setDetalheBuildId] = useState(null); // folha "Detalhes do APK"
+  const [notaDetalhe, setNotaDetalhe] = useState('');
+  const [arquivosOk, setArquivosOk] = useState({}); // { [idBuild]: false } quando o APK sumiu do celular
+  const [confirmarLimparGrupo, setConfirmarLimparGrupo] = useState(null); // pacote com "limpar antigos?" armado
+  const [copiandoBuildId, setCopiandoBuildId] = useState(null); // APK sendo copiado pra cindra-studio
   const [copiandoPublica, setCopiandoPublica] = useState(false); // copiando APKs pra /storage/emulated/0/cindra-studio
   const avisoPastaPublicaRef = useRef(false); // avisa da permissão só 1 vez por sessão
   const [pedirAcessoArquivos, setPedirAcessoArquivos] = useState(false); // folha "Liberar acesso aos arquivos" ao abrir o app
@@ -10779,6 +10934,7 @@ function CindraStudioScreen({ visible, onClose }) {
       if (prefs.modoLista === 'grade' || prefs.modoLista === 'lista') setModoLista(prefs.modoLista);
       if (Object.prototype.hasOwnProperty.call(ROTULOS_ORDEM_STUDIO, prefs.ordenacao)) setOrdenacao(prefs.ordenacao);
       if (typeof prefs.favoritosNoTopo === 'boolean') setFavoritosNoTopo(prefs.favoritosNoTopo);
+      if (Object.prototype.hasOwnProperty.call(ROTULOS_ORDEM_GERADOS, prefs.ordenacaoGerados)) setOrdenacaoGerados(prefs.ordenacaoGerados);
       if (prefs.keystore && prefs.keystore.caminho) {
         // só reaproveita se a cópia do keystore ainda existe no aparelho
         FileSystem.getInfoAsync(prefs.keystore.caminho).then((info) => {
@@ -11049,6 +11205,34 @@ function CindraStudioScreen({ visible, onClose }) {
       importandoPastasRef.current = false;
     }
   };
+
+  // Aba Gerados aberta: confere quais APKs ainda existem no celular (marca os
+  // que sumiram) e completa o tamanho dos registros antigos que não tinham.
+  useEffect(() => {
+    if (abaHome !== 'gerados' || !builds.length) return undefined;
+    let vivo = true;
+    (async () => {
+      const ok = {};
+      const tamanhos = {};
+      for (const b of builds) {
+        try {
+          const i = await FileSystem.getInfoAsync(b.apk);
+          ok[b.id] = !!(i && i.exists);
+          if (i && i.exists && !b.tamanho && i.size) tamanhos[b.id] = i.size;
+        } catch (e) { ok[b.id] = true; }
+      }
+      if (!vivo) return;
+      setArquivosOk(ok);
+      if (Object.keys(tamanhos).length) {
+        setBuilds((atual) => {
+          const nova = atual.map((x) => (tamanhos[x.id] ? { ...x, tamanho: tamanhos[x.id] } : x));
+          gravarBuildsStudio(nova).catch(() => {});
+          return nova;
+        });
+      }
+    })();
+    return () => { vivo = false; };
+  }, [abaHome, builds.length]);
 
   // APK apagado por fora (gerenciador de arquivos) some da aba Gerados.
   // Só mexe quando a pasta do app ainda existe e dá pra listar tudo.
@@ -12336,6 +12520,126 @@ function CindraStudioScreen({ visible, onClose }) {
     }
   };
 
+  // Salva uma alteração em um APK (favorito, nota...) no histórico.
+  const atualizarBuild = (id, mudancas) => {
+    setBuilds((atual) => {
+      const nova = atual.map((x) => (x.id === id ? { ...x, ...mudancas } : x));
+      gravarBuildsStudio(nova).catch(() => {});
+      return nova;
+    });
+  };
+  const alternarFavoritoBuild = (b) => atualizarBuild(b.id, { favorito: !b.favorito });
+  const salvarNotaBuild = (id, texto) => {
+    const limpa = String(texto || '').trim().slice(0, 140);
+    const atual = builds.find((x) => x.id === id);
+    if (!atual || (atual.nota || '') === limpa) return;
+    atualizarBuild(id, { nota: limpa || undefined });
+  };
+  const abrirDetalheBuild = (b) => {
+    setConfirmarApagarBuild(null);
+    setNotaDetalhe(b.nota || '');
+    setDetalheBuildId(b.id);
+  };
+  const fecharDetalheBuild = () => {
+    if (detalheBuildId) salvarNotaBuild(detalheBuildId, notaDetalhe);
+    setDetalheBuildId(null);
+  };
+  const escolherOrdenacaoGerados = (id) => { setOrdenacaoGerados(id); salvarPref('ordenacaoGerados', id); };
+  const fecharBuscaGerados = () => { setBuscaGerados(''); setBuscaGeradosAberta(false); };
+  const limparFiltrosGerados = () => { setBuscaGerados(''); setBuscaGeradosAberta(false); setFiltroGerados('todos'); };
+
+  // Os APKs que aparecem agora (filtro + busca).
+  const buildsVisiveisGerados = () => {
+    const termo = semAcentoStudio(buscaGerados.trim());
+    return builds.filter((b) => buildPassaFiltroGeradosStudio(b, filtroGerados) && buildPassaBuscaGeradosStudio(b, termo));
+  };
+
+  // Copia um APK pra /storage/emulated/0/cindra-studio (se ainda não estiver lá).
+  const copiarBuildParaPublica = async (b) => {
+    if (copiandoBuildId) return;
+    if (arquivosOk[b.id] === false) {
+      exibirAviso('APK não encontrado', 'Esse arquivo foi apagado do celular. Compile de novo pra gerar outro.', 'aviso');
+      return;
+    }
+    setCopiandoBuildId(b.id);
+    try {
+      const r = await copiarParaPastaPublicaStudio(b);
+      if (r.ok) {
+        atualizarBuild(b.id, { apkPublico: r.destino });
+        exibirAviso('Copiado', `APK em ${PASTA_PUBLICA_TEXTO}`, 'sucesso');
+      } else {
+        exibirAviso('Sem permissão pra criar a pasta', 'Ative "Acesso a todos os arquivos" pro Cindra na tela que vai abrir e tente de novo.', 'aviso');
+        abrirConfigAcessoArquivos();
+      }
+    } finally {
+      setCopiandoBuildId(null);
+    }
+  };
+
+  const copiarCaminhoBuild = async (b) => {
+    const r = await copiarTextoStudio(String(b.apkPublico || b.apk).replace(/^file:\/\//, ''));
+    if (r === 'copiado') exibirAviso('Caminho copiado', 'Colei na área de transferência.', 'sucesso');
+  };
+
+  // Manda os APKs marcados pra cindra-studio.
+  const copiarSelecionadosParaPublica = async () => {
+    if (copiandoPublica) return;
+    const alvo = builds.filter((b) => selecionadosBuilds[b.id] && !b.apkPublico && arquivosOk[b.id] !== false);
+    if (!alvo.length) {
+      exibirAviso('Tudo certo', `Os APKs marcados já estão em ${PASTA_PUBLICA_TEXTO}`, 'sucesso');
+      return;
+    }
+    setCopiandoPublica(true);
+    try {
+      const r = await copiarPendentesPastaPublicaStudio(alvo);
+      if (r.copiados > 0) {
+        const mapa = {};
+        r.lista.forEach((x) => { mapa[x.id] = x.apkPublico; });
+        setBuilds((atual) => {
+          const nova = atual.map((x) => (mapa[x.id] && !x.apkPublico ? { ...x, apkPublico: mapa[x.id] } : x));
+          gravarBuildsStudio(nova).catch(() => {});
+          return nova;
+        });
+        exibirAviso('Copiado', `${r.copiados} ${r.copiados === 1 ? 'APK' : 'APKs'} em ${PASTA_PUBLICA_TEXTO}`, 'sucesso');
+      } else if (r.falhou) {
+        exibirAviso('Sem permissão pra criar a pasta', 'Ative "Acesso a todos os arquivos" pro Cindra na tela que vai abrir e tente de novo.', 'aviso');
+        abrirConfigAcessoArquivos();
+      }
+    } finally {
+      setCopiandoPublica(false);
+    }
+  };
+
+  // Compartilha o APK marcado (o Android só compartilha um arquivo por vez aqui).
+  const compartilharSelecionadoBuild = () => {
+    const ids = Object.keys(selecionadosBuilds);
+    if (ids.length !== 1) return;
+    const b = builds.find((x) => x.id === ids[0]);
+    if (b) compartilharApk(b.apk, b.nomeApp);
+  };
+
+  // Apaga os APKs antigos de um app. Fica o mais recente e os favoritos.
+  const tocarLimparAntigosGrupo = (g) => {
+    const todos = builds.filter((x) => x.pacote === g.pacote).sort((a, b) => b.criadoEm - a.criadoEm);
+    const apagar = todos.slice(1).filter((x) => !x.favorito);
+    if (!apagar.length) return;
+    if (confirmarLimparGrupo === g.pacote) {
+      setConfirmarLimparGrupo(null);
+      apagarBuilds(apagar.map((x) => x.id));
+      exibirAviso('Limpeza feita', `${apagar.length} ${apagar.length === 1 ? 'APK antigo apagado' : 'APKs antigos apagados'}. O mais recente e os favoritos ficaram.`, 'sucesso');
+      return;
+    }
+    setConfirmarLimparGrupo(g.pacote);
+  };
+
+  // Tira do histórico os registros cujo arquivo sumiu do celular.
+  const removerRegistrosSemArquivo = () => {
+    const ids = builds.filter((b) => arquivosOk[b.id] === false).map((b) => b.id);
+    if (!ids.length) return;
+    apagarBuilds(ids);
+    exibirAviso('Histórico limpo', `${ids.length} ${ids.length === 1 ? 'registro sem arquivo removido' : 'registros sem arquivo removidos'}.`, 'sucesso');
+  };
+
   const apagarBuilds = async (ids) => {
     const alvo = builds.filter((b) => ids.includes(b.id));
     alvo.forEach((b) => {
@@ -12346,6 +12650,7 @@ function CindraStudioScreen({ visible, onClose }) {
     const nova = builds.filter((b) => !ids.includes(b.id));
     setBuilds(nova);
     setConfirmarApagarBuild(null);
+    if (detalheBuildId && ids.includes(detalheBuildId)) setDetalheBuildId(null);
     gravarBuildsStudio(nova).catch(() => {});
   };
 
@@ -12377,10 +12682,11 @@ function CindraStudioScreen({ visible, onClose }) {
   };
   const selecionarTodosBuilds = () => {
     setConfirmarApagarLote(false);
+    const visiveis = buildsVisiveisGerados();
     setSelecionadosBuilds((a) => {
-      if (builds.length > 0 && Object.keys(a).length === builds.length) return {};
+      if (visiveis.length > 0 && visiveis.every((b) => a[b.id])) return {};
       const n = {};
-      builds.forEach((b) => { n[b.id] = true; });
+      visiveis.forEach((b) => { n[b.id] = true; });
       return n;
     });
   };
@@ -13316,6 +13622,8 @@ function CindraStudioScreen({ visible, onClose }) {
     if (confirmarSaida) { setConfirmarSaida(false); return; }
     if (cardProjeto) { setCardProjeto(null); return; }
     if (menuOrdenarAberto) { setMenuOrdenarAberto(false); return; }
+    if (detalheBuildId) { fecharDetalheBuild(); return; }
+    if (menuOrdenarGeradosAberto) { setMenuOrdenarGeradosAberto(false); return; }
     if (cardNo) { setCardNo(null); setPastaEmCriacao(false); setNomeNovaPasta(''); return; }
     if (permissoesAberto) { setPermissoesAberto(false); setBuscaPermissao(''); return; }
     if (snippetsAberto) { setSnippetsAberto(false); setFiltroSnippet(''); return; }
@@ -13328,6 +13636,7 @@ function CindraStudioScreen({ visible, onClose }) {
     if (buscaAberta) { fecharBusca(); return; }
     if (abaHome === 'gerados') {
       if (modoSelecaoBuilds) { sairSelecaoBuilds(); return; }
+      if (buscaGeradosAberta) { fecharBuscaGerados(); return; }
       setAbaHome('apps');
       return;
     }
@@ -13687,50 +13996,98 @@ function CindraStudioScreen({ visible, onClose }) {
   };
 
   // Aba "Gerados": um cartão por app compilado; a setinha abre todos os
-  // APKs já gerados dele (ícone, versão, tipo, data e tamanho). Dá pra
-  // apagar um a um (lixeira), todos de um app, ou vários de uma vez no modo
-  // de seleção (botão do topo ou segurando o dedo num APK).
+  // APKs já gerados dele (ícone, versão, tipo, data e tamanho). Tem busca,
+  // filtros (favoritos, release, debug, na pasta), ordenação, favoritos,
+  // nota em cada APK e uma folha de detalhes (toque no APK). Dá pra apagar
+  // um a um, todos de um app, limpar os antigos, ou vários de uma vez no
+  // modo de seleção (botão do topo ou segurando o dedo num APK).
   const renderAbaGerados = () => {
-    const grupos = agruparBuildsStudio(builds);
+    const visiveis = buildsVisiveisGerados();
+    const grupos = ordenarGruposGeradosStudio(agruparBuildsStudio(visiveis), ordenacaoGerados);
+    const todosGrupos = agruparBuildsStudio(builds);
     const qtdSel = Object.keys(selecionadosBuilds).length;
+    const filtrando = filtroGerados !== 'todos' || !!buscaGerados.trim();
+    const bytesTotal = builds.reduce((n, b) => n + (Number(b.tamanho) || 0), 0);
+    const qtdSemArquivo = builds.filter((b) => arquivosOk[b.id] === false).length;
+    const contagem = {
+      todos: builds.length,
+      favoritos: builds.filter((b) => b.favorito).length,
+      release: builds.filter((b) => b.tipo === 'release').length,
+      debug: builds.filter((b) => b.tipo !== 'release').length,
+      pasta: builds.filter((b) => b.apkPublico).length,
+    };
+    const todosVisiveisMarcados = visiveis.length > 0 && visiveis.every((b) => selecionadosBuilds[b.id]);
+    const selUnico = qtdSel === 1 ? builds.find((b) => selecionadosBuilds[b.id]) : null;
     return (
       <>
         <View style={studioStyles.homeHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={studioStyles.homeOverline}>CINDRA-STUDIO</Text>
-            <Text style={studioStyles.homeTitulo} numberOfLines={1}>
-              {modoSelecaoBuilds ? (qtdSel ? `${qtdSel} selecionado${qtdSel > 1 ? 's' : ''}` : 'Selecionar APKs') : 'Apps gerados'}
-            </Text>
-            {grupos.length > 0 && !modoSelecaoBuilds && (
-              <Text style={geradosStyles.resumo}>
-                {grupos.length} {grupos.length === 1 ? 'app' : 'apps'} · {builds.length} {builds.length === 1 ? 'APK' : 'APKs'}
-              </Text>
-            )}
-          </View>
-          {grupos.length > 0 && !modoSelecaoBuilds && (
-            <TouchableOpacity style={studioStyles.homeIconBtn} onPress={copiarTodosParaPublica} activeOpacity={0.8}>
-              {copiandoPublica ? (
-                <ActivityIndicator size="small" color={COLORS.ink} />
-              ) : (
-                <MaterialCommunityIcons name="folder-download-outline" size={22} color={COLORS.ink} />
-              )}
-            </TouchableOpacity>
-          )}
-          {grupos.length > 0 && (
-            <TouchableOpacity
-              style={studioStyles.homeIconBtn}
-              onPress={() => (modoSelecaoBuilds ? sairSelecaoBuilds() : iniciarSelecaoBuilds(null))}
-              activeOpacity={0.8}
-            >
-              <MaterialCommunityIcons
-                name={modoSelecaoBuilds ? 'close' : 'checkbox-multiple-marked-outline'}
-                size={22}
-                color={COLORS.ink}
+          {buscaGeradosAberta && !modoSelecaoBuilds ? (
+            <View style={studioStyles.homeBuscaPilula}>
+              <MaterialCommunityIcons name="magnify" size={20} color={COLORS.dim} />
+              <TextInput
+                style={studioStyles.buscaInput}
+                value={buscaGerados}
+                onChangeText={setBuscaGerados}
+                placeholder="Buscar app, pacote, versão ou nota..."
+                placeholderTextColor={COLORS.dim}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoFocus
               />
-            </TouchableOpacity>
+              <TouchableOpacity onPress={fecharBuscaGerados} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <MaterialCommunityIcons name="close" size={20} color={COLORS.ink} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <View style={{ flex: 1 }}>
+                <Text style={studioStyles.homeOverline}>CINDRA-STUDIO</Text>
+                <Text style={studioStyles.homeTitulo} numberOfLines={1}>
+                  {modoSelecaoBuilds ? (qtdSel ? `${qtdSel} selecionado${qtdSel > 1 ? 's' : ''}` : 'Selecionar APKs') : 'Apps gerados'}
+                </Text>
+                {builds.length > 0 && !modoSelecaoBuilds && (
+                  <Text style={geradosStyles.resumo}>
+                    {filtrando
+                      ? `${visiveis.length} de ${builds.length} ${builds.length === 1 ? 'APK' : 'APKs'}`
+                      : `${todosGrupos.length} ${todosGrupos.length === 1 ? 'app' : 'apps'} · ${builds.length} ${builds.length === 1 ? 'APK' : 'APKs'}`}
+                  </Text>
+                )}
+              </View>
+              {builds.length > 0 && !modoSelecaoBuilds && (
+                <>
+                  <TouchableOpacity style={studioStyles.homeIconBtn} onPress={() => setBuscaGeradosAberta(true)} activeOpacity={0.8}>
+                    <MaterialCommunityIcons name="magnify" size={22} color={COLORS.ink} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={studioStyles.homeIconBtn} onPress={() => setMenuOrdenarGeradosAberto(true)} activeOpacity={0.8}>
+                    <MaterialCommunityIcons name="sort-variant" size={22} color={ordenacaoGerados !== 'recentes' ? COLORS.ember : COLORS.ink} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={studioStyles.homeIconBtn} onPress={copiarTodosParaPublica} activeOpacity={0.8}>
+                    {copiandoPublica ? (
+                      <ActivityIndicator size="small" color={COLORS.ink} />
+                    ) : (
+                      <MaterialCommunityIcons name="folder-download-outline" size={22} color={COLORS.ink} />
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+              {builds.length > 0 && (
+                <TouchableOpacity
+                  style={studioStyles.homeIconBtn}
+                  onPress={() => (modoSelecaoBuilds ? sairSelecaoBuilds() : iniciarSelecaoBuilds(null))}
+                  activeOpacity={0.8}
+                >
+                  <MaterialCommunityIcons
+                    name={modoSelecaoBuilds ? 'close' : 'checkbox-multiple-marked-outline'}
+                    size={22}
+                    color={COLORS.ink}
+                  />
+                </TouchableOpacity>
+              )}
+            </>
           )}
         </View>
-        {grupos.length === 0 ? (
+
+        {builds.length === 0 ? (
           <View style={geradosStyles.vazio}>
             <View style={geradosStyles.vazioIcone}>
               <MaterialCommunityIcons name="package-variant-closed" size={36} color={COLORS.ember} />
@@ -13741,12 +14098,87 @@ function CindraStudioScreen({ visible, onClose }) {
             </Text>
           </View>
         ) : (
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={geradosStyles.lista} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={geradosStyles.lista}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {!modoSelecaoBuilds && (
+              <>
+                <View style={geradosStyles.statsCard}>
+                  <View style={geradosStyles.statsItem}>
+                    <Text style={geradosStyles.statsNumero}>{todosGrupos.length}</Text>
+                    <Text style={geradosStyles.statsRotulo}>{todosGrupos.length === 1 ? 'app' : 'apps'}</Text>
+                  </View>
+                  <View style={geradosStyles.statsDivisor} />
+                  <View style={geradosStyles.statsItem}>
+                    <Text style={geradosStyles.statsNumero}>{builds.length}</Text>
+                    <Text style={geradosStyles.statsRotulo}>{builds.length === 1 ? 'APK' : 'APKs'}</Text>
+                  </View>
+                  <View style={geradosStyles.statsDivisor} />
+                  <View style={geradosStyles.statsItem}>
+                    <Text style={geradosStyles.statsNumero}>{bytesTotal ? formatarTamanhoStudio(bytesTotal) : '—'}</Text>
+                    <Text style={geradosStyles.statsRotulo}>ocupados</Text>
+                  </View>
+                </View>
+
+                {qtdSemArquivo > 0 && (
+                  <View style={geradosStyles.avisoSumiu}>
+                    <MaterialCommunityIcons name="alert-circle-outline" size={18} color={COLORS.gold} />
+                    <Text style={geradosStyles.avisoSumiuTexto} numberOfLines={2}>
+                      {qtdSemArquivo} {qtdSemArquivo === 1 ? 'APK não está mais' : 'APKs não estão mais'} no celular
+                    </Text>
+                    <TouchableOpacity style={geradosStyles.avisoSumiuBtn} onPress={removerRegistrosSemArquivo} activeOpacity={0.85}>
+                      <Text style={geradosStyles.avisoSumiuBtnTexto}>Remover</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={geradosStyles.filtrosScroll} contentContainerStyle={geradosStyles.filtrosLinha}>
+                  {FILTROS_GERADOS.map((f) => {
+                    const ativo = filtroGerados === f.id;
+                    return (
+                      <TouchableOpacity
+                        key={f.id}
+                        style={[geradosStyles.filtro, ativo && geradosStyles.filtroAtivo]}
+                        onPress={() => setFiltroGerados(f.id)}
+                        activeOpacity={0.85}
+                      >
+                        <MaterialCommunityIcons name={f.icone} size={15} color={ativo ? '#d9a2ff' : COLORS.dim} />
+                        <Text style={[geradosStyles.filtroTexto, ativo && geradosStyles.filtroTextoAtivo]}>{f.rotulo}</Text>
+                        <Text style={[geradosStyles.filtroQtd, ativo && { color: '#d9a2ff' }]}>{contagem[f.id]}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </>
+            )}
+
+            {grupos.length === 0 && (
+              <View style={geradosStyles.semResultado}>
+                <MaterialCommunityIcons name="text-search" size={34} color={COLORS.dim} />
+                <Text style={geradosStyles.semResultadoTitulo}>Nada encontrado</Text>
+                <Text style={geradosStyles.semResultadoTexto}>
+                  Nenhum APK bate com {buscaGerados.trim() ? `"${buscaGerados.trim()}"` : 'esse filtro'}.
+                </Text>
+                <TouchableOpacity style={geradosStyles.semResultadoBtn} onPress={limparFiltrosGerados} activeOpacity={0.85}>
+                  <Text style={geradosStyles.semResultadoBtnTexto}>Limpar busca e filtros</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {grupos.map((g, i) => {
-              const aberto = modoSelecaoBuilds || !!gruposAbertos[g.pacote];
+              const aberto = modoSelecaoBuilds || !!gruposAbertos[g.pacote] || filtrando;
               const qtdGrupoSel = g.itens.filter((b) => selecionadosBuilds[b.id]).length;
               const grupoTodoSel = qtdGrupoSel === g.itens.length;
               const grupoArmado = confirmarApagarGrupo === g.pacote;
+              const grupoLimparArmado = confirmarLimparGrupo === g.pacote;
+              const completo = builds.filter((x) => x.pacote === g.pacote).sort((a, b) => b.criadoEm - a.criadoEm);
+              const qtdAntigos = completo.slice(1).filter((x) => !x.favorito).length;
+              const temFavorito = g.itens.some((b) => b.favorito);
+              const bytesGrupo = g.itens.reduce((n, x) => n + (Number(x.tamanho) || 0), 0);
+              const projetoExiste = listaProjetos.some((p) => p.pacote === g.pacote);
               return (
                 <ItemAnimadoStudio key={g.pacote} indice={i}>
                   <View style={geradosStyles.grupo}>
@@ -13764,19 +14196,25 @@ function CindraStudioScreen({ visible, onClose }) {
                           });
                         } else {
                           setConfirmarApagarGrupo(null);
+                          setConfirmarLimparGrupo(null);
                           setGruposAbertos((a) => ({ ...a, [g.pacote]: !a[g.pacote] }));
                         }
                       }}
                     >
                       <IconeAppStudio dados={g.icone} lado={42} icone={22} raio={12} />
                       <View style={{ flex: 1 }}>
-                        <Text style={geradosStyles.grupoNome} numberOfLines={1}>{g.ultimo.nomeApp}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                          <Text style={[geradosStyles.grupoNome, { flexShrink: 1 }]} numberOfLines={1}>{g.ultimo.nomeApp}</Text>
+                          {temFavorito && <MaterialCommunityIcons name="star" size={13} color={COLORS.gold} />}
+                        </View>
                         <Text style={geradosStyles.grupoPacote} numberOfLines={1}>{g.pacote}</Text>
                         <View style={geradosStyles.grupoMeta}>
                           <View style={geradosStyles.grupoBadge}>
                             <Text style={geradosStyles.grupoBadgeTexto}>{g.itens.length} {g.itens.length === 1 ? 'APK' : 'APKs'}</Text>
                           </View>
-                          <Text style={geradosStyles.grupoData} numberOfLines={1}>{formatarDataBuildStudio(g.ultimo.criadoEm)}</Text>
+                          <Text style={geradosStyles.grupoData} numberOfLines={1}>
+                            {tempoRelativoStudio(g.ultimo.criadoEm)}{bytesGrupo ? `  ·  ${formatarTamanhoStudio(bytesGrupo)}` : ''}
+                          </Text>
                         </View>
                       </View>
                       <View style={geradosStyles.seta}>
@@ -13798,12 +14236,13 @@ function CindraStudioScreen({ visible, onClose }) {
                           const armado = confirmarApagarBuild === b.id;
                           const ehRelease = b.tipo === 'release';
                           const marcado = !!selecionadosBuilds[b.id];
+                          const sumiu = arquivosOk[b.id] === false;
                           return (
                             <TouchableOpacity
                               key={b.id}
                               style={[geradosStyles.buildLinha, marcado && { backgroundColor: 'rgba(180,60,255,0.10)' }]}
-                              activeOpacity={modoSelecaoBuilds ? 0.7 : 1}
-                              onPress={() => { if (modoSelecaoBuilds) alternarSelecaoBuild(b.id); }}
+                              activeOpacity={0.7}
+                              onPress={() => { if (modoSelecaoBuilds) alternarSelecaoBuild(b.id); else abrirDetalheBuild(b); }}
                               onLongPress={() => { if (!modoSelecaoBuilds) iniciarSelecaoBuilds(b.id); }}
                               delayLongPress={350}
                             >
@@ -13816,23 +14255,36 @@ function CindraStudioScreen({ visible, onClose }) {
                               )}
                               <IconeAppStudio dados={b} lado={32} icone={18} raio={10} />
                               <View style={{ flex: 1 }}>
-                                <Text style={geradosStyles.buildTitulo} numberOfLines={1}>
-                                  {b.versaoNome ? `v${b.versaoNome}` : 'APK'}{b.versaoCodigo ? ` (${b.versaoCodigo})` : ''}
-                                  {'  '}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                  <Text style={[geradosStyles.buildTitulo, { flexShrink: 1 }]} numberOfLines={1}>
+                                    {b.versaoNome ? `v${b.versaoNome}` : 'APK'}{b.versaoCodigo ? ` (${b.versaoCodigo})` : ''}
+                                  </Text>
                                   <Text style={[geradosStyles.buildTipo, { color: ehRelease ? '#8bd450' : COLORS.gold }]}>
                                     {ehRelease ? 'RELEASE' : 'DEBUG'}
                                   </Text>
-                                </Text>
+                                  {!!b.favorito && <MaterialCommunityIcons name="star" size={13} color={COLORS.gold} />}
+                                  {!!b.apkPublico && <MaterialCommunityIcons name="folder-check-outline" size={13} color="#8bd450" />}
+                                </View>
                                 <Text style={geradosStyles.buildData} numberOfLines={1}>
-                                  {formatarDataBuildStudio(b.criadoEm)}{b.tamanho ? `  ·  ${formatarTamanhoStudio(b.tamanho)}` : ''}{b.apkPublico ? '  ·  cindra-studio' : ''}
+                                  {formatarDataBuildStudio(b.criadoEm)}{b.tamanho ? `  ·  ${formatarTamanhoStudio(b.tamanho)}` : ''}
                                 </Text>
+                                {sumiu && <Text style={geradosStyles.buildSumiu} numberOfLines={1}>ARQUIVO APAGADO DO CELULAR</Text>}
+                                {!!b.nota && !sumiu && <Text style={geradosStyles.buildNota} numberOfLines={1}>{b.nota}</Text>}
                               </View>
                               {!modoSelecaoBuilds && (
                                 <>
-                                  <TouchableOpacity style={geradosStyles.buildAcao} onPress={() => instalarBuild(b)} activeOpacity={0.8}>
+                                  <TouchableOpacity
+                                    style={[geradosStyles.buildAcao, sumiu && { opacity: 0.35 }]}
+                                    onPress={() => instalarBuild(b)}
+                                    activeOpacity={0.8}
+                                  >
                                     <MaterialCommunityIcons name="cellphone-arrow-down" size={17} color="#8bd450" />
                                   </TouchableOpacity>
-                                  <TouchableOpacity style={geradosStyles.buildAcao} onPress={() => compartilharApk(b.apk, b.nomeApp)} activeOpacity={0.8}>
+                                  <TouchableOpacity
+                                    style={[geradosStyles.buildAcao, sumiu && { opacity: 0.35 }]}
+                                    onPress={() => compartilharApk(b.apk, b.nomeApp)}
+                                    activeOpacity={0.8}
+                                  >
                                     <MaterialCommunityIcons name="share-variant-outline" size={17} color={COLORS.ink} />
                                   </TouchableOpacity>
                                   <TouchableOpacity
@@ -13848,14 +14300,32 @@ function CindraStudioScreen({ visible, onClose }) {
                           );
                         })}
                         {!modoSelecaoBuilds && (
-                          <TouchableOpacity style={geradosStyles.apagarGrupo} onPress={() => tocarApagarGrupo(g)} activeOpacity={0.8}>
-                            <MaterialCommunityIcons name="delete-sweep-outline" size={16} color={COLORS.error} />
-                            <Text style={geradosStyles.apagarGrupoTexto}>
-                              {grupoArmado
-                                ? `Toque de novo pra apagar ${g.itens.length} ${g.itens.length === 1 ? 'APK' : 'APKs'}`
-                                : 'Apagar todos deste app'}
-                            </Text>
-                          </TouchableOpacity>
+                          <View style={geradosStyles.grupoRodape}>
+                            {projetoExiste && (
+                              <TouchableOpacity style={geradosStyles.rodapeBtn} onPress={() => abrirProjetoDaLista(g.pacote)} activeOpacity={0.8}>
+                                <MaterialCommunityIcons name="folder-open-outline" size={16} color="#d9a2ff" />
+                                <Text style={[geradosStyles.rodapeBtnTexto, { color: '#d9a2ff' }]}>Abrir projeto</Text>
+                              </TouchableOpacity>
+                            )}
+                            {qtdAntigos > 0 && (
+                              <TouchableOpacity style={geradosStyles.rodapeBtn} onPress={() => tocarLimparAntigosGrupo(g)} activeOpacity={0.8}>
+                                <MaterialCommunityIcons name="broom" size={16} color={grupoLimparArmado ? COLORS.error : COLORS.gold} />
+                                <Text style={[geradosStyles.rodapeBtnTexto, { color: grupoLimparArmado ? COLORS.error : COLORS.gold }]} numberOfLines={1}>
+                                  {grupoLimparArmado
+                                    ? `Toque de novo: apagar ${qtdAntigos}`
+                                    : `Limpar ${qtdAntigos} ${qtdAntigos === 1 ? 'antigo' : 'antigos'}`}
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+                            <TouchableOpacity style={geradosStyles.rodapeBtn} onPress={() => tocarApagarGrupo(g)} activeOpacity={0.8}>
+                              <MaterialCommunityIcons name="delete-sweep-outline" size={16} color={COLORS.error} />
+                              <Text style={geradosStyles.apagarGrupoTexto} numberOfLines={1}>
+                                {grupoArmado
+                                  ? `Toque de novo: apagar ${g.itens.length}`
+                                  : 'Apagar todos'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
                         )}
                       </View>
                     )}
@@ -13870,12 +14340,33 @@ function CindraStudioScreen({ visible, onClose }) {
           <View style={geradosStyles.barraSelecao}>
             <TouchableOpacity style={geradosStyles.barraBtn} onPress={selecionarTodosBuilds} activeOpacity={0.8}>
               <MaterialCommunityIcons
-                name={builds.length > 0 && qtdSel === builds.length ? 'checkbox-multiple-marked' : 'checkbox-multiple-blank-outline'}
+                name={todosVisiveisMarcados ? 'checkbox-multiple-marked' : 'checkbox-multiple-blank-outline'}
                 size={18}
                 color={COLORS.ink}
               />
               <Text style={geradosStyles.barraBtnTexto}>Todos</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[geradosStyles.barraBtn, geradosStyles.barraBtnIcone, !qtdSel && { opacity: 0.4 }]}
+              onPress={copiarSelecionadosParaPublica}
+              disabled={!qtdSel || copiandoPublica}
+              activeOpacity={0.8}
+            >
+              {copiandoPublica ? (
+                <ActivityIndicator size="small" color={COLORS.ink} />
+              ) : (
+                <MaterialCommunityIcons name="folder-download-outline" size={19} color={COLORS.ink} />
+              )}
+            </TouchableOpacity>
+            {!!selUnico && (
+              <TouchableOpacity
+                style={[geradosStyles.barraBtn, geradosStyles.barraBtnIcone]}
+                onPress={compartilharSelecionadoBuild}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="share-variant-outline" size={19} color={COLORS.ink} />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[
                 geradosStyles.barraApagar,
@@ -14181,6 +14672,140 @@ function CindraStudioScreen({ visible, onClose }) {
           )}
         </FolhaInferiorStudio>
       )}
+
+      {menuOrdenarGeradosAberto && (
+        <FolhaInferiorStudio onFechar={() => setMenuOrdenarGeradosAberto(false)} insetBottom={insets.bottom}>
+          {(fechar) => (
+            <>
+              <Text style={[studioStyles.folhaTitulo, { marginBottom: 14 }]}>Ordenar APKs por</Text>
+              {Object.keys(ROTULOS_ORDEM_GERADOS).map((id) => {
+                const ativo = ordenacaoGerados === id;
+                return (
+                  <TouchableOpacity
+                    key={id}
+                    style={studioStyles.folhaLinha}
+                    onPress={() => { escolherOrdenacaoGerados(id); fechar(); }}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialCommunityIcons name={ICONES_ORDEM_GERADOS[id]} size={20} color={ativo ? COLORS.ember : COLORS.dim} />
+                    <Text style={[studioStyles.folhaLinhaTexto, ativo && { color: COLORS.ember }]}>{ROTULOS_ORDEM_GERADOS[id]}</Text>
+                    {ativo && <MaterialCommunityIcons name="check" size={20} color={COLORS.ember} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </>
+          )}
+        </FolhaInferiorStudio>
+      )}
+
+      {!!detalheBuildId && (() => {
+        const b = builds.find((x) => x.id === detalheBuildId);
+        if (!b) return null;
+        const sumiu = arquivosOk[b.id] === false;
+        const ehRelease = b.tipo === 'release';
+        const armado = confirmarApagarBuild === b.id;
+        const copiando = copiandoBuildId === b.id;
+        const linhaInfo = (rotulo, valor, cor) => (
+          <View style={geradosStyles.infoLinha}>
+            <Text style={geradosStyles.infoRotulo}>{rotulo}</Text>
+            <Text style={[geradosStyles.infoValor, cor && { color: cor }]} numberOfLines={3}>{valor}</Text>
+          </View>
+        );
+        return (
+          <FolhaInferiorStudio onFechar={fecharDetalheBuild} insetBottom={insets.bottom}>
+            {(fechar) => (
+              <ScrollView style={{ maxHeight: 560 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <View style={geradosStyles.detTopo}>
+                  <IconeAppStudio dados={b} lado={56} icone={30} raio={16} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={studioStyles.folhaTitulo} numberOfLines={1}>{b.nomeApp}</Text>
+                    <Text style={studioStyles.folhaSub} numberOfLines={1}>{b.pacote}</Text>
+                    <View style={geradosStyles.grupoMeta}>
+                      <View style={[geradosStyles.grupoBadge, { backgroundColor: ehRelease ? 'rgba(139,212,80,0.16)' : 'rgba(255,122,217,0.16)' }]}>
+                        <Text style={[geradosStyles.grupoBadgeTexto, { color: ehRelease ? '#8bd450' : COLORS.gold }]}>
+                          {ehRelease ? 'RELEASE' : 'DEBUG'}
+                        </Text>
+                      </View>
+                      <Text style={geradosStyles.grupoData} numberOfLines={1}>
+                        {b.versaoNome ? `v${b.versaoNome}` : 'sem versão'}{b.versaoCodigo ? ` (${b.versaoCodigo})` : ''}
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity style={geradosStyles.detEstrela} onPress={() => alternarFavoritoBuild(b)} activeOpacity={0.8}>
+                    <MaterialCommunityIcons name={b.favorito ? 'star' : 'star-outline'} size={24} color={b.favorito ? COLORS.gold : COLORS.dim} />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={geradosStyles.infoCard}>
+                  {linhaInfo('Gerado em', formatarDataBuildStudio(b.criadoEm) || '—')}
+                  {linhaInfo('Tamanho', b.tamanho ? formatarTamanhoStudio(b.tamanho) : '—')}
+                  {linhaInfo('Arquivo', sumiu ? 'Apagado do celular' : 'No celular', sumiu ? COLORS.error : '#8bd450')}
+                  {linhaInfo('Pasta cindra-studio', b.apkPublico ? String(b.apkPublico).replace(/^file:\/\//, '') : 'Ainda não copiado', b.apkPublico ? undefined : COLORS.dim)}
+                </View>
+
+                <Text style={geradosStyles.detRotuloCampo}>NOTA</Text>
+                <TextInput
+                  style={geradosStyles.notaInput}
+                  value={notaDetalhe}
+                  onChangeText={setNotaDetalhe}
+                  placeholder="Ex.: versão que mandei pro cliente"
+                  placeholderTextColor={COLORS.dim}
+                  maxLength={140}
+                  returnKeyType="done"
+                  onSubmitEditing={() => { salvarNotaBuild(b.id, notaDetalhe); Keyboard.dismiss(); }}
+                  onBlur={() => salvarNotaBuild(b.id, notaDetalhe)}
+                />
+
+                <View style={geradosStyles.acoesGrade}>
+                  <TouchableOpacity
+                    style={[geradosStyles.acaoGrade, { backgroundColor: 'rgba(139,212,80,0.14)' }, sumiu && { opacity: 0.4 }]}
+                    onPress={() => instalarBuild(b)}
+                    activeOpacity={0.85}
+                  >
+                    <MaterialCommunityIcons name="cellphone-arrow-down" size={20} color="#8bd450" />
+                    <Text style={[geradosStyles.acaoGradeTexto, { color: '#8bd450' }]}>Instalar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[geradosStyles.acaoGrade, sumiu && { opacity: 0.4 }]}
+                    onPress={() => compartilharApk(b.apk, b.nomeApp)}
+                    activeOpacity={0.85}
+                  >
+                    <MaterialCommunityIcons name="share-variant-outline" size={20} color={COLORS.ink} />
+                    <Text style={geradosStyles.acaoGradeTexto}>Compartilhar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[geradosStyles.acaoGrade, (sumiu || !!b.apkPublico) && { opacity: 0.4 }]}
+                    onPress={() => { if (!b.apkPublico) copiarBuildParaPublica(b); }}
+                    disabled={copiando}
+                    activeOpacity={0.85}
+                  >
+                    {copiando ? (
+                      <ActivityIndicator size="small" color={COLORS.ink} />
+                    ) : (
+                      <MaterialCommunityIcons name={b.apkPublico ? 'folder-check-outline' : 'folder-download-outline'} size={20} color={COLORS.ink} />
+                    )}
+                    <Text style={geradosStyles.acaoGradeTexto}>{b.apkPublico ? 'Já na pasta' : 'Copiar p/ pasta'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={geradosStyles.acaoGrade} onPress={() => copiarCaminhoBuild(b)} activeOpacity={0.85}>
+                    <MaterialCommunityIcons name="content-copy" size={20} color={COLORS.ink} />
+                    <Text style={geradosStyles.acaoGradeTexto}>Copiar caminho</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[geradosStyles.acaoGrade, { width: '100%', backgroundColor: armado ? COLORS.error : 'rgba(255,107,107,0.12)' }]}
+                    onPress={() => tocarLixeiraBuild(b)}
+                    activeOpacity={0.85}
+                  >
+                    <MaterialCommunityIcons name="trash-can-outline" size={20} color={armado ? '#ffffff' : COLORS.error} />
+                    <Text style={[geradosStyles.acaoGradeTexto, { color: armado ? '#ffffff' : COLORS.error }]}>
+                      {armado ? 'Toque de novo pra apagar' : 'Apagar este APK'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
+          </FolhaInferiorStudio>
+        );
+      })()}
 
       {confirmarSaida && (
         <FolhaInferiorStudio onFechar={() => setConfirmarSaida(false)} insetBottom={insets.bottom}>
