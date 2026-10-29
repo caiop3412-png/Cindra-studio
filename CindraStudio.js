@@ -1300,6 +1300,54 @@ function forcarAppNaManifest(xmlManifest) {
   );
 }
 
+// ─────────────────────────────────────────────────────────
+// Ícone adaptativo. O projeto gera um ícone "antigo" (drawable/ic_launcher):
+// no Samsung/Android 8+ ele aparece pequeno dentro de uma moldura redonda.
+// Na hora de gravar o projeto, criamos também o ícone adaptativo
+// (mipmap-anydpi-v26), que preenche a forma inteira do launcher, e o
+// manifest passa a apontar pra @mipmap/ic_launcher. Só mexe no que é do
+// Cindra (ícone padrão ou foto da galeria); se a pessoa montou o próprio
+// ícone, não encosta. Vale pra projeto novo e antigo, e só na cópia que vai
+// pro compilador (o que aparece no editor e no .zip não muda).
+// Pra desligar: ICONE_ADAPTATIVO_STUDIO = false.
+// ─────────────────────────────────────────────────────────
+const ICONE_ADAPTATIVO_STUDIO = true;
+const ICONE_PADRAO_CIRCULO = 'M54,30 A24,24 0 1 1 54,78 A24,24 0 1 1 54,30 Z';
+function aplicarIconeAdaptivoStudio(conteudos, binarios) {
+  if (!ICONE_ADAPTATIVO_STUDIO) return conteudos;
+  const manifestPath = 'app/src/main/AndroidManifest.xml';
+  const manifest = conteudos[manifestPath];
+  if (!manifest || !/android:icon="@drawable\/ic_launcher"/.test(manifest)) return conteudos;
+  // a pessoa montou os próprios mipmaps: respeita
+  if (Object.keys(conteudos).some((c) => /\/res\/mipmap[^/]*\/ic_launcher/.test(c))) return conteudos;
+
+  const res = 'app/src/main/res/';
+  const xmlPath = `${res}drawable/ic_launcher.xml`;
+  const comFoto = !!(binarios && binarios[ICONE_FOTO_CAMINHO]);
+  const xmlIcone = conteudos[xmlPath] || '';
+  const ehPadrao = xmlIcone.indexOf(ICONE_PADRAO_CIRCULO) >= 0;
+  // vetor editado à mão (nem foto, nem o ícone padrão): deixa como está
+  if (!comFoto && !ehPadrao) return conteudos;
+
+  const cab = '<?xml version="1.0" encoding="utf-8"?>\n';
+  const ns = 'xmlns:android="http://schemas.android.com/apk/res/android"';
+  const novo = { ...conteudos };
+  novo[manifestPath] = manifest.replace(/android:icon="@drawable\/ic_launcher"/, 'android:icon="@mipmap/ic_launcher"');
+  // Android 5 a 7: usa o ícone antigo
+  novo[`${res}mipmap-anydpi/ic_launcher.xml`] = `${cab}<layer-list ${ns}>\n    <item android:drawable="@drawable/ic_launcher" />\n</layer-list>\n`;
+  if (comFoto) {
+    // a foto preenche tudo (o launcher corta só as bordas)
+    novo[`${res}mipmap-anydpi-v26/ic_launcher.xml`] = `${cab}<adaptive-icon ${ns}>\n    <background android:drawable="@drawable/ic_launcher" />\n    <foreground android:drawable="@android:color/transparent" />\n</adaptive-icon>\n`;
+  } else {
+    const m = /android:fillColor="(#[0-9a-fA-F]{6})"/.exec(xmlIcone);
+    const cor = m ? m[1] : '#b43cff';
+    novo[`${res}values/ic_launcher_background.xml`] = `${cab}<resources>\n    <color name="ic_launcher_background">${cor}</color>\n</resources>\n`;
+    novo[`${res}drawable/ic_launcher_foreground.xml`] = `${cab}<vector ${ns}\n    android:width="108dp"\n    android:height="108dp"\n    android:viewportWidth="108"\n    android:viewportHeight="108">\n    <path\n        android:fillColor="#FFFFFF"\n        android:pathData="${ICONE_PADRAO_CIRCULO}" />\n</vector>\n`;
+    novo[`${res}mipmap-anydpi-v26/ic_launcher.xml`] = `${cab}<adaptive-icon ${ns}>\n    <background android:drawable="@color/ic_launcher_background" />\n    <foreground android:drawable="@drawable/ic_launcher_foreground" />\n</adaptive-icon>\n`;
+  }
+  return novo;
+}
+
 // Reaplica a marca d'água obrigatória num conjunto de conteúdos de
 // projeto: reescreve/recria o Application.java e força o manifest a
 // usá-lo. Roda sempre em gravarProjetoStudio, então vale tanto pra
@@ -1327,7 +1375,7 @@ function aplicarMarcaDaguaObrigatoria(projeto) {
     });
   }
 
-  return { ...projeto, conteudos, arvore };
+  return { ...projeto, conteudos: aplicarIconeAdaptivoStudio(conteudos, projeto.binarios), arvore };
 }
 
 // Grava o projeto inteiro em disco, um arquivo por caminho. Apaga a
