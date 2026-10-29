@@ -538,13 +538,87 @@ function hexParaRgba(hex, alpha) {
 // compilador, módulo nativo ausente etc). O detalhe real nunca vai pra tela.
 const TITULO_MANUTENCAO = 'Em manutenção';
 const MSG_MANUTENCAO = 'Estamos em manutenção. Resolvemos em breve.';
-// true = o painel de compilação mostra o erro original; false = volta a
-// mostrar só a mensagem de manutenção (use false na versão pública).
-const MOSTRAR_ERRO_ORIGINAL_STUDIO = true;
+// true = o painel de compilação mostra a mensagem simples do que fazer;
+// false = volta a mostrar só a mensagem de manutenção.
+const MOSTRAR_ERRO_STUDIO = true;
 function textoErroStudio(original) {
   const t = String(original || '').trim();
-  return MOSTRAR_ERRO_ORIGINAL_STUDIO && t ? t : MSG_MANUTENCAO;
+  if (!MOSTRAR_ERRO_STUDIO || !t) return MSG_MANUTENCAO;
+  return formatarErroLogStudio(t);
 }
+
+// Tradutor de erros do build → frase simples dizendo o que fazer.
+// Cada regra: [regex, (match) => texto, semLinha?]. A primeira que casar vence.
+const REGRAS_ERRO_STUDIO = [
+  [/LambdaMetafactory|invokedynamic|invoke-custom/i, () => 'Seu código usa lambda (->) ou referência (::). Troque por classe anônima, tipo new View.OnClickListener() { ... } ou new Runnable() { ... }.', true],
+  [/The import (\S+) cannot be resolved/i, (m) => `O import ${m[1]} não existe. Apague essa linha ou confira o nome.`],
+  [/The type (\S+) cannot be resolved\. It is indirectly referenced/i, (m) => `Seu código usa ${m[1].split('.').pop()}, que o compilador do app ainda não conhece. Troque por uma alternativa mais simples.`, true],
+  [/(\S+) cannot be resolved to a type/i, (m) => `A classe ${m[1]} não foi encontrada. Falta um import no topo do arquivo ou o nome está errado.`],
+  [/(\S+) cannot be resolved to a variable/i, (m) => `A variável ${m[1]} não existe aqui. Crie ela antes de usar ou confira o nome.`],
+  [/(\S+) cannot be resolved\b/i, (m) => `O nome ${m[1]} não existe aqui. Confira se escreveu certo e se falta import.`],
+  [/The method (\w+)\(.*\) is undefined for the type (\S+)/i, (m) => `O método ${m[1]} não existe em ${m[2]}. Confira o nome e se falta import.`],
+  [/The method (\w+)\(.*\) in the type (\S+) is not applicable/i, (m) => `O método ${m[1]} foi chamado com valores errados. Confira quantos e quais valores ele pede.`],
+  [/The constructor (\S+?)\(.*\) is undefined/i, (m) => `Não existe um construtor de ${m[1]} com esses valores. Confira os valores do new.`],
+  [/must override or implement a supertype method/i, () => 'O @Override está sobrando: esse método não existe na classe pai. Confira o nome e os parâmetros, ou apague o @Override.'],
+  [/must implement the inherited abstract method (\S+)/i, (m) => `Falta escrever o método obrigatório ${m[1]}. Adicione ele na classe.`],
+  [/Syntax error, insert "([;)\]}])"/i, (m) => (m[1] === ';' ? 'Falta um ; (ponto e vírgula) no fim dessa linha ou da anterior.' : `Falta fechar com ${m[1]}. Confira se cada abre tem o seu fecha.`)],
+  [/Syntax error on token "([^"]*)"/i, (m) => `Tem algo errado perto de "${m[1]}". Confira parênteses, chaves, vírgulas e ;.`],
+  [/Syntax error/i, () => 'Tem erro de escrita nessa linha. Confira parênteses, chaves, vírgulas e ;.'],
+  [/String literal is not properly closed/i, () => 'Faltou fechar as aspas de um texto.'],
+  [/Unhandled exception type (\S+)/i, (m) => `Esse código pode dar erro (${m[1]}). Coloque dentro de try { ... } catch (Exception e) { }.`],
+  [/Type mismatch: cannot convert from (\S+) to (\S+)/i, (m) => `Tipo errado: você colocou ${m[1]} onde precisa de ${m[2]}. Converta o valor ou troque o tipo.`],
+  [/Cannot cast from (\S+) to (\S+)/i, (m) => `Não dá pra converter ${m[1]} em ${m[2]}. Confira o tipo.`],
+  [/Duplicate local variable (\w+)/i, (m) => `A variável ${m[1]} já foi criada antes. Use outro nome.`],
+  [/Duplicate (method|field) (\w+)/i, (m) => `Já existe ${m[1] === 'method' ? 'um método' : 'um campo'} chamado ${m[2]}. Apague ou renomeie um deles.`],
+  [/The type (\S+) is already defined/i, (m) => `A classe ${m[1]} já existe. Apague ou renomeie uma delas.`],
+  [/The public type (\S+) must be defined in its own file/i, (m) => `O nome do arquivo precisa ser ${m[1]}.java, igual ao da classe.`],
+  [/may not have been initialized/i, () => 'Essa variável precisa de um valor antes de ser usada. Exemplo: int x = 0;'],
+  [/Cannot make a static reference to the non-static/i, () => 'Você usou algo de dentro de um método static que não é static. Tire o static ou crie o objeto antes.'],
+  [/Missing return statement|must return a result of type/i, () => 'Falta um return no fim desse método.'],
+  [/Void methods cannot return a value/i, () => 'Esse método é void e não pode devolver valor. Tire o return com valor.'],
+  [/must be final or effectively final/i, () => 'Variável usada dentro de classe anônima precisa ser final. Coloque final na frente dela.'],
+  [/Cannot instantiate the type (\S+)/i, (m) => `Não dá pra criar ${m[1]} com new (é interface ou abstrata). Use uma classe anônima ou uma classe de verdade.`],
+  [/is not visible|is not accessible/i, () => 'Você não pode usar isso daqui (é private). Mude a permissão ou use outro caminho.'],
+  [/Unreachable code|Dead code/i, () => 'Tem código depois de um return/break que nunca roda. Apague esse trecho.'],
+  [/does not match the expected package|declared package/i, () => 'A linha package do topo não bate com a pasta do arquivo. Corrija a primeira linha.'],
+  [/resource (\S+).*not found/i, (m) => `O recurso ${m[1]} não existe. Crie o arquivo dele na pasta res ou corrija o nome.`],
+  [/attribute (\S+).*not found/i, (m) => `O atributo ${m[1]} não existe. Confira como escreveu no XML.`],
+  [/duplicate value for resource/i, () => 'Tem dois recursos com o mesmo nome. Renomeie ou apague um deles.'],
+  [/invalid file name|invalid resource name/i, () => 'Nome de arquivo inválido na pasta res. Use só letras minúsculas, números e _.'],
+  [/not well-formed|mismatched tag|unexpected element|unterminated|XML/i, () => 'Um arquivo XML tem erro de escrita (tag sem fechar, aspas faltando). Confira o arquivo indicado.'],
+  [/Cannot fit requested classes|too many methods|64K/i, () => 'O app ficou grande demais. Remova código ou bibliotecas que você não usa.'],
+  [/defined multiple times|Duplicate class/i, () => 'Tem uma classe repetida no projeto. Apague o arquivo duplicado.'],
+  [/minSdk|desugar|default or static interface methods/i, () => 'Esse recurso do Java precisa de um Android mais novo. Use uma forma mais simples.'],
+  [/keystore|alias|Cannot recover key|tampered|password/i, () => 'Keystore, alias ou senha não conferem. Confira os dados e tente de novo.'],
+  [/UnknownHost|Unable to resolve host|timed? ?out|SocketException|ConnectException|baixar|download/i, () => 'Sem internet pra baixar as ferramentas. Conecte e tente de novo.'],
+  [/ENOSPC|No space left/i, () => 'Sem espaço no celular. Libere memória e tente de novo.'],
+  [/OutOfMemory/i, () => 'Faltou memória. Feche outros apps e tente de novo.'],
+  [/aapt2 não encontrado|libaapt2/i, () => 'Falta uma peça interna do app. Reinstale o Cindra Studio.'],
+  [/Android 8|API 26/i, () => 'Seu Android é antigo. O compilador precisa do Android 8 ou mais novo.'],
+  [/EACCES|Permission denied/i, () => 'O app não tem permissão pra mexer num arquivo. Libere "Acesso a todos os arquivos".'],
+];
+
+// Devolve { texto, semLinha }. Se nenhuma regra casar, devolve um texto
+// genérico com o erro original curto (pra ninguém ficar sem pista).
+function traduzirErroStudio(bruto) {
+  const t = String(bruto || '').replace(/\s+/g, ' ').trim();
+  for (const [re, fazer, semLinha] of REGRAS_ERRO_STUDIO) {
+    const m = re.exec(t);
+    if (m) return { texto: fazer(m), semLinha: !!semLinha };
+  }
+  return { texto: `Não consegui explicar esse erro. Confira o arquivo indicado. Se continuar, chame o suporte. (${t.slice(0, 160)})`, semLinha: false };
+}
+
+// Linha do log: "caminho/Arquivo.java:12 — erro" → "Arquivo.java, linha 12: o que fazer".
+function formatarErroLogStudio(textoBruto) {
+  const t = String(textoBruto || '').trim();
+  const loc = /^([\s\S]*?):(\d+) — ([\s\S]*)$/.exec(t);
+  if (!loc) return traduzirErroStudio(t).texto;
+  const base = loc[1].split('/').pop();
+  const r = traduzirErroStudio(loc[3]);
+  return r.semLinha ? `${base}: ${r.texto}` : `${base}, linha ${loc[2]}: ${r.texto}`;
+}
+
 
 const STEPS_COMPILACAO = [
   { icone: 'image-multiple-outline', titulo: 'Recursos', sub: 'Preparando imagens e textos' },
@@ -612,12 +686,10 @@ function montarLogAmigavel(logCru) {
       return;
     }
     const falhou = /^falhou na etapa:\s*(.*)$/i.exec(bruta);
-    if (falhou) {
-      itens.push({ tipo: 'erro', texto: textoErroStudio(falhou[1]) });
-      return;
-    }
-    if (/^erro:/i.test(bruta)) {
-      itens.push({ tipo: 'erro', texto: textoErroStudio(bruta.replace(/^erro:\s*/i, '')) });
+    const erroTxt = falhou ? textoErroStudio(falhou[1]) : (/^erro:/i.test(bruta) ? textoErroStudio(bruta.replace(/^erro:\s*/i, '')) : null);
+    if (erroTxt !== null) {
+      const ult = itens[itens.length - 1];
+      if (!(ult && ult.tipo === 'erro' && ult.texto === erroTxt)) itens.push({ tipo: 'erro', texto: erroTxt });
       return;
     }
     if (REGEX_LINHA_TECNICA.test(bruta)) return; // linha técnica: esconde
@@ -14010,7 +14082,7 @@ function CindraStudioScreen({ visible, onClose }) {
               <View style={studioStyles.edErroBanner}>
                 <MaterialCommunityIcons name="alert-circle-outline" size={16} color={COLORS.error} />
                 <TouchableOpacity style={{ flex: 1 }} onPress={() => irParaErro(erroIdxSeguro)} activeOpacity={0.7}>
-                  <Text style={studioStyles.edErroTexto} numberOfLines={2}>Linha {erro.linha} · {erro.mensagem}</Text>
+                  <Text style={studioStyles.edErroTexto} numberOfLines={2}>Linha {erro.linha} · {traduzirErroStudio(erro.mensagem).texto}</Text>
                 </TouchableOpacity>
                 {errosArquivo.length > 1 && (
                   <>
@@ -14894,7 +14966,7 @@ function CindraStudioScreen({ visible, onClose }) {
                         {erro.arquivo}{erro.linha ? `  ·  linha ${erro.linha}` : ''}
                       </Text>
                     </View>
-                    <Text style={studioStyles.erroMensagem}>{erro.mensagem}</Text>
+                    <Text style={studioStyles.erroMensagem}>{traduzirErroStudio(erro.mensagem).texto}</Text>
                   </TouchableOpacity>
                 ))}
 
