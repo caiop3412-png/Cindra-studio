@@ -4051,6 +4051,77 @@ function NoArvoreArquivo({ no, pastasAbertas, alternarPasta, arquivoAtivo, onAbr
 // aviso "em breve" ao tocar; coloque a URL (site, Instagram, Pix...) pra abrir.
 const STUDIO_LINK_APOIO = 'https://whatsapp.com/channel/0029Vb8GnMiFHWq4Sovp7E2J';
 
+// Estilos da aba "Publicar".
+const pubStyles = StyleSheet.create({
+  heroVazio: { alignItems: 'center', paddingTop: 18, paddingHorizontal: 10, marginBottom: 14 },
+  beneficiosCard: {
+    backgroundColor: COLORS.panel,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: COLORS.lineSoft,
+    paddingHorizontal: 12,
+    marginBottom: 16,
+  },
+  beneficioLinha: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.lineSoft },
+  beneficioIcone: { width: 38, height: 38, borderRadius: 12, backgroundColor: 'rgba(180,60,255,0.16)', alignItems: 'center', justifyContent: 'center' },
+  beneficioTitulo: { color: COLORS.ink, fontSize: 13, fontWeight: '700' },
+  beneficioTexto: { color: COLORS.dim, fontSize: 11.5, lineHeight: 16, marginTop: 1 },
+  btnGrande: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, height: 50, borderRadius: 16, backgroundColor: COLORS.ember },
+  btnGrandeTexto: { color: '#ffffff', fontSize: 14.5, fontWeight: '800' },
+  termosEntrar: { color: 'rgba(255,255,255,0.5)', fontSize: 11.5, lineHeight: 17, textAlign: 'center', marginTop: 12, paddingHorizontal: 10 },
+  cotaCard: {
+    backgroundColor: 'rgba(180,60,255,0.10)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(180,60,255,0.28)',
+    padding: 16,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  cotaTopo: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  cotaRotulo: { color: '#d9a2ff', fontSize: 10.5, fontWeight: '800', letterSpacing: 1.2 },
+  cotaNumero: { color: COLORS.ink, fontSize: 30, fontWeight: '800', marginTop: 2 },
+  cotaDe: { color: COLORS.dim, fontSize: 18, fontWeight: '700' },
+  cotaContaChip: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: 150, paddingHorizontal: 10, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.08)' },
+  cotaContaTexto: { color: COLORS.ink, fontSize: 11.5, fontWeight: '700', flexShrink: 1 },
+  cotaBarra: { flexDirection: 'row', gap: 6, marginTop: 12 },
+  cotaPip: { flex: 1, height: 7, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.12)' },
+  cotaPipCheio: { backgroundColor: COLORS.ember },
+  cotaSub: { color: COLORS.dim, fontSize: 11.5, marginTop: 10 },
+  erroCaixa: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,107,107,0.10)', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 },
+  erroTexto: { flex: 1, color: '#ff8a80', fontSize: 12 },
+  erroAcao: { color: '#ffffff', fontSize: 12, fontWeight: '800', textDecorationLine: 'underline' },
+  cardPublicado: { borderColor: 'rgba(139,212,80,0.35)' },
+  status: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, height: 24, borderRadius: 12 },
+  statusPonto: { width: 6, height: 6, borderRadius: 3 },
+  statusTexto: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  corpo: { borderTopWidth: 1, borderTopColor: COLORS.lineSoft, paddingHorizontal: 12, paddingVertical: 12 },
+  linkPilula: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 40, paddingHorizontal: 12, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.07)' },
+  linkTexto: { flex: 1, color: '#d9a2ff', fontSize: 12.5, fontWeight: '700' },
+  estatLinha: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 4, marginTop: 10 },
+  estat: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  estatTexto: { color: COLORS.dim, fontSize: 11 },
+  dica: { color: '#ffc400', fontSize: 11, lineHeight: 15, marginTop: 8 },
+  acoes: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  acao: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.08)' },
+  acaoTexto: { color: COLORS.ink, fontSize: 11.5, fontWeight: '700' },
+  acaoDestaque: { backgroundColor: COLORS.ember },
+  acaoPerigo: { flex: 0, width: 44, backgroundColor: 'rgba(255,107,107,0.12)' },
+  avisoDebug: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,122,217,0.10)', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 10 },
+  avisoDebugTexto: { flex: 1, color: COLORS.dim, fontSize: 11, lineHeight: 15 },
+  btnPublicar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 46, borderRadius: 14, backgroundColor: COLORS.ember },
+  btnPublicarTexto: { color: '#ffffff', fontSize: 13.5, fontWeight: '800' },
+  legal: { flexDirection: 'row', gap: 10, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 16, padding: 14, marginTop: 6 },
+  legalTexto: { flex: 1, color: 'rgba(255,255,255,0.5)', fontSize: 11, lineHeight: 16 },
+  legalLink: { color: '#d9a2ff', fontWeight: '700', textDecorationLine: 'underline' },
+  passosCard: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 6, marginBottom: 14 },
+  passoLinha: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 9 },
+  passoTexto: { flex: 1, color: COLORS.ink, fontSize: 12.5, lineHeight: 18 },
+  aceiteLinha: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 16, paddingRight: 6 },
+  aceiteTexto: { flex: 1, color: COLORS.dim, fontSize: 12, lineHeight: 18 },
+  termosSheet: { color: 'rgba(255,255,255,0.55)', fontSize: 12, lineHeight: 18, marginBottom: 14 },
+});
+
 // Estilos da aba "Gerados" (apps compilados + histórico de APKs).
 const geradosStyles = StyleSheet.create({
   lista: { paddingHorizontal: 14, paddingTop: 6, paddingBottom: 20 },
@@ -10934,6 +11005,7 @@ function CindraStudioScreen({ visible, onClose }) {
       if (prefs.modoLista === 'grade' || prefs.modoLista === 'lista') setModoLista(prefs.modoLista);
       if (Object.prototype.hasOwnProperty.call(ROTULOS_ORDEM_STUDIO, prefs.ordenacao)) setOrdenacao(prefs.ordenacao);
       if (typeof prefs.favoritosNoTopo === 'boolean') setFavoritosNoTopo(prefs.favoritosNoTopo);
+      if (prefs.termosPublicarAceitos) setTermosJaAceitos(true);
       if (Object.prototype.hasOwnProperty.call(ROTULOS_ORDEM_GERADOS, prefs.ordenacaoGerados)) setOrdenacaoGerados(prefs.ordenacaoGerados);
       if (prefs.keystore && prefs.keystore.caminho) {
         // só reaproveita se a cópia do keystore ainda existe no aparelho
@@ -13409,6 +13481,10 @@ function CindraStudioScreen({ visible, onClose }) {
   const [erroPublicados, setErroPublicados] = useState('');
   const [publicandoPacote, setPublicandoPacote] = useState(null); // pacote em envio
   const [apagandoSlug, setApagandoSlug] = useState(null);
+  const [publicarPacote, setPublicarPacote] = useState(null); // folha "Publicar app" (confirmação + termos)
+  const [aceitouTermos, setAceitouTermos] = useState(false); // caixinha da folha
+  const [termosJaAceitos, setTermosJaAceitos] = useState(false); // aceitou numa publicação anterior
+  const [ajudaPublicarAberta, setAjudaPublicarAberta] = useState(false); // folha "Como funciona"
 
   const carregarPublicados = async () => {
     const n = nuvemRef.current;
@@ -13427,6 +13503,36 @@ function CindraStudioScreen({ visible, onClose }) {
   }, [abaHome, contaNuvem]);
 
   const abrirLinkPublicado = (url) => abrirLinkNoApp(url);
+
+  const copiarLinkPublicado = async (p) => {
+    const r = await copiarTextoStudio(p.url);
+    if (r === 'copiado') exibirAviso('Link copiado', String(p.url).replace(/^https:\/\//, ''), 'sucesso');
+  };
+  const compartilharLinkPublicado = async (p) => {
+    try { await Share.share({ message: `Baixe o ${p.nome}: ${p.url}` }); } catch (e) { /* cancelou */ }
+  };
+
+  // Botão "Publicar": sem link ainda → abre a folha de confirmação (com os
+  // termos); já publicado → só atualiza o APK no mesmo link.
+  const pedirPublicar = (g) => {
+    if (publicandoPacote) return;
+    const n = nuvemRef.current;
+    if (!n || !n.token) { setLoginNuvem('manual'); return; }
+    const jaPublicado = publicados.some((p) => p.pacote === g.pacote);
+    if (jaPublicado) { publicarGrupo(g); return; }
+    if (publicados.length >= LIMITE_PUBLICADOS_STUDIO) {
+      exibirAviso('Limite de publicações', `Você já tem ${LIMITE_PUBLICADOS_STUDIO} apps publicados. Apague um link pra publicar outro.`, 'aviso');
+      return;
+    }
+    setAceitouTermos(termosJaAceitos);
+    setPublicarPacote(g.pacote);
+  };
+  const confirmarPublicar = (g) => {
+    if (!aceitouTermos) return;
+    if (!termosJaAceitos) { setTermosJaAceitos(true); salvarPref('termosPublicarAceitos', true); }
+    setPublicarPacote(null);
+    publicarGrupo(g);
+  };
 
   // Publica (ou atualiza) o último APK gerado do projeto.
   const publicarGrupo = async (g) => {
@@ -13622,6 +13728,8 @@ function CindraStudioScreen({ visible, onClose }) {
     if (confirmarSaida) { setConfirmarSaida(false); return; }
     if (cardProjeto) { setCardProjeto(null); return; }
     if (menuOrdenarAberto) { setMenuOrdenarAberto(false); return; }
+    if (publicarPacote) { setPublicarPacote(null); return; }
+    if (ajudaPublicarAberta) { setAjudaPublicarAberta(false); return; }
     if (detalheBuildId) { fecharDetalheBuild(); return; }
     if (menuOrdenarGeradosAberto) { setMenuOrdenarGeradosAberto(false); return; }
     if (cardNo) { setCardNo(null); setPastaEmCriacao(false); setNomeNovaPasta(''); return; }
@@ -14482,11 +14590,41 @@ function CindraStudioScreen({ visible, onClose }) {
     );
   };
 
-  // Aba "Publicar": cada app gerado com o último APK. Publicado → link + apagar; senão → botão Publicar.
+  // Aba "Publicar": cada app gerado com o último APK. Painel de vagas no topo,
+  // status e ações do link por app (abrir, copiar, compartilhar, atualizar,
+  // apagar) e os termos de uso no rodapé, na confirmação e na ajuda.
+  const renderRodapeLegalPublicar = () => (
+    <View style={pubStyles.legal}>
+      <MaterialCommunityIcons name="shield-check-outline" size={18} color={COLORS.dim} />
+      <Text style={pubStyles.legalTexto}>
+        Ao publicar, você declara ter o direito de distribuir o app e concorda com os{' '}
+        <Text style={pubStyles.legalLink} onPress={() => abrirLinkNoApp(URL_TERMOS_STUDIO)}>Termos de Uso</Text>
+        {' '}e a{' '}
+        <Text style={pubStyles.legalLink} onPress={() => abrirLinkNoApp(URL_PRIVACIDADE_STUDIO)}>Política de Privacidade</Text>.
+        {' '}Links que violarem as regras podem ser removidos.{' '}
+        <Text style={pubStyles.legalLink} onPress={() => abrirSuporteNuvem(contaNuvem ? contaNuvem.nome : '')}>Falar com o suporte</Text>
+      </Text>
+    </View>
+  );
+
   const renderAbaPublicar = () => {
     const grupos = agruparBuildsStudio(builds);
     const usados = publicados.length;
+    const livres = Math.max(0, LIMITE_PUBLICADOS_STUDIO - usados);
     const limiteCheio = usados >= LIMITE_PUBLICADOS_STUDIO;
+    const totalBaixadas = publicados.reduce((n, x) => n + (Number(x.baixadas) || 0), 0);
+    // publicados primeiro, depois o resto (cada grupo já vem do mais novo pro mais antigo)
+    const ordenados = grupos.slice().sort((a, b) => {
+      const pa = publicados.some((x) => x.pacote === a.pacote) ? 0 : 1;
+      const pb = publicados.some((x) => x.pacote === b.pacote) ? 0 : 1;
+      return pa - pb;
+    });
+    const beneficios = [
+      ['link-variant', 'Link de download', 'Mande o link e a pessoa baixa o APK direto, sem pedir arquivo.'],
+      ['cloud-sync-outline', 'Atualize sem trocar o link', 'Publicou uma versão nova? O mesmo link passa a baixar ela.'],
+      ['chart-line', 'Veja quantos baixaram', 'O contador de downloads aparece em cada app publicado.'],
+      ['delete-clock-outline', 'Você controla', 'Apague o link quando quiser e o download sai do ar.'],
+    ];
     return (
       <>
         <View style={studioStyles.homeHeader}>
@@ -14497,6 +14635,9 @@ function CindraStudioScreen({ visible, onClose }) {
               <Text style={geradosStyles.resumo}>{usados}/{LIMITE_PUBLICADOS_STUDIO} apps publicados</Text>
             )}
           </View>
+          <TouchableOpacity style={studioStyles.homeIconBtn} onPress={() => setAjudaPublicarAberta(true)} activeOpacity={0.8}>
+            <MaterialCommunityIcons name="help-circle-outline" size={22} color={COLORS.ink} />
+          </TouchableOpacity>
           {!!contaNuvem && (
             <TouchableOpacity style={studioStyles.homeIconBtn} onPress={carregarPublicados} activeOpacity={0.8}>
               {carregandoPublicados ? (
@@ -14509,90 +14650,238 @@ function CindraStudioScreen({ visible, onClose }) {
         </View>
 
         {!contaNuvem ? (
-          <View style={geradosStyles.vazio}>
-            <View style={geradosStyles.vazioIcone}>
-              <MaterialCommunityIcons name="account-lock-outline" size={36} color={COLORS.ember} />
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={geradosStyles.lista} showsVerticalScrollIndicator={false}>
+            <View style={pubStyles.heroVazio}>
+              <View style={geradosStyles.vazioIcone}>
+                <MaterialCommunityIcons name="rocket-launch-outline" size={36} color={COLORS.ember} />
+              </View>
+              <Text style={studioStyles.homeVazioTitulo}>Publique seu app com um link</Text>
+              <Text style={studioStyles.homeVazioTexto}>
+                Crie uma conta grátis e compartilhe o download do seu APK. Até {LIMITE_PUBLICADOS_STUDIO} apps por conta.
+              </Text>
             </View>
-            <Text style={studioStyles.homeVazioTitulo}>Entre na sua conta</Text>
-            <Text style={studioStyles.homeVazioTexto}>
-              O link de download só funciona com conta. Entre pra publicar até {LIMITE_PUBLICADOS_STUDIO} apps.
-            </Text>
-            <TouchableOpacity style={[geradosStyles.pubBtn, { marginTop: 16, height: 40, paddingHorizontal: 22 }]} onPress={() => setLoginNuvem('manual')} activeOpacity={0.85}>
-              <Text style={geradosStyles.pubBtnTexto}>Entrar</Text>
+            <View style={pubStyles.beneficiosCard}>
+              {beneficios.map(([icone, titulo, texto], i) => (
+                <View key={titulo} style={[pubStyles.beneficioLinha, i === beneficios.length - 1 && { borderBottomWidth: 0 }]}>
+                  <View style={pubStyles.beneficioIcone}>
+                    <MaterialCommunityIcons name={icone} size={19} color="#d9a2ff" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={pubStyles.beneficioTitulo}>{titulo}</Text>
+                    <Text style={pubStyles.beneficioTexto}>{texto}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+            <TouchableOpacity style={pubStyles.btnGrande} onPress={() => setLoginNuvem('manual')} activeOpacity={0.88}>
+              <MaterialCommunityIcons name="login-variant" size={20} color="#ffffff" />
+              <Text style={pubStyles.btnGrandeTexto}>Entrar ou criar conta</Text>
             </TouchableOpacity>
-          </View>
+            <Text style={pubStyles.termosEntrar}>
+              Ao continuar, você concorda com os{' '}
+              <Text style={pubStyles.legalLink} onPress={() => abrirLinkNoApp(URL_TERMOS_STUDIO)}>Termos de Uso</Text>
+              {' '}e a{' '}
+              <Text style={pubStyles.legalLink} onPress={() => abrirLinkNoApp(URL_PRIVACIDADE_STUDIO)}>Política de Privacidade</Text>.
+            </Text>
+          </ScrollView>
         ) : grupos.length === 0 ? (
           <View style={geradosStyles.vazio}>
             <View style={geradosStyles.vazioIcone}>
-              <MaterialCommunityIcons name="rocket-launch-outline" size={36} color={COLORS.ember} />
+              <MaterialCommunityIcons name="package-variant-closed" size={36} color={COLORS.ember} />
             </View>
             <Text style={studioStyles.homeVazioTitulo}>Nada pra publicar ainda</Text>
             <Text style={studioStyles.homeVazioTexto}>
               Abra um app e toque em ▶ pra compilar. O último APK de cada app aparece aqui pra você publicar.
             </Text>
+            <TouchableOpacity style={[geradosStyles.pubBtn, { marginTop: 16, height: 40, paddingHorizontal: 22 }]} onPress={() => setAjudaPublicarAberta(true)} activeOpacity={0.85}>
+              <Text style={geradosStyles.pubBtnTexto}>Como funciona</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <ScrollView style={{ flex: 1 }} contentContainerStyle={geradosStyles.lista} showsVerticalScrollIndicator={false}>
+            <View style={pubStyles.cotaCard}>
+              <View style={pubStyles.cotaTopo}>
+                <View style={{ flex: 1 }}>
+                  <Text style={pubStyles.cotaRotulo}>SEUS LINKS</Text>
+                  <Text style={pubStyles.cotaNumero}>
+                    {usados}<Text style={pubStyles.cotaDe}> / {LIMITE_PUBLICADOS_STUDIO}</Text>
+                  </Text>
+                </View>
+                <View style={pubStyles.cotaContaChip}>
+                  <MaterialCommunityIcons name="account-circle-outline" size={15} color="#d9a2ff" />
+                  <Text style={pubStyles.cotaContaTexto} numberOfLines={1}>{contaNuvem.nome}</Text>
+                </View>
+              </View>
+              <View style={pubStyles.cotaBarra}>
+                {Array.from({ length: LIMITE_PUBLICADOS_STUDIO }).map((_, i) => (
+                  <View key={i} style={[pubStyles.cotaPip, i < usados && pubStyles.cotaPipCheio]} />
+                ))}
+              </View>
+              <Text style={pubStyles.cotaSub}>
+                {limiteCheio
+                  ? 'Limite atingido. Apague um link pra publicar outro app.'
+                  : `${livres} ${livres === 1 ? 'vaga livre' : 'vagas livres'}${totalBaixadas ? `  ·  ${totalBaixadas} ${totalBaixadas === 1 ? 'download' : 'downloads'} no total` : ''}`}
+              </Text>
+            </View>
+
             {!!erroPublicados && (
-              <Text style={{ color: COLORS.error, fontSize: 12, marginBottom: 10 }}>{erroPublicados}</Text>
+              <View style={pubStyles.erroCaixa}>
+                <MaterialCommunityIcons name="alert-circle-outline" size={18} color={COLORS.error} />
+                <Text style={pubStyles.erroTexto}>{erroPublicados}</Text>
+                {erroPublicados.indexOf('Sessão') === 0 && (
+                  <TouchableOpacity onPress={() => setLoginNuvem('manual')} activeOpacity={0.8}>
+                    <Text style={pubStyles.erroAcao}>Entrar</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
-            {grupos.map((g, i) => {
+
+            {ordenados.map((g, i) => {
               const pub = publicados.find((p) => p.pacote === g.pacote);
               const enviando = publicandoPacote === g.pacote;
               const apagando = !!pub && apagandoSlug === pub.slug;
               const b = g.ultimo;
               const bloqueado = !pub && limiteCheio;
+              const desatualizado = !!pub && b.criadoEm > (pub.atualizadoEm || 0) + 60000;
+              const ehDebug = b.tipo !== 'release';
+              const processando = !!pub && !pub.pronto;
               return (
                 <ItemAnimadoStudio key={g.pacote} indice={i}>
-                  <View style={geradosStyles.grupo}>
+                  <View style={[geradosStyles.grupo, pub && pubStyles.cardPublicado]}>
                     <View style={geradosStyles.grupoTopo}>
-                      <IconeAppStudio dados={g.icone} lado={42} icone={22} raio={12} />
+                      <IconeAppStudio dados={g.icone} lado={46} icone={24} raio={13} />
                       <View style={{ flex: 1 }}>
                         <Text style={geradosStyles.grupoNome} numberOfLines={1}>{b.nomeApp}</Text>
                         <Text style={geradosStyles.pubInfo} numberOfLines={1}>
-                          Último APK: {b.versaoNome ? `v${b.versaoNome}` : 'APK'} · {formatarDataBuildStudio(b.criadoEm)}{b.tamanho ? ` · ${formatarTamanhoStudio(b.tamanho)}` : ''}
+                          {b.versaoNome ? `v${b.versaoNome}` : 'APK'} · {ehDebug ? 'debug' : 'release'}{b.tamanho ? ` · ${formatarTamanhoStudio(b.tamanho)}` : ''}
                         </Text>
-                        {pub && (
-                          <View style={geradosStyles.pubLinkLinha}>
-                            <TouchableOpacity style={{ flex: 1 }} onPress={() => abrirLinkPublicado(pub.url)} activeOpacity={0.7}>
-                              <Text style={geradosStyles.pubLink} numberOfLines={1}>{String(pub.url).replace(/^https:\/\//, '')}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={geradosStyles.pubBtnIcone} onPress={() => publicarGrupo(g)} disabled={!!publicandoPacote} activeOpacity={0.8}>
-                              {enviando ? (
-                                <ActivityIndicator size="small" color={COLORS.ink} />
-                              ) : (
-                                <MaterialCommunityIcons name="cloud-upload-outline" size={18} color={COLORS.ink} />
-                              )}
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[geradosStyles.pubBtn, geradosStyles.pubBtnApagar]} onPress={() => apagarLinkPublicado(pub)} disabled={apagando} activeOpacity={0.8}>
-                              {apagando ? (
-                                <ActivityIndicator size="small" color="#ff8a80" />
-                              ) : (
-                                <Text style={geradosStyles.pubBtnApagarTexto}>Apagar</Text>
-                              )}
-                            </TouchableOpacity>
+                        <Text style={geradosStyles.pubInfo} numberOfLines={1}>Gerado {tempoRelativoStudio(b.criadoEm)}</Text>
+                      </View>
+                      <View
+                        style={[
+                          pubStyles.status,
+                          processando
+                            ? { backgroundColor: 'rgba(255,122,217,0.14)' }
+                            : desatualizado
+                              ? { backgroundColor: 'rgba(255,196,0,0.14)' }
+                              : pub
+                                ? { backgroundColor: 'rgba(139,212,80,0.16)' }
+                                : { backgroundColor: 'rgba(255,255,255,0.07)' },
+                        ]}
+                      >
+                        <View
+                          style={[
+                            pubStyles.statusPonto,
+                            { backgroundColor: processando ? COLORS.gold : desatualizado ? '#ffc400' : pub ? '#8bd450' : COLORS.dim },
+                          ]}
+                        />
+                        <Text
+                          style={[
+                            pubStyles.statusTexto,
+                            { color: processando ? COLORS.gold : desatualizado ? '#ffc400' : pub ? '#8bd450' : COLORS.dim },
+                          ]}
+                        >
+                          {processando ? 'ENVIANDO' : desatualizado ? 'DESATUALIZADO' : pub ? 'NO AR' : 'NÃO PUBLICADO'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {pub ? (
+                      <View style={pubStyles.corpo}>
+                        <TouchableOpacity style={pubStyles.linkPilula} onPress={() => abrirLinkPublicado(pub.url)} activeOpacity={0.75}>
+                          <MaterialCommunityIcons name="link-variant" size={16} color="#d9a2ff" />
+                          <Text style={pubStyles.linkTexto} numberOfLines={1}>{String(pub.url).replace(/^https:\/\//, '')}</Text>
+                          <MaterialCommunityIcons name="open-in-new" size={15} color={COLORS.dim} />
+                        </TouchableOpacity>
+                        <View style={pubStyles.estatLinha}>
+                          <View style={pubStyles.estat}>
+                            <MaterialCommunityIcons name="download-outline" size={14} color={COLORS.dim} />
+                            <Text style={pubStyles.estatTexto}>{Number(pub.baixadas) || 0} {(Number(pub.baixadas) || 0) === 1 ? 'download' : 'downloads'}</Text>
+                          </View>
+                          <View style={pubStyles.estat}>
+                            <MaterialCommunityIcons name="update" size={14} color={COLORS.dim} />
+                            <Text style={pubStyles.estatTexto} numberOfLines={1}>
+                              {pub.atualizadoEm ? `Atualizado ${tempoRelativoStudio(pub.atualizadoEm)}` : 'Sem APK enviado'}
+                            </Text>
+                          </View>
+                          {!!pub.versao && (
+                            <View style={pubStyles.estat}>
+                              <MaterialCommunityIcons name="tag-outline" size={14} color={COLORS.dim} />
+                              <Text style={pubStyles.estatTexto}>v{pub.versao}</Text>
+                            </View>
+                          )}
+                        </View>
+                        {desatualizado && (
+                          <Text style={pubStyles.dica}>Você gerou um APK mais novo. Toque em Atualizar pra o link baixar essa versão.</Text>
+                        )}
+                        <View style={pubStyles.acoes}>
+                          <TouchableOpacity style={pubStyles.acao} onPress={() => copiarLinkPublicado(pub)} activeOpacity={0.8}>
+                            <MaterialCommunityIcons name="content-copy" size={17} color={COLORS.ink} />
+                            <Text style={pubStyles.acaoTexto}>Copiar</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={pubStyles.acao} onPress={() => compartilharLinkPublicado(pub)} activeOpacity={0.8}>
+                            <MaterialCommunityIcons name="share-variant-outline" size={17} color={COLORS.ink} />
+                            <Text style={pubStyles.acaoTexto}>Enviar</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[pubStyles.acao, desatualizado && pubStyles.acaoDestaque]}
+                            onPress={() => publicarGrupo(g)}
+                            disabled={!!publicandoPacote}
+                            activeOpacity={0.8}
+                          >
+                            {enviando ? (
+                              <ActivityIndicator size="small" color={COLORS.ink} />
+                            ) : (
+                              <MaterialCommunityIcons name="cloud-upload-outline" size={17} color={desatualizado ? '#ffffff' : COLORS.ink} />
+                            )}
+                            <Text style={[pubStyles.acaoTexto, desatualizado && { color: '#ffffff' }]}>{enviando ? 'Enviando' : 'Atualizar'}</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[pubStyles.acao, pubStyles.acaoPerigo]}
+                            onPress={() => apagarLinkPublicado(pub)}
+                            disabled={apagando}
+                            activeOpacity={0.8}
+                          >
+                            {apagando ? (
+                              <ActivityIndicator size="small" color="#ff8a80" />
+                            ) : (
+                              <MaterialCommunityIcons name="trash-can-outline" size={17} color={COLORS.error} />
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={pubStyles.corpo}>
+                        {ehDebug && (
+                          <View style={pubStyles.avisoDebug}>
+                            <MaterialCommunityIcons name="bug-outline" size={15} color={COLORS.gold} />
+                            <Text style={pubStyles.avisoDebugTexto}>
+                              Esse APK é debug. Pra mandar pra outras pessoas, o ideal é compilar em release.
+                            </Text>
                           </View>
                         )}
-                      </View>
-                      {!pub && (
                         <TouchableOpacity
-                          style={[geradosStyles.pubBtn, bloqueado && geradosStyles.pubBtnInativo]}
-                          onPress={() => publicarGrupo(g)}
+                          style={[pubStyles.btnPublicar, bloqueado && { opacity: 0.45 }]}
+                          onPress={() => pedirPublicar(g)}
                           disabled={!!publicandoPacote}
-                          activeOpacity={0.85}
+                          activeOpacity={0.88}
                         >
                           {enviando ? (
                             <ActivityIndicator size="small" color="#ffffff" />
                           ) : (
-                            <Text style={[geradosStyles.pubBtnTexto, bloqueado && { color: COLORS.dim }]}>Publicar</Text>
+                            <MaterialCommunityIcons name={bloqueado ? 'lock-outline' : 'rocket-launch-outline'} size={18} color="#ffffff" />
                           )}
+                          <Text style={pubStyles.btnPublicarTexto}>
+                            {enviando ? 'Enviando APK...' : bloqueado ? 'Limite atingido' : 'Publicar este app'}
+                          </Text>
                         </TouchableOpacity>
-                      )}
-                    </View>
+                      </View>
+                    )}
                   </View>
                 </ItemAnimadoStudio>
               );
             })}
+            {renderRodapeLegalPublicar()}
           </ScrollView>
         )}
       </>
@@ -14669,6 +14958,141 @@ function CindraStudioScreen({ visible, onClose }) {
                 />
               </View>
             </>
+          )}
+        </FolhaInferiorStudio>
+      )}
+
+      {!!publicarPacote && (() => {
+        const g = agruparBuildsStudio(builds).find((x) => x.pacote === publicarPacote);
+        if (!g) return null;
+        const b = g.ultimo;
+        const ehDebug = b.tipo !== 'release';
+        return (
+          <FolhaInferiorStudio onFechar={() => setPublicarPacote(null)} insetBottom={insets.bottom}>
+            {(fechar) => (
+              <ScrollView style={{ maxHeight: 580 }} showsVerticalScrollIndicator={false}>
+                <View style={geradosStyles.detTopo}>
+                  <IconeAppStudio dados={g.icone} lado={56} icone={30} raio={16} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={studioStyles.folhaTitulo} numberOfLines={1}>Publicar {b.nomeApp}</Text>
+                    <Text style={studioStyles.folhaSub} numberOfLines={1}>
+                      {b.versaoNome ? `v${b.versaoNome}` : 'APK'} · {ehDebug ? 'debug' : 'release'}{b.tamanho ? ` · ${formatarTamanhoStudio(b.tamanho)}` : ''}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={pubStyles.passosCard}>
+                  {[
+                    ['cloud-upload-outline', 'O APK vai pro servidor do Cindra Studio.'],
+                    ['link-variant', 'Você ganha um link público pra baixar o app.'],
+                    ['cloud-sync-outline', 'Dá pra atualizar ou apagar o link quando quiser.'],
+                  ].map(([ic, t]) => (
+                    <View key={t} style={pubStyles.passoLinha}>
+                      <MaterialCommunityIcons name={ic} size={18} color="#d9a2ff" />
+                      <Text style={pubStyles.passoTexto}>{t}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                {ehDebug && (
+                  <View style={[pubStyles.avisoDebug, { marginBottom: 12 }]}>
+                    <MaterialCommunityIcons name="bug-outline" size={15} color={COLORS.gold} />
+                    <Text style={pubStyles.avisoDebugTexto}>
+                      É um APK debug. Funciona, mas pra distribuir o ideal é compilar em release.
+                    </Text>
+                  </View>
+                )}
+
+                {termosJaAceitos ? (
+                  <Text style={pubStyles.termosSheet}>
+                    Você já aceitou os{' '}
+                    <Text style={pubStyles.legalLink} onPress={() => abrirLinkNoApp(URL_TERMOS_STUDIO)}>Termos de Uso</Text>
+                    {' '}e a{' '}
+                    <Text style={pubStyles.legalLink} onPress={() => abrirLinkNoApp(URL_PRIVACIDADE_STUDIO)}>Política de Privacidade</Text>
+                    {' '}para publicar.
+                  </Text>
+                ) : (
+                  <TouchableOpacity style={pubStyles.aceiteLinha} onPress={() => setAceitouTermos((v) => !v)} activeOpacity={0.8}>
+                    <MaterialCommunityIcons
+                      name={aceitouTermos ? 'checkbox-marked' : 'checkbox-blank-outline'}
+                      size={24}
+                      color={aceitouTermos ? COLORS.ember : COLORS.dim}
+                    />
+                    <Text style={pubStyles.aceiteTexto}>
+                      Tenho o direito de distribuir este app e concordo com os{' '}
+                      <Text style={pubStyles.legalLink} onPress={() => abrirLinkNoApp(URL_TERMOS_STUDIO)}>Termos de Uso</Text>
+                      {' '}e a{' '}
+                      <Text style={pubStyles.legalLink} onPress={() => abrirLinkNoApp(URL_PRIVACIDADE_STUDIO)}>Política de Privacidade</Text>.
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                <View style={studioStyles.folhaConfirmaBotoes}>
+                  <TouchableOpacity style={studioStyles.folhaBtn} onPress={fechar} activeOpacity={0.8}>
+                    <Text style={studioStyles.folhaBtnTexto}>Cancelar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[studioStyles.folhaBtn, { backgroundColor: COLORS.ember }, !aceitouTermos && { opacity: 0.4 }]}
+                    onPress={() => { if (!aceitouTermos) return; fechar(); setTimeout(() => confirmarPublicar(g), 220); }}
+                    disabled={!aceitouTermos}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[studioStyles.folhaBtnTexto, { color: '#ffffff' }]}>Publicar</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
+          </FolhaInferiorStudio>
+        );
+      })()}
+
+      {ajudaPublicarAberta && (
+        <FolhaInferiorStudio onFechar={() => setAjudaPublicarAberta(false)} insetBottom={insets.bottom}>
+          {(fechar) => (
+            <ScrollView style={{ maxHeight: 600 }} showsVerticalScrollIndicator={false}>
+              <Text style={[studioStyles.folhaTitulo, { marginBottom: 4 }]}>Como funciona</Text>
+              <Text style={[studioStyles.folhaSub, { marginBottom: 14 }]}>Publique o APK e compartilhe só um link.</Text>
+
+              <View style={pubStyles.passosCard}>
+                {[
+                  ['numeric-1-circle-outline', 'Compile o app e gere o APK (aba Gerados).'],
+                  ['numeric-2-circle-outline', 'Entre na sua conta e toque em Publicar no app.'],
+                  ['numeric-3-circle-outline', `Copie ou envie o link. Você pode ter até ${LIMITE_PUBLICADOS_STUDIO} apps no ar.`],
+                  ['numeric-4-circle-outline', 'Gerou versão nova? Toque em Atualizar e o mesmo link baixa a nova.'],
+                ].map(([ic, t]) => (
+                  <View key={t} style={pubStyles.passoLinha}>
+                    <MaterialCommunityIcons name={ic} size={20} color="#d9a2ff" />
+                    <Text style={pubStyles.passoTexto}>{t}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <Text style={geradosStyles.detRotuloCampo}>REGRAS DE PUBLICAÇÃO</Text>
+              <View style={pubStyles.passosCard}>
+                {[
+                  ['check-circle-outline', '#8bd450', 'Publique apenas apps seus ou que você tem permissão pra distribuir.'],
+                  ['close-circle-outline', COLORS.error, 'Não publique vírus, golpes, apps que roubam dados ou que violam direitos de terceiros.'],
+                  ['alert-circle-outline', '#ffc400', `O APK pode ter até 95 MB. Cada conta tem até ${LIMITE_PUBLICADOS_STUDIO} links.`],
+                  ['shield-alert-outline', COLORS.gold, 'Links que violarem os Termos de Uso podem ser removidos sem aviso.'],
+                ].map(([ic, cor, t]) => (
+                  <View key={t} style={pubStyles.passoLinha}>
+                    <MaterialCommunityIcons name={ic} size={19} color={cor} />
+                    <Text style={pubStyles.passoTexto}>{t}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <Text style={pubStyles.termosSheet}>
+                Isso é um resumo. Leia os{' '}
+                <Text style={pubStyles.legalLink} onPress={() => abrirLinkNoApp(URL_TERMOS_STUDIO)}>Termos de Uso</Text>
+                {' '}e a{' '}
+                <Text style={pubStyles.legalLink} onPress={() => abrirLinkNoApp(URL_PRIVACIDADE_STUDIO)}>Política de Privacidade</Text>
+                {' '}completos.
+              </Text>
+              <TouchableOpacity style={studioStyles.folhaBtn} onPress={fechar} activeOpacity={0.8}>
+                <Text style={studioStyles.folhaBtnTexto}>Entendi</Text>
+              </TouchableOpacity>
+            </ScrollView>
           )}
         </FolhaInferiorStudio>
       )}
