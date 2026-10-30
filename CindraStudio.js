@@ -1164,6 +1164,11 @@ function pastaProjetoStudio(pacote) {
 // manifest sempre poder apontar pra ela.
 const MARCA_DAGUA_CLASSE = 'CindraWatermarkApp';
 
+// Projetos (pelo pacote) que o dono desligou a marca d'água. Menu escondido:
+// segurar a engrenagem de permissões no editor. Salvo em _prefs.json (semMarca)
+// e carregado quando o app abre. Vale só pro projeto em que foi ligado.
+const PACOTES_SEM_MARCA_STUDIO = new Set();
+
 // Código secreto que tira a marca d'água. Fica guardado só como "assinatura"
 // (hash), então o código em si não aparece escrito no arquivo. Depois de
 // digitado certo UMA vez, o aparelho lembra pra sempre (salvo em _prefs.json).
@@ -1385,7 +1390,7 @@ function aplicarMarcaDaguaObrigatoria(projeto) {
   const marcaPath = `app/src/main/java/${pkgPath}/${MARCA_DAGUA_CLASSE}.java`;
 
   const conteudos = { ...projeto.conteudos };
-  const semMarca = projetoTemCodigoSemMarca(conteudos);
+  const semMarca = PACOTES_SEM_MARCA_STUDIO.has(projeto.pacote) || projetoTemCodigoSemMarca(conteudos);
   conteudos[marcaPath] = gerarFonteMarcaDagua(projeto.pacote, semMarca);
   if (conteudos[manifestPath]) {
     conteudos[manifestPath] = forcarAppNaManifest(conteudos[manifestPath]);
@@ -11169,6 +11174,8 @@ function CindraStudioScreen({ visible, onClose }) {
   // fechar o app. Só começa do zero se a pessoa tocar em "Novo projeto".
   const [estadoCarregado, setEstadoCarregado] = useState(false);
   const [confirmandoNovo, setConfirmandoNovo] = useState(false);
+  const [marcaMenuAberto, setMarcaMenuAberto] = useState(false); // menu escondido (segurar a engrenagem)
+  const [, setMarcaVersao] = useState(0);
   const [permissoesAberto, setPermissoesAberto] = useState(false); // folha de permissões (engrenagem do editor)
   const [buscaPermissao, setBuscaPermissao] = useState('');
   const { height: alturaTela, width: larguraTela } = useWindowDimensions();
@@ -11198,6 +11205,10 @@ function CindraStudioScreen({ visible, onClose }) {
       if (Object.prototype.hasOwnProperty.call(ROTULOS_ORDEM_STUDIO, prefs.ordenacao)) setOrdenacao(prefs.ordenacao);
       if (typeof prefs.favoritosNoTopo === 'boolean') setFavoritosNoTopo(prefs.favoritosNoTopo);
       if (prefs.termosPublicarAceitos) setTermosJaAceitos(true);
+      PACOTES_SEM_MARCA_STUDIO.clear();
+      if (prefs.semMarca && typeof prefs.semMarca === 'object') {
+        Object.keys(prefs.semMarca).forEach((k) => { if (prefs.semMarca[k]) PACOTES_SEM_MARCA_STUDIO.add(k); });
+      }
       if (Object.prototype.hasOwnProperty.call(ROTULOS_ORDEM_GERADOS, prefs.ordenacaoGerados)) setOrdenacaoGerados(prefs.ordenacaoGerados);
       if (prefs.keystore && prefs.keystore.caminho) {
         // só reaproveita se a cópia do keystore ainda existe no aparelho
@@ -12574,6 +12585,18 @@ function CindraStudioScreen({ visible, onClose }) {
 
   // Liga/desliga uma permissão: escreve (ou apaga) a linha <uses-permission>
   // no AndroidManifest.xml do projeto. O arquivo nunca é excluído.
+  // Liga/desliga a marca d'água SÓ do projeto aberto. Vale na próxima compilação.
+  const marcaDesligadaNoProjeto = !!(projeto && PACOTES_SEM_MARCA_STUDIO.has(projeto.pacote));
+  const alternarMarcaDagua = (ativar) => {
+    if (!projeto || !projeto.pacote) return;
+    if (ativar) PACOTES_SEM_MARCA_STUDIO.delete(projeto.pacote);
+    else PACOTES_SEM_MARCA_STUDIO.add(projeto.pacote);
+    const obj = {};
+    PACOTES_SEM_MARCA_STUDIO.forEach((k) => { obj[k] = true; });
+    salvarPref('semMarca', obj);
+    setMarcaVersao((v) => v + 1);
+  };
+
   const alternarPermissao = (nomePermissao, ligar) => {
     setProjeto((atual) => {
       if (!atual) return atual;
@@ -14022,6 +14045,7 @@ function CindraStudioScreen({ visible, onClose }) {
     if (detalheBuildId) { fecharDetalheBuild(); return; }
     if (menuOrdenarGeradosAberto) { setMenuOrdenarGeradosAberto(false); return; }
     if (cardNo) { setCardNo(null); setPastaEmCriacao(false); setNomeNovaPasta(''); return; }
+    if (marcaMenuAberto) { setMarcaMenuAberto(false); return; }
     if (permissoesAberto) { setPermissoesAberto(false); setBuscaPermissao(''); return; }
     if (snippetsAberto) { setSnippetsAberto(false); setFiltroSnippet(''); return; }
     if (menuProjetoAberto) { setMenuProjetoAberto(false); return; }
@@ -15949,6 +15973,8 @@ function CindraStudioScreen({ visible, onClose }) {
             <View ref={tutRef('wsCfg')} collapsable={false}><TouchableOpacity
               style={studioStyles.topBarIconBtn}
               onPress={() => setPermissoesAberto(true)}
+              onLongPress={() => setMarcaMenuAberto(true)}
+              delayLongPress={450}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.75}
             >
@@ -16498,6 +16524,46 @@ function CindraStudioScreen({ visible, onClose }) {
                 </Text>
               </TouchableOpacity>
             </>
+          )}
+        </FolhaInferiorStudio>
+      )}
+
+      {marcaMenuAberto && (
+        <FolhaInferiorStudio
+          onFechar={() => setMarcaMenuAberto(false)}
+          insetBottom={insets.bottom}
+        >
+          {() => (
+            <View>
+              <View style={studioStyles.nodoTopo}>
+                <View style={studioStyles.nodoIcone}>
+                  <MaterialCommunityIcons name="water-outline" size={24} color={COLORS.ember} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={studioStyles.folhaTitulo}>Marca d'água</Text>
+                  <Text style={studioStyles.folhaSub} numberOfLines={2}>
+                    Só neste projeto · vale na próxima compilação
+                  </Text>
+                </View>
+              </View>
+              <View style={[studioStyles.permLinha, { marginTop: 14 }]}>
+                <View style={studioStyles.nodoOpcaoIcone}>
+                  <MaterialCommunityIcons name={marcaDesligadaNoProjeto ? 'eye-off-outline' : 'eye-outline'} size={20} color={marcaDesligadaNoProjeto ? COLORS.dim : COLORS.ember} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={studioStyles.permNome}>Mostrar "Cindra Studio"</Text>
+                  <Text style={studioStyles.nodoOpcaoDesc} numberOfLines={2}>
+                    {marcaDesligadaNoProjeto ? 'Desativada: o app sai sem marca d\'água' : 'Ativada: aparece no canto da tela do app'}
+                  </Text>
+                </View>
+                <Switch
+                  value={!marcaDesligadaNoProjeto}
+                  onValueChange={(v) => alternarMarcaDagua(v)}
+                  trackColor={{ false: 'rgba(255,255,255,0.15)', true: COLORS.ember }}
+                  thumbColor="#ffffff"
+                />
+              </View>
+            </View>
           )}
         </FolhaInferiorStudio>
       )}
