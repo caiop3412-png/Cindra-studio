@@ -2712,6 +2712,25 @@ function formatarDataBuildStudio(ms) {
   return `${dois(d.getDate())}/${dois(d.getMonth() + 1)}/${d.getFullYear()} às ${dois(d.getHours())}:${dois(d.getMinutes())}`;
 }
 
+// Tela inicial (Meus apps): saudação e dicas.
+function saudacaoStudio() {
+  const h = new Date().getHours();
+  if (h < 5) return 'Boa madrugada';
+  if (h < 12) return 'Bom dia';
+  if (h < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
+const DICAS_HOME_STUDIO = [
+  ['gesture-tap-hold', 'Segure o dedo num app pra abrir as ações rápidas: abrir, favoritar, versão e excluir.'],
+  ['star-outline', 'Favorite seus apps principais. Eles podem ficar sempre no topo da lista.'],
+  ['package-variant-closed', 'Na aba Gerados, segure um APK pra selecionar vários de uma vez e apagar ou copiar.'],
+  ['rocket-launch-outline', 'Publique o APK e mande só um link de download. A aba Publicar faz isso.'],
+  ['note-text-outline', 'Toque num APK da aba Gerados pra ver os detalhes e escrever uma nota.'],
+  ['folder-download-outline', 'Os APKs gerados também vão pra pasta cindra-studio do celular, quando o acesso aos arquivos está liberado.'],
+  ['cloud-sync-outline', 'Entre na sua conta pra ter o backup dos seus projetos na nuvem.'],
+  ['school-outline', 'A aba Aprender tem exemplos de código prontos pra copiar e colar.'],
+];
+
 // Aba Gerados: ordenação, filtros e busca.
 const ROTULOS_ORDEM_GERADOS = {
   recentes: 'Mais recentes',
@@ -4050,6 +4069,34 @@ function NoArvoreArquivo({ no, pastasAbertas, alternarPasta, arquivoAtivo, onAbr
 // Link do card "Gostando do CindraStudio?". Deixe vazio pra mostrar só o
 // aviso "em breve" ao tocar; coloque a URL (site, Instagram, Pix...) pra abrir.
 const STUDIO_LINK_APOIO = 'https://whatsapp.com/channel/0029Vb8GnMiFHWq4Sovp7E2J';
+
+// Estilos da tela inicial "Meus apps".
+const homeStyles = StyleSheet.create({
+  chips: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, height: 20, borderRadius: 10, backgroundColor: 'rgba(180,60,255,0.16)' },
+  chipTexto: { color: '#d9a2ff', fontSize: 9.5, fontWeight: '800', letterSpacing: 0.3 },
+  chipPonto: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#8bd450' },
+  metaLinha: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 10, rowGap: 2 },
+  cardFavorito: { borderWidth: 1, borderColor: 'rgba(255,122,217,0.28)' },
+  heroStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+  heroStat: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.12)' },
+  heroStatTexto: { color: '#f1e4ff', fontSize: 11, fontWeight: '700' },
+  heroBtnSec: { width: 50, height: 50, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
+  atalhosLinha: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  atalho: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: COLORS.lineSoft },
+  atalhoIcone: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  atalhoRotulo: { color: COLORS.ink, fontSize: 11, fontWeight: '700', marginTop: 8 },
+  atalhoBadge: { position: 'absolute', top: -6, right: -8, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, backgroundColor: COLORS.ember, alignItems: 'center', justifyContent: 'center' },
+  atalhoBadgeTexto: { color: '#ffffff', fontSize: 10, fontWeight: '800' },
+  dica: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 18, padding: 14, borderRadius: 20, backgroundColor: 'rgba(255,122,217,0.07)', borderWidth: 1, borderColor: 'rgba(255,122,217,0.22)' },
+  dicaIcone: { width: 42, height: 42, borderRadius: 14, backgroundColor: 'rgba(255,122,217,0.14)', alignItems: 'center', justifyContent: 'center' },
+  dicaRotulo: { color: COLORS.gold, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  dicaTexto: { color: COLORS.ink, fontSize: 12.5, lineHeight: 18, marginTop: 3 },
+  vazioPassos: { flexDirection: 'row', gap: 8, marginTop: 26, alignSelf: 'stretch' },
+  vazioPasso: { flex: 1, alignItems: 'center', paddingVertical: 12, paddingHorizontal: 4, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.05)' },
+  vazioPassoIcone: { width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(180,60,255,0.16)', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  vazioPassoTexto: { color: COLORS.dim, fontSize: 10.5, fontWeight: '600' },
+});
 
 // Estilos da aba "Publicar".
 const pubStyles = StyleSheet.create({
@@ -13481,6 +13528,7 @@ function CindraStudioScreen({ visible, onClose }) {
   const [erroPublicados, setErroPublicados] = useState('');
   const [publicandoPacote, setPublicandoPacote] = useState(null); // pacote em envio
   const [apagandoSlug, setApagandoSlug] = useState(null);
+  const [dicaExtra, setDicaExtra] = useState(0); // toque no card "Dica" passa pra próxima
   const [publicarPacote, setPublicarPacote] = useState(null); // folha "Publicar app" (confirmação + termos)
   const [aceitouTermos, setAceitouTermos] = useState(false); // caixinha da folha
   const [termosJaAceitos, setTermosJaAceitos] = useState(false); // aceitou numa publicação anterior
@@ -13786,51 +13834,66 @@ function CindraStudioScreen({ visible, onClose }) {
     <IconeAppStudio dados={p} lado={lado} icone={icone} raio={raio} />
   );
 
-  const renderCardLista = (p, i) => (
-    <ItemAnimadoStudio key={p.pacote} indice={i}>
-      <TouchableOpacity
-        style={studioStyles.projCard}
-        onPress={() => abrirProjetoDaLista(p.pacote)}
-        onLongPress={() => setCardProjeto(p)}
-        delayLongPress={350}
-        activeOpacity={0.8}
-      >
-        {renderIconeProjeto(p)}
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={studioStyles.projNome} numberOfLines={1}>{p.nomeApp}</Text>
-            {p.favorito && <MaterialCommunityIcons name="star" size={14} color={COLORS.gold} />}
-          </View>
-          <Text style={studioStyles.projPacote} numberOfLines={1}>{p.pacote}</Text>
-          {!!p.atualizadoEm && (
-            <View style={studioStyles.projTempoLinha}>
-              <MaterialCommunityIcons name="clock-outline" size={12} color={COLORS.dim} />
-              <Text style={studioStyles.projTempo}>{tempoRelativoStudio(p.atualizadoEm)}</Text>
-            </View>
-          )}
-        </View>
-        <TouchableOpacity
-          onPress={() => setCardProjeto(p)}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          style={studioStyles.projMais}
-        >
-          <MaterialCommunityIcons name="dots-vertical" size={22} color={COLORS.dim} />
-        </TouchableOpacity>
-      </TouchableOpacity>
-    </ItemAnimadoStudio>
-  );
+  // Resumo de cada app na tela inicial: quantos APKs, o último build e se está no ar.
+  const infoAppHome = (pacote) => {
+    let qtd = 0;
+    let ultimo = null;
+    builds.forEach((b) => {
+      if (b.pacote !== pacote) return;
+      qtd += 1;
+      if (!ultimo || b.criadoEm > ultimo.criadoEm) ultimo = b;
+    });
+    return { qtd, ultimo, noAr: publicados.some((x) => x.pacote === pacote) };
+  };
 
-  const renderCardGrade = (p, i) => (
-    <ItemAnimadoStudio key={p.pacote} indice={i} style={{ width: '48.5%', marginBottom: 10 }}>
-      <TouchableOpacity
-        style={studioStyles.gradeCard}
-        onPress={() => abrirProjetoDaLista(p.pacote)}
-        onLongPress={() => setCardProjeto(p)}
-        delayLongPress={350}
-        activeOpacity={0.8}
-      >
-        <View style={studioStyles.gradeTopo}>
-          {renderIconeProjeto(p, 48, 26, 15)}
+  const renderChipsApp = (info) => {
+    if (!info.qtd && !info.noAr) return null;
+    return (
+      <View style={homeStyles.chips}>
+        {info.qtd > 0 && (
+          <View style={homeStyles.chip}>
+            <MaterialCommunityIcons name="package-variant-closed" size={11} color="#d9a2ff" />
+            <Text style={homeStyles.chipTexto}>{info.qtd} {info.qtd === 1 ? 'APK' : 'APKs'}</Text>
+          </View>
+        )}
+        {info.noAr && (
+          <View style={[homeStyles.chip, { backgroundColor: 'rgba(139,212,80,0.14)' }]}>
+            <View style={homeStyles.chipPonto} />
+            <Text style={[homeStyles.chipTexto, { color: '#8bd450' }]}>NO AR</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const renderCardLista = (p, i) => {
+    const info = infoAppHome(p.pacote);
+    return (
+      <ItemAnimadoStudio key={p.pacote} indice={i}>
+        <TouchableOpacity
+          style={[studioStyles.projCard, p.favorito && homeStyles.cardFavorito]}
+          onPress={() => abrirProjetoDaLista(p.pacote)}
+          onLongPress={() => setCardProjeto(p)}
+          delayLongPress={350}
+          activeOpacity={0.8}
+        >
+          {renderIconeProjeto(p)}
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={studioStyles.projNome} numberOfLines={1}>{p.nomeApp}</Text>
+              {p.favorito && <MaterialCommunityIcons name="star" size={14} color={COLORS.gold} />}
+            </View>
+            <Text style={studioStyles.projPacote} numberOfLines={1}>{p.pacote}</Text>
+            <View style={homeStyles.metaLinha}>
+              {!!p.atualizadoEm && (
+                <View style={studioStyles.projTempoLinha}>
+                  <MaterialCommunityIcons name="clock-outline" size={12} color={COLORS.dim} />
+                  <Text style={studioStyles.projTempo}>{tempoRelativoStudio(p.atualizadoEm)}</Text>
+                </View>
+              )}
+              {renderChipsApp(info)}
+            </View>
+          </View>
           <TouchableOpacity
             onPress={() => setCardProjeto(p)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -13838,16 +13901,43 @@ function CindraStudioScreen({ visible, onClose }) {
           >
             <MaterialCommunityIcons name="dots-vertical" size={22} color={COLORS.dim} />
           </TouchableOpacity>
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 12 }}>
-          <Text style={[studioStyles.projNome, { flexShrink: 1 }]} numberOfLines={1}>{p.nomeApp}</Text>
-          {p.favorito && <MaterialCommunityIcons name="star" size={14} color={COLORS.gold} />}
-        </View>
-        <Text style={studioStyles.projPacote} numberOfLines={1}>{p.pacote}</Text>
-        {!!p.atualizadoEm && <Text style={studioStyles.gradeTempo}>{tempoRelativoStudio(p.atualizadoEm)}</Text>}
-      </TouchableOpacity>
-    </ItemAnimadoStudio>
-  );
+        </TouchableOpacity>
+      </ItemAnimadoStudio>
+    );
+  };
+
+  const renderCardGrade = (p, i) => {
+    const info = infoAppHome(p.pacote);
+    return (
+      <ItemAnimadoStudio key={p.pacote} indice={i} style={{ width: '48.5%', marginBottom: 10 }}>
+        <TouchableOpacity
+          style={[studioStyles.gradeCard, p.favorito && homeStyles.cardFavorito]}
+          onPress={() => abrirProjetoDaLista(p.pacote)}
+          onLongPress={() => setCardProjeto(p)}
+          delayLongPress={350}
+          activeOpacity={0.8}
+        >
+          <View style={studioStyles.gradeTopo}>
+            {renderIconeProjeto(p, 48, 26, 15)}
+            <TouchableOpacity
+              onPress={() => setCardProjeto(p)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={studioStyles.projMais}
+            >
+              <MaterialCommunityIcons name="dots-vertical" size={22} color={COLORS.dim} />
+            </TouchableOpacity>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 12 }}>
+            <Text style={[studioStyles.projNome, { flexShrink: 1 }]} numberOfLines={1}>{p.nomeApp}</Text>
+            {p.favorito && <MaterialCommunityIcons name="star" size={14} color={COLORS.gold} />}
+          </View>
+          <Text style={studioStyles.projPacote} numberOfLines={1}>{p.pacote}</Text>
+          {renderChipsApp(info)}
+          {!!p.atualizadoEm && <Text style={studioStyles.gradeTempo}>{tempoRelativoStudio(p.atualizadoEm)}</Text>}
+        </TouchableOpacity>
+      </ItemAnimadoStudio>
+    );
+  };
 
   const renderTileFiltro = (id, icone, numero, rotulo) => {
     const ativo = filtroProjetos === id;
@@ -13867,41 +13957,114 @@ function CindraStudioScreen({ visible, onClose }) {
     );
   };
 
-  const renderHero = () => (
-    <View style={studioStyles.heroCard}>
-      <Grad cores={GRAD_LOGO_ESCURO} />
-      <MaterialCommunityIcons
-        name={ultimoProjeto.iconeEscolhido || ICONES_APP_STUDIO[0]}
-        size={170}
-        color="#ffffff"
-        style={studioStyles.heroMarcaDagua}
-      />
-      <View style={studioStyles.heroTopo}>
-        <View style={studioStyles.heroSelo}>
-          <MaterialCommunityIcons name="lightning-bolt" size={13} color="#e9d5ff" />
-          <Text style={studioStyles.heroSeloTexto}>RETOMAR</Text>
+  const renderHero = () => {
+    const info = infoAppHome(ultimoProjeto.pacote);
+    return (
+      <View style={studioStyles.heroCard}>
+        <Grad cores={GRAD_LOGO_ESCURO} />
+        <MaterialCommunityIcons
+          name={ultimoProjeto.iconeEscolhido || ICONES_APP_STUDIO[0]}
+          size={170}
+          color="#ffffff"
+          style={studioStyles.heroMarcaDagua}
+        />
+        <View style={studioStyles.heroTopo}>
+          <View style={studioStyles.heroSelo}>
+            <MaterialCommunityIcons name="lightning-bolt" size={13} color="#e9d5ff" />
+            <Text style={studioStyles.heroSeloTexto}>RETOMAR</Text>
+          </View>
+          {!!ultimoProjeto.atualizadoEm && (
+            <Text style={studioStyles.heroTempo}>Editado {tempoRelativoStudio(ultimoProjeto.atualizadoEm)}</Text>
+          )}
         </View>
-        {!!ultimoProjeto.atualizadoEm && (
-          <Text style={studioStyles.heroTempo}>Editado {tempoRelativoStudio(ultimoProjeto.atualizadoEm)}</Text>
-        )}
+        <View style={[studioStyles.heroCorpo, { marginBottom: 12 }]}>
+          {renderIconeProjeto(ultimoProjeto, 58, 30, 18)}
+          <View style={{ flex: 1 }}>
+            <Text style={studioStyles.heroNome} numberOfLines={1}>{ultimoProjeto.nomeApp}</Text>
+            <Text style={studioStyles.heroPacote} numberOfLines={1}>Android · {ultimoProjeto.pacote}</Text>
+          </View>
+        </View>
+        <View style={homeStyles.heroStats}>
+          <View style={homeStyles.heroStat}>
+            <MaterialCommunityIcons name="package-variant-closed" size={14} color="#e9d5ff" />
+            <Text style={homeStyles.heroStatTexto}>{info.qtd} {info.qtd === 1 ? 'APK' : 'APKs'}</Text>
+          </View>
+          <View style={homeStyles.heroStat}>
+            <MaterialCommunityIcons name="hammer-wrench" size={14} color="#e9d5ff" />
+            <Text style={homeStyles.heroStatTexto} numberOfLines={1}>
+              {info.ultimo ? `Build ${tempoRelativoStudio(info.ultimo.criadoEm)}` : 'Ainda não compilou'}
+            </Text>
+          </View>
+          {info.noAr && (
+            <View style={[homeStyles.heroStat, { backgroundColor: 'rgba(139,212,80,0.22)' }]}>
+              <View style={homeStyles.chipPonto} />
+              <Text style={[homeStyles.heroStatTexto, { color: '#c8f2a0' }]}>No ar</Text>
+            </View>
+          )}
+        </View>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <TouchableOpacity
+            style={[studioStyles.heroBtn, { flex: 1 }]}
+            onPress={() => abrirProjetoDaLista(ultimoProjeto.pacote)}
+            activeOpacity={0.85}
+          >
+            <MaterialCommunityIcons name="play" size={20} color="#3a1d7a" />
+            <Text style={studioStyles.heroBtnText}>Continuar editando</Text>
+          </TouchableOpacity>
+          {info.qtd > 0 && (
+            <TouchableOpacity style={homeStyles.heroBtnSec} onPress={() => setAbaHome('gerados')} activeOpacity={0.85}>
+              <MaterialCommunityIcons name="package-variant-closed" size={22} color="#ffffff" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
-      <View style={studioStyles.heroCorpo}>
-        {renderIconeProjeto(ultimoProjeto, 58, 30, 18)}
+    );
+  };
+
+  // Atalhos pras outras telas (com contagem quando faz sentido).
+  const renderAtalhosHome = () => {
+    const itens = [
+      { id: 'novo', icone: 'plus-circle-outline', rotulo: 'Novo app', cor: '#b43cff', acao: abrirTelaConfigNova },
+      { id: 'gerados', icone: 'package-variant-closed', rotulo: 'Gerados', cor: '#4f46ff', badge: builds.length, acao: () => setAbaHome('gerados') },
+      { id: 'publicar', icone: 'rocket-launch-outline', rotulo: 'Publicar', cor: '#ff2fc6', badge: publicados.length, acao: () => setAbaHome('publicar') },
+      { id: 'aprender', icone: 'school-outline', rotulo: 'Aprender', cor: '#8bd450', acao: () => setAbaHome('aprender') },
+    ];
+    return (
+      <View style={homeStyles.atalhosLinha}>
+        {itens.map((a) => (
+          <TouchableOpacity key={a.id} style={homeStyles.atalho} onPress={a.acao} activeOpacity={0.85}>
+            <View style={[homeStyles.atalhoIcone, { backgroundColor: hexParaRgba(a.cor, 0.18) }]}>
+              <MaterialCommunityIcons name={a.icone} size={22} color={a.cor} />
+              {!!a.badge && (
+                <View style={homeStyles.atalhoBadge}>
+                  <Text style={homeStyles.atalhoBadgeTexto}>{a.badge > 99 ? '99+' : a.badge}</Text>
+                </View>
+              )}
+            </View>
+            <Text style={homeStyles.atalhoRotulo} numberOfLines={1}>{a.rotulo}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  };
+
+  // Card "Dica": uma por dia; tocar passa pra próxima.
+  const renderDicaHome = () => {
+    const idx = (Math.floor(Date.now() / 86400000) + dicaExtra) % DICAS_HOME_STUDIO.length;
+    const [icone, texto] = DICAS_HOME_STUDIO[idx];
+    return (
+      <TouchableOpacity style={homeStyles.dica} onPress={() => setDicaExtra((v) => v + 1)} activeOpacity={0.85}>
+        <View style={homeStyles.dicaIcone}>
+          <MaterialCommunityIcons name={icone} size={22} color={COLORS.gold} />
+        </View>
         <View style={{ flex: 1 }}>
-          <Text style={studioStyles.heroNome} numberOfLines={1}>{ultimoProjeto.nomeApp}</Text>
-          <Text style={studioStyles.heroPacote} numberOfLines={1}>Android · {ultimoProjeto.pacote}</Text>
+          <Text style={homeStyles.dicaRotulo}>DICA  ·  {idx + 1}/{DICAS_HOME_STUDIO.length}</Text>
+          <Text style={homeStyles.dicaTexto}>{texto}</Text>
         </View>
-      </View>
-      <TouchableOpacity
-        style={studioStyles.heroBtn}
-        onPress={() => abrirProjetoDaLista(ultimoProjeto.pacote)}
-        activeOpacity={0.85}
-      >
-        <MaterialCommunityIcons name="play" size={20} color="#3a1d7a" />
-        <Text style={studioStyles.heroBtnText}>Continuar editando</Text>
+        <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.dim} />
       </TouchableOpacity>
-    </View>
-  );
+    );
+  };
 
   const renderAbaApps = () => {
     const buscando = !!termoBusca;
@@ -13943,6 +14106,9 @@ function CindraStudioScreen({ visible, onClose }) {
               <View style={{ flex: 1 }}>
                 <Text style={studioStyles.homeOverline}>CINDRA-STUDIO</Text>
                 <Text style={studioStyles.homeTitulo} numberOfLines={1}>Meus apps</Text>
+                <Text style={geradosStyles.resumo} numberOfLines={1}>
+                  {saudacaoStudio()}{contaNuvem ? `, ${contaNuvem.nome}` : ''}
+                </Text>
               </View>
               <TouchableOpacity
                 style={studioStyles.homeIconBtn}
@@ -13975,6 +14141,20 @@ function CindraStudioScreen({ visible, onClose }) {
               <MaterialCommunityIcons name="plus" size={22} color="#ffffff" />
               <Text style={studioStyles.vazioBtnText}>Criar app</Text>
             </TouchableOpacity>
+            <View style={homeStyles.vazioPassos}>
+              {[
+                ['code-braces', 'Escreva o código'],
+                ['hammer-wrench', 'Gere o APK'],
+                ['rocket-launch-outline', 'Publique o link'],
+              ].map(([ic, t], i) => (
+                <View key={t} style={homeStyles.vazioPasso}>
+                  <View style={homeStyles.vazioPassoIcone}>
+                    <MaterialCommunityIcons name={ic} size={18} color="#d9a2ff" />
+                  </View>
+                  <Text style={homeStyles.vazioPassoTexto} numberOfLines={1}>{i + 1}. {t}</Text>
+                </View>
+              ))}
+            </View>
           </View>
         ) : (
           <ScrollView
@@ -13982,6 +14162,8 @@ function CindraStudioScreen({ visible, onClose }) {
             contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 28 }}
           >
             {!buscando && ultimoProjeto && renderHero()}
+
+            {!buscando && renderAtalhosHome()}
 
             {!buscando && (
               <View style={studioStyles.tilesLinha}>
@@ -14030,6 +14212,8 @@ function CindraStudioScreen({ visible, onClose }) {
             ) : (
               listaExibida.map(renderCardLista)
             )}
+
+            {!buscando && renderDicaHome()}
 
             {!buscando && (
               <TouchableOpacity style={studioStyles.apoioCard} onPress={abrirLinkApoio} activeOpacity={0.85}>
