@@ -2720,17 +2720,6 @@ function saudacaoStudio() {
   if (h < 18) return 'Boa tarde';
   return 'Boa noite';
 }
-const DICAS_HOME_STUDIO = [
-  ['gesture-tap-hold', 'Segure o dedo num app pra abrir as ações rápidas: abrir, favoritar, versão e excluir.'],
-  ['star-outline', 'Favorite seus apps principais. Eles podem ficar sempre no topo da lista.'],
-  ['package-variant-closed', 'Na aba Gerados, segure um APK pra selecionar vários de uma vez e apagar ou copiar.'],
-  ['rocket-launch-outline', 'Publique o APK e mande só um link de download. A aba Publicar faz isso.'],
-  ['note-text-outline', 'Toque num APK da aba Gerados pra ver os detalhes e escrever uma nota.'],
-  ['folder-download-outline', 'Os APKs gerados também vão pra pasta cindra-studio do celular, quando o acesso aos arquivos está liberado.'],
-  ['cloud-sync-outline', 'Entre na sua conta pra ter o backup dos seus projetos na nuvem.'],
-  ['school-outline', 'A aba Aprender tem exemplos de código prontos pra copiar e colar.'],
-];
-
 // Aba Gerados: ordenação, filtros e busca.
 const ROTULOS_ORDEM_GERADOS = {
   recentes: 'Mais recentes',
@@ -4082,16 +4071,12 @@ const homeStyles = StyleSheet.create({
   heroStat: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.12)' },
   heroStatTexto: { color: '#f1e4ff', fontSize: 11, fontWeight: '700' },
   heroBtnSec: { width: 50, height: 50, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
-  atalhosLinha: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  atalho: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: COLORS.lineSoft },
-  atalhoIcone: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  atalhoRotulo: { color: COLORS.ink, fontSize: 11, fontWeight: '700', marginTop: 8 },
-  atalhoBadge: { position: 'absolute', top: -6, right: -8, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, backgroundColor: COLORS.ember, alignItems: 'center', justifyContent: 'center' },
-  atalhoBadgeTexto: { color: '#ffffff', fontSize: 10, fontWeight: '800' },
-  dica: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 18, padding: 14, borderRadius: 20, backgroundColor: 'rgba(255,122,217,0.07)', borderWidth: 1, borderColor: 'rgba(255,122,217,0.22)' },
-  dicaIcone: { width: 42, height: 42, borderRadius: 14, backgroundColor: 'rgba(255,122,217,0.14)', alignItems: 'center', justifyContent: 'center' },
-  dicaRotulo: { color: COLORS.gold, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
-  dicaTexto: { color: COLORS.ink, fontSize: 12.5, lineHeight: 18, marginTop: 3 },
+  tutorialCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 18, padding: 14, borderRadius: 20, backgroundColor: 'rgba(180,60,255,0.10)', borderWidth: 1, borderColor: 'rgba(180,60,255,0.30)' },
+  tutorialIcone: { width: 46, height: 46, borderRadius: 15, backgroundColor: 'rgba(180,60,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  tutorialTitulo: { color: COLORS.ink, fontSize: 14, fontWeight: '800' },
+  tutorialSub: { color: COLORS.dim, fontSize: 11.5, lineHeight: 16, marginTop: 2 },
+  tutorialBtnVazio: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, paddingHorizontal: 16, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.08)' },
+  tutorialBtnVazioTexto: { color: COLORS.ink, fontSize: 12.5, fontWeight: '700' },
   vazioPassos: { flexDirection: 'row', gap: 8, marginTop: 26, alignSelf: 'stretch' },
   vazioPasso: { flex: 1, alignItems: 'center', paddingVertical: 12, paddingHorizontal: 4, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.05)' },
   vazioPassoIcone: { width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(180,60,255,0.16)', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
@@ -13528,7 +13513,6 @@ function CindraStudioScreen({ visible, onClose }) {
   const [erroPublicados, setErroPublicados] = useState('');
   const [publicandoPacote, setPublicandoPacote] = useState(null); // pacote em envio
   const [apagandoSlug, setApagandoSlug] = useState(null);
-  const [dicaExtra, setDicaExtra] = useState(0); // toque no card "Dica" passa pra próxima
   const [publicarPacote, setPublicarPacote] = useState(null); // folha "Publicar app" (confirmação + termos)
   const [aceitouTermos, setAceitouTermos] = useState(false); // caixinha da folha
   const [termosJaAceitos, setTermosJaAceitos] = useState(false); // aceitou numa publicação anterior
@@ -13748,6 +13732,15 @@ function CindraStudioScreen({ visible, onClose }) {
   };
   const tutAoCompilar = () => {
     if (tutIdx !== null && PASSOS_TUTORIAL[tutIdx] && PASSOS_TUTORIAL[tutIdx].id === 'bPlay') concluirTutorial();
+  };
+  // Botão "Ver tutorial" da tela inicial: abre o mesmo tutorial guiado da 1ª abertura.
+  const abrirTutorial = () => {
+    if (tutIdx !== null) return;
+    setBuscaProjeto('');
+    setBuscaAberta(false);
+    setAbaHome('apps');
+    tutIniciadoRef.current = true;
+    setTutIdx(0);
   };
   // começa sozinho na 1ª abertura (tela inicial, sem outros avisos por cima)
   useEffect(() => {
@@ -14021,51 +14014,6 @@ function CindraStudioScreen({ visible, onClose }) {
     );
   };
 
-  // Atalhos pras outras telas (com contagem quando faz sentido).
-  const renderAtalhosHome = () => {
-    const itens = [
-      { id: 'novo', icone: 'plus-circle-outline', rotulo: 'Novo app', cor: '#b43cff', acao: abrirTelaConfigNova },
-      { id: 'gerados', icone: 'package-variant-closed', rotulo: 'Gerados', cor: '#4f46ff', badge: builds.length, acao: () => setAbaHome('gerados') },
-      { id: 'publicar', icone: 'rocket-launch-outline', rotulo: 'Publicar', cor: '#ff2fc6', badge: publicados.length, acao: () => setAbaHome('publicar') },
-      { id: 'aprender', icone: 'school-outline', rotulo: 'Aprender', cor: '#8bd450', acao: () => setAbaHome('aprender') },
-    ];
-    return (
-      <View style={homeStyles.atalhosLinha}>
-        {itens.map((a) => (
-          <TouchableOpacity key={a.id} style={homeStyles.atalho} onPress={a.acao} activeOpacity={0.85}>
-            <View style={[homeStyles.atalhoIcone, { backgroundColor: hexParaRgba(a.cor, 0.18) }]}>
-              <MaterialCommunityIcons name={a.icone} size={22} color={a.cor} />
-              {!!a.badge && (
-                <View style={homeStyles.atalhoBadge}>
-                  <Text style={homeStyles.atalhoBadgeTexto}>{a.badge > 99 ? '99+' : a.badge}</Text>
-                </View>
-              )}
-            </View>
-            <Text style={homeStyles.atalhoRotulo} numberOfLines={1}>{a.rotulo}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    );
-  };
-
-  // Card "Dica": uma por dia; tocar passa pra próxima.
-  const renderDicaHome = () => {
-    const idx = (Math.floor(Date.now() / 86400000) + dicaExtra) % DICAS_HOME_STUDIO.length;
-    const [icone, texto] = DICAS_HOME_STUDIO[idx];
-    return (
-      <TouchableOpacity style={homeStyles.dica} onPress={() => setDicaExtra((v) => v + 1)} activeOpacity={0.85}>
-        <View style={homeStyles.dicaIcone}>
-          <MaterialCommunityIcons name={icone} size={22} color={COLORS.gold} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={homeStyles.dicaRotulo}>DICA  ·  {idx + 1}/{DICAS_HOME_STUDIO.length}</Text>
-          <Text style={homeStyles.dicaTexto}>{texto}</Text>
-        </View>
-        <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.dim} />
-      </TouchableOpacity>
-    );
-  };
-
   const renderAbaApps = () => {
     const buscando = !!termoBusca;
     const rotuloSecao = buscando
@@ -14155,6 +14103,10 @@ function CindraStudioScreen({ visible, onClose }) {
                 </View>
               ))}
             </View>
+            <TouchableOpacity style={homeStyles.tutorialBtnVazio} onPress={abrirTutorial} activeOpacity={0.85}>
+              <MaterialCommunityIcons name="play-circle-outline" size={20} color="#d9a2ff" />
+              <Text style={homeStyles.tutorialBtnVazioTexto}>Ver tutorial</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <ScrollView
@@ -14162,8 +14114,6 @@ function CindraStudioScreen({ visible, onClose }) {
             contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 28 }}
           >
             {!buscando && ultimoProjeto && renderHero()}
-
-            {!buscando && renderAtalhosHome()}
 
             {!buscando && (
               <View style={studioStyles.tilesLinha}>
@@ -14213,7 +14163,18 @@ function CindraStudioScreen({ visible, onClose }) {
               listaExibida.map(renderCardLista)
             )}
 
-            {!buscando && renderDicaHome()}
+            {!buscando && (
+              <TouchableOpacity style={homeStyles.tutorialCard} onPress={abrirTutorial} activeOpacity={0.85}>
+                <View style={homeStyles.tutorialIcone}>
+                  <MaterialCommunityIcons name="play-circle-outline" size={26} color="#d9a2ff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={homeStyles.tutorialTitulo}>Ver tutorial</Text>
+                  <Text style={homeStyles.tutorialSub}>Aprenda a criar, compilar e publicar seu app, passo a passo.</Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={22} color={COLORS.dim} />
+              </TouchableOpacity>
+            )}
 
             {!buscando && (
               <TouchableOpacity style={studioStyles.apoioCard} onPress={abrirLinkApoio} activeOpacity={0.85}>
