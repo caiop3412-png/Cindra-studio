@@ -1357,8 +1357,10 @@ function aplicarIconeAdaptivoStudio(conteudos, binarios) {
   // Android 5 a 7: usa o ícone antigo
   novo[`${res}mipmap-anydpi/ic_launcher.xml`] = `${cab}<layer-list ${ns}>\n    <item android:drawable="@drawable/ic_launcher" />\n</layer-list>\n`;
   if (comFoto) {
-    // a foto preenche tudo (o launcher corta só as bordas)
-    novo[`${res}mipmap-anydpi-v26/ic_launcher.xml`] = `${cab}<adaptive-icon ${ns}>\n    <background android:drawable="@drawable/ic_launcher" />\n    <foreground android:drawable="@android:color/transparent" />\n</adaptive-icon>\n`;
+    // o launcher só mostra ~66% central do ícone adaptativo; encolhe a foto (inset)
+    // para ela caber inteira na zona segura, sem ficar "zoomada"
+    novo[`${res}drawable/ic_launcher_foreground.xml`] = `${cab}<inset ${ns} android:drawable="@drawable/ic_launcher" android:inset="16%" />\n`;
+    novo[`${res}mipmap-anydpi-v26/ic_launcher.xml`] = `${cab}<adaptive-icon ${ns}>\n    <background android:drawable="@android:color/black" />\n    <foreground android:drawable="@drawable/ic_launcher_foreground" />\n</adaptive-icon>\n`;
   } else {
     const m = /android:fillColor="(#[0-9a-fA-F]{6})"/.exec(xmlIcone);
     const cor = m ? m[1] : '#b43cff';
