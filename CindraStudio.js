@@ -2436,6 +2436,10 @@ async function copiarPendentesPastaPublicaStudio(lista) {
 const PASTAS_FIXAS_STUDIO = {};
 function nomePastaAppStudio(nomeApp, pacote) {
   if (pacote && PASTAS_FIXAS_STUDIO[pacote]) return PASTAS_FIXAS_STUDIO[pacote];
+  return slugPastaAppStudio(nomeApp, pacote);
+}
+// Nome "limpo" da pasta a partir do nome do app (ignora o nome já fixado).
+function slugPastaAppStudio(nomeApp, pacote) {
   let x = String(nomeApp || '');
   try { if (x.normalize) x = x.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) { /* segue sem tirar acento */ }
   x = x.replace(/[^A-Za-z0-9._-]+/g, '').replace(/^[._-]+/, '');
@@ -2550,6 +2554,42 @@ async function gravarVistaStudio(pacote, pasta) {
 }
 
 const PASTAS_FIXAS_PRONTAS = carregarPastasFixasStudio().catch(() => {});
+
+// Renomeia a pasta cindra-studio/NomeApp (com os APKs e a pasta "arquivos")
+// pro nome novo do app. Se já existir outra pasta com esse nome, usa NomeApp-2,
+// NomeApp-3... Devolve { ok, antiga, nova } — ok=false quando não deu pra mexer
+// (sem acesso, pasta ainda não existe, ou o aparelho recusou). Nunca apaga nada.
+async function renomearPastaDoAppStudio(pacote, nomeNovoApp) {
+  try {
+    if (!pacote || !ApkBuilder.temPastaNativa) return { ok: false };
+    await PASTAS_FIXAS_PRONTAS;
+    const antiga = PASTAS_FIXAS_STUDIO[pacote];
+    if (!antiga) return { ok: false }; // sem pasta ainda: a primeira cópia já nasce com o nome novo
+    if (!(await testarAcessoPastaPublicaStudio())) return { ok: false };
+    const lista = await ApkBuilder.listarPasta(PASTA_PUBLICA_TEXTO);
+    if (!Array.isArray(lista)) return { ok: false };
+    const topo = new Set();
+    lista.forEach((it) => {
+      const rel = String(it.caminho || '').replace(/\\/g, '/').replace(/^\/+/, '');
+      if (rel) topo.add(rel.split('/')[0]);
+    });
+    if (!topo.has(antiga)) return { ok: false };
+    const base = slugPastaAppStudio(nomeNovoApp, pacote);
+    if (base === antiga) return { ok: true, antiga, nova: antiga };
+    const ocupadas = new Set(Array.from(topo).map((n) => n.toLowerCase()));
+    Object.keys(PASTAS_FIXAS_STUDIO).forEach((k) => { if (k !== pacote) ocupadas.add(String(PASTAS_FIXAS_STUDIO[k]).toLowerCase()); });
+    let nova = base;
+    for (let n = 2; n < 100 && ocupadas.has(nova.toLowerCase()) && nova.toLowerCase() !== antiga.toLowerCase(); n += 1) nova = `${base}-${n}`;
+    await FileSystem.moveAsync({ from: `file://${PASTA_PUBLICA_TEXTO}/${antiga}`, to: `file://${PASTA_PUBLICA_TEXTO}/${nova}` });
+    fixarPastaStudio(pacote, nova);
+    const sync = await lerSyncStudio(pacote);
+    if (sync.ultimaSync) await gravarSyncStudio(pacote, { ultimaSync: sync.ultimaSync, pasta: nova, arquivos: sync.arquivos });
+    await gravarVistaStudio(pacote, nova);
+    return { ok: true, antiga, nova };
+  } catch (e) {
+    return { ok: false };
+  }
+}
 
 // Pasta do app foi RENOMEADA por fora (gerenciador de arquivos)? Procura, entre
 // as pastas de cindra-studio que não são de nenhum outro app, uma que tenha os
@@ -5813,8 +5853,11 @@ function PainelLateralStudio({ onFechar, children, largura = '86%' }) {
 
 // Conteúdo da folha de ações de um projeto (abrir / favoritar / excluir com
 // confirmação em 2 passos).
-function ConteudoFolhaProjeto({ projeto, onAbrir, onFavoritar, onExcluir, onCancelar, onLerVersao, onSalvarVersao, onTrocarIcone }) {
+function ConteudoFolhaProjeto({ projeto, onAbrir, onFavoritar, onExcluir, onCancelar, onLerVersao, onSalvarVersao, onTrocarIcone, onTrocarNome }) {
   const [confirmando, setConfirmando] = useState(false);
+  const [editandoNome, setEditandoNome] = useState(false);
+  const [nomeNovo, setNomeNovo] = useState('');
+  const [salvandoNome, setSalvandoNome] = useState(false);
   const [editandoVersao, setEditandoVersao] = useState(false);
   const [verNome, setVerNome] = useState('1.0');
   const [verCodigo, setVerCodigo] = useState('1');
@@ -5832,6 +5875,13 @@ function ConteudoFolhaProjeto({ projeto, onAbrir, onFavoritar, onExcluir, onCanc
       setVerCodigo(String(projeto.versaoCodigo || 1));
     }
     setCarregandoVersao(false);
+  };
+  const salvarNome = async () => {
+    if (salvandoNome) return;
+    setSalvandoNome(true);
+    const ok = await onTrocarNome(nomeNovo);
+    setSalvandoNome(false);
+    if (ok) onCancelar();
   };
   const salvarVersao = async () => {
     setSalvandoVersao(true);
@@ -5851,7 +5901,42 @@ function ConteudoFolhaProjeto({ projeto, onAbrir, onFavoritar, onExcluir, onCanc
         </View>
       </View>
 
-      {editandoVersao ? (
+      {editandoNome ? (
+        <View>
+          <Text style={[studioStyles.cfgLabel, { marginTop: 4 }]}>Nome do app</Text>
+          <View style={studioStyles.cfgCampo}>
+            <MaterialCommunityIcons name="application-outline" size={18} color={COLORS.dim} />
+            <TextInput
+              style={studioStyles.cfgCampoInput}
+              value={nomeNovo}
+              onChangeText={setNomeNovo}
+              placeholder="Ex: Abismo de Lumen"
+              placeholderTextColor={COLORS.dim}
+              maxLength={60}
+              autoFocus
+              editable={!salvandoNome}
+            />
+          </View>
+          <Text style={studioStyles.cfgHint}>
+            É o nome que aparece embaixo do ícone no celular. A pasta em cindra-studio também troca de nome. O pacote não muda, então quem já instalou continua recebendo a atualização.
+          </Text>
+          <View style={[studioStyles.folhaConfirmaBotoes, { marginTop: 14 }]}>
+            <TouchableOpacity style={studioStyles.folhaBtn} onPress={() => setEditandoNome(false)} activeOpacity={0.8}>
+              <Text style={studioStyles.folhaBtnTexto}>Voltar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[studioStyles.folhaBtn, { backgroundColor: COLORS.ember }, (salvandoNome || !nomeNovo.trim()) && { opacity: 0.6 }]}
+              onPress={salvarNome}
+              activeOpacity={0.85}
+              disabled={salvandoNome || !nomeNovo.trim()}
+            >
+              {salvandoNome
+                ? <ActivityIndicator size="small" color="#ffffff" />
+                : <Text style={[studioStyles.folhaBtnTexto, { color: '#ffffff', fontWeight: '800' }]}>Salvar</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : editandoVersao ? (
         <View>
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <View style={{ flex: 1.4 }}>
@@ -5946,6 +6031,21 @@ function ConteudoFolhaProjeto({ projeto, onAbrir, onFavoritar, onExcluir, onCanc
             <TouchableOpacity style={studioStyles.folhaLinha} onPress={onTrocarIcone} activeOpacity={0.8}>
               <MaterialCommunityIcons name="image-edit-outline" size={20} color={COLORS.ink} />
               <Text style={studioStyles.folhaLinhaTexto}>Trocar ícone</Text>
+            </TouchableOpacity>
+          )}
+          {!!onTrocarNome && (
+            <TouchableOpacity
+              style={studioStyles.folhaLinha}
+              onPress={() => { setNomeNovo(projeto.nomeApp || ''); setEditandoNome(true); }}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons name="rename-box-outline" size={20} color={COLORS.ink} />
+              <Text style={studioStyles.folhaLinhaTexto}>Trocar nome</Text>
+              {!!projeto.nomeApp && (
+                <Text style={{ color: COLORS.dim, fontSize: 13, fontWeight: '600', maxWidth: '45%' }} numberOfLines={1}>
+                  {projeto.nomeApp}
+                </Text>
+              )}
             </TouchableOpacity>
           )}
           <TouchableOpacity style={studioStyles.folhaLinha} onPress={() => setConfirmando(true)} activeOpacity={0.8}>
@@ -9862,6 +9962,24 @@ function aplicarVersaoNoProjeto(projeto, nomeBruto, codigoBruto) {
   }
   return { ...projeto, conteudos };
 }
+// Troca só o NOME do app (o que aparece embaixo do ícone no celular): o
+// app_name do strings.xml. O pacote e o resto do projeto não mudam.
+function limparNomeApp(t) {
+  return String(t || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+}
+function aplicarNomeNoProjeto(projeto, nomeBruto) {
+  const nome = limparNomeApp(nomeBruto) || 'Meu App';
+  const caminho = 'app/src/main/res/values/strings.xml';
+  const conteudos = { ...projeto.conteudos };
+  const xml = conteudos[caminho];
+  const linha = `<string name="app_name">${escaparStringAndroid(nome)}</string>`;
+  if (xml !== undefined && /<string\s+name="app_name"[^>]*>[\s\S]*?<\/string>/.test(xml)) {
+    conteudos[caminho] = xml.replace(/<string\s+name="app_name"[^>]*>[\s\S]*?<\/string>/, () => linha);
+  } else if (xml !== undefined && /<\/resources>/.test(xml)) {
+    conteudos[caminho] = xml.replace(/<\/resources>/, () => `    ${linha}\n</resources>`);
+  }
+  return { projeto: { ...projeto, conteudos }, nome };
+}
 const P = (id, nome, desc, icone, grupo, perigosa = false) => ({ id: `android.permission.${id}`, nome, desc, icone, grupo, perigosa });
 const PERMISSOES_STUDIO = [
   P('INTERNET', 'Internet', 'Acessar a internet', 'web', 'Rede'),
@@ -11766,6 +11884,53 @@ function CindraStudioScreen({ visible, onClose }) {
       setEditorFotoUri(r.assets[0].uri);
     } catch (e) {
       exibirAviso(TITULO_MANUTENCAO, MSG_MANUTENCAO, 'erro');
+    }
+  };
+  // Tela inicial → card do projeto → "Trocar nome": muda o nome do app direto
+  // no projeto salvo (strings.xml) e na lista, sem abrir o app.
+  const trocarNomeDaLista = async (pacote, nomeBruto) => {
+    const nomeLimpo = limparNomeApp(nomeBruto);
+    if (!nomeLimpo) {
+      exibirAviso('Nome vazio', 'Digite um nome pro app.', 'aviso');
+      return false;
+    }
+    try {
+      const e = await lerEstadoStudio(pacote);
+      if (!e || !e.projeto) {
+        exibirAviso('Não deu pra trocar', 'Não achei o projeto salvo.', 'erro');
+        return false;
+      }
+      const r = aplicarNomeNoProjeto(e.projeto, nomeLimpo);
+      await gravarEstadoStudio({ ...e, nomeApp: r.nome, projeto: r.projeto });
+      const lista = await atualizarListaProjetosStudio({ pacote, nomeApp: r.nome });
+      setListaProjetos(lista);
+      marcarSeMudouNuvem();
+      agendarSyncNuvem(2500);
+      // A pasta cindra-studio/NomeApp acompanha o nome novo (APKs e "arquivos" vão juntos).
+      const pasta = await renomearPastaDoAppStudio(pacote, r.nome);
+      if (pasta.ok && pasta.antiga !== pasta.nova) {
+        const velho = `${PASTA_PUBLICA_TEXTO}/${pasta.antiga}/`;
+        const novo = `${PASTA_PUBLICA_TEXTO}/${pasta.nova}/`;
+        setBuilds((atual) => {
+          const nova = atual.map((b) => {
+            const cheio = b.apkPublico ? String(b.apkPublico).replace(/^file:\/\//, '').replace(/\\/g, '/') : '';
+            return cheio.startsWith(velho) ? { ...b, apkPublico: novo + cheio.slice(velho.length) } : b;
+          });
+          gravarBuildsStudio(nova).catch(() => {});
+          return nova;
+        });
+      }
+      exibirAviso(
+        'Nome atualizado',
+        pasta.ok && pasta.antiga !== pasta.nova
+          ? `A pasta agora é cindra-studio/${pasta.nova}. Compile de novo pro nome novo aparecer no celular.`
+          : 'Compile o app de novo pro nome novo aparecer no celular.',
+        'sucesso'
+      );
+      return true;
+    } catch (err) {
+      exibirAviso(TITULO_MANUTENCAO, MSG_MANUTENCAO, 'erro');
+      return false;
     }
   };
   const aplicarIconeDaLista = async (pacote, uriFoto) => {
@@ -15755,6 +15920,7 @@ function CindraStudioScreen({ visible, onClose }) {
               onLerVersao={() => lerVersaoDaLista(cardProjeto.pacote)}
               onSalvarVersao={(n, c) => salvarVersaoDaLista(cardProjeto.pacote, n, c)}
               onTrocarIcone={() => { const pacote = cardProjeto.pacote; setCardProjeto(null); setTimeout(() => escolherIconeDaLista(pacote), 250); }}
+              onTrocarNome={(n) => trocarNomeDaLista(cardProjeto.pacote, n)}
               onCancelar={fechar}
             />
           )}
