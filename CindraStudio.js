@@ -5658,7 +5658,7 @@ function PainelLateralStudio({ onFechar, children, largura = '86%' }) {
 
 // Conteúdo da folha de ações de um projeto (abrir / favoritar / excluir com
 // confirmação em 2 passos).
-function ConteudoFolhaProjeto({ projeto, onAbrir, onFavoritar, onExcluir, onCancelar, onLerVersao, onSalvarVersao }) {
+function ConteudoFolhaProjeto({ projeto, onAbrir, onFavoritar, onExcluir, onCancelar, onLerVersao, onSalvarVersao, onTrocarIcone }) {
   const [confirmando, setConfirmando] = useState(false);
   const [editandoVersao, setEditandoVersao] = useState(false);
   const [verNome, setVerNome] = useState('1.0');
@@ -5787,6 +5787,12 @@ function ConteudoFolhaProjeto({ projeto, onAbrir, onFavoritar, onExcluir, onCanc
               </Text>
             )}
           </TouchableOpacity>
+          {!!onTrocarIcone && (
+            <TouchableOpacity style={studioStyles.folhaLinha} onPress={onTrocarIcone} activeOpacity={0.8}>
+              <MaterialCommunityIcons name="image-edit-outline" size={20} color={COLORS.ink} />
+              <Text style={studioStyles.folhaLinhaTexto}>Trocar ícone</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={studioStyles.folhaLinha} onPress={() => setConfirmando(true)} activeOpacity={0.8}>
             <MaterialCommunityIcons name="delete-outline" size={20} color="#ff8a80" />
             <Text style={[studioStyles.folhaLinhaTexto, { color: '#ff8a80' }]}>Excluir app</Text>
@@ -10841,6 +10847,8 @@ function CindraStudioScreen({ visible, onClose }) {
   const [fotoIcone, setFotoIcone] = useState(null); // uri do PNG do ícone (foto da galeria), ou null = robozinho
   const [processandoFoto, setProcessandoFoto] = useState(false);
   const [editorFotoUri, setEditorFotoUri] = useState(null);
+  // Pacote do app da lista cujo ícone está sendo trocado (null = foto do "Novo app")
+  const [iconeListaPacote, setIconeListaPacote] = useState(null);
   const [criandoProjeto, setCriandoProjeto] = useState(false);
   const [campoFoco, setCampoFoco] = useState(null); // 'nome' | 'pacote' | 'versao' | 'codigo'
   const [versaoNomeNovo, setVersaoNomeNovo] = useState('1.0'); // versão do app novo (tela de criação)
@@ -11571,6 +11579,75 @@ function CindraStudioScreen({ visible, onClose }) {
     } catch (err) {
       exibirAviso(TITULO_MANUTENCAO, MSG_MANUTENCAO, 'erro');
       return false;
+    }
+  };
+
+  // Tela inicial → card do projeto → "Trocar ícone": galeria → editor de foto
+  // (corta/gira) → grava direto no projeto salvo, sem abrir o app nem mexer
+  // em arquivos. O ic_launcher.xml dá lugar ao ic_launcher.png.
+  const escolherIconeDaLista = async (pacote) => {
+    if (!ImagePicker || !ImageManipulator) {
+      exibirAviso(
+        'Faltam pacotes',
+        'Pra usar foto no ícone instale expo-image-picker e expo-image-manipulator (npx expo install ...) e gere um build novo.',
+        'erro'
+      );
+      return;
+    }
+    try {
+      const r = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaType ? ['images'] : ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 1,
+      });
+      if (r.canceled || !r.assets || !r.assets.length) return;
+      setIconeListaPacote(pacote);
+      setEditorFotoUri(r.assets[0].uri);
+    } catch (e) {
+      exibirAviso(TITULO_MANUTENCAO, MSG_MANUTENCAO, 'erro');
+    }
+  };
+  const aplicarIconeDaLista = async (pacote, uriFoto) => {
+    try {
+      const e = await lerEstadoStudio(pacote);
+      if (!e || !e.projeto) {
+        exibirAviso('Não deu pra trocar', 'Não achei o projeto salvo.', 'erro');
+        return;
+      }
+      // 1) a foto vira o ic_launcher.png guardado em _bin/
+      const destinoBin = pastaBinariosStudio(pacote) + ICONE_FOTO_CAMINHO;
+      await FileSystem.makeDirectoryAsync(destinoBin.split('/').slice(0, -1).join('/'), { intermediates: true });
+      await FileSystem.deleteAsync(destinoBin, { idempotent: true });
+      await FileSystem.copyAsync({ from: uriFoto, to: destinoBin });
+      const info = await FileSystem.getInfoAsync(destinoBin);
+
+      // 2) cópia própria pro card da lista
+      await FileSystem.makeDirectoryAsync(PASTA_ICONES_STUDIO, { intermediates: true });
+      const fotoCard = `${PASTA_ICONES_STUDIO}${pacote}_${Date.now()}.png`;
+      await FileSystem.copyAsync({ from: destinoBin, to: fotoCard });
+
+      // 3) projeto: tira o ícone em vetor (mesmo nome do PNG) e registra o PNG
+      const xmlPath = 'app/src/main/res/drawable/ic_launcher.xml';
+      const conteudos = { ...e.projeto.conteudos };
+      delete conteudos[xmlPath];
+      let arvore = removerNoDaArvore(e.projeto.arvore, xmlPath);
+      arvore = garantirArquivoNaArvore(arvore, ICONE_FOTO_CAMINHO);
+      const binarios = { ...(e.projeto.binarios || {}), [ICONE_FOTO_CAMINHO]: { tamanho: info.size || 0 } };
+      const proj = { ...e.projeto, conteudos, arvore, binarios };
+      await gravarEstadoStudio({ ...e, fotoIcone: fotoCard, projeto: proj });
+
+      // 4) lista: troca a foto do card e apaga a antiga
+      const anterior = listaProjetos.find((p) => p.pacote === pacote);
+      if (anterior && anterior.fotoIcone && anterior.fotoIcone !== fotoCard) {
+        FileSystem.deleteAsync(anterior.fotoIcone, { idempotent: true }).catch(() => {});
+      }
+      const lista = await atualizarListaProjetosStudio({ pacote, fotoIcone: fotoCard });
+      setListaProjetos(lista);
+      marcarSeMudouNuvem();
+      agendarSyncNuvem(2500);
+      exibirAviso('Ícone atualizado', 'Compile o app de novo pra o ícone novo aparecer no celular.', 'sucesso');
+    } catch (err) {
+      exibirAviso(TITULO_MANUTENCAO, MSG_MANUTENCAO, 'erro');
     }
   };
 
@@ -15484,6 +15561,7 @@ function CindraStudioScreen({ visible, onClose }) {
               onExcluir={() => excluirProjetoDaLista(cardProjeto.pacote)}
               onLerVersao={() => lerVersaoDaLista(cardProjeto.pacote)}
               onSalvarVersao={(n, c) => salvarVersaoDaLista(cardProjeto.pacote, n, c)}
+              onTrocarIcone={() => { const pacote = cardProjeto.pacote; setCardProjeto(null); setTimeout(() => escolherIconeDaLista(pacote), 250); }}
               onCancelar={fechar}
             />
           )}
@@ -16859,8 +16937,17 @@ function CindraStudioScreen({ visible, onClose }) {
         titulo="Foto do ícone"
         proporcaoInicial="1:1"
         tamanhoInicial={512}
-        onCancelar={() => setEditorFotoUri(null)}
-        onConfirmar={({ uri }) => { setFotoIcone(uri); setEditorFotoUri(null); }}
+        onCancelar={() => { setEditorFotoUri(null); setIconeListaPacote(null); }}
+        onConfirmar={({ uri }) => {
+          setEditorFotoUri(null);
+          if (iconeListaPacote) {
+            const pacote = iconeListaPacote;
+            setIconeListaPacote(null);
+            aplicarIconeDaLista(pacote, uri);
+          } else {
+            setFotoIcone(uri);
+          }
+        }}
       />
       <AtualizacaoForcada />
       <BloqueioVersao />
