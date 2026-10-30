@@ -1717,11 +1717,17 @@ function extrairDoZipStudio(zip, e) {
   throw new Error('compressão do .zip não suportada');
 }
 
+function causaErroStudio(err) {
+  const t = String((err && err.message) || err || '');
+  const i = t.indexOf('Caused by:');
+  return (i >= 0 ? t.slice(i + 10) : t).trim().slice(0, 160);
+}
+
 // ── Leitura do .zip POR PEDAÇOS ───────────────────────────────
 // Não carrega o .zip inteiro na memória (era isso que dava OutOfMemoryError):
 // lê só o índice e depois cada arquivo, um de cada vez. Sem limite de tamanho do .zip.
-const PEDACO_LEITURA_ZIP_STUDIO = 3 * 1024 * 1024;
-const ESCRITA_UNICA_STUDIO = 8 * 1024 * 1024;
+const PEDACO_LEITURA_ZIP_STUDIO = 512 * 1024;
+const ESCRITA_UNICA_STUDIO = 2 * 1024 * 1024;
 
 async function lerBytesArquivoStudio(uri, pos, len) {
   const out = new Uint8Array(len);
@@ -1794,7 +1800,7 @@ async function gravarBytesEmPartesStudio(destino, bytes) {
     await FileSystem.writeAsStringAsync(destino, bytesParaBase64(bytes), enc);
     return;
   }
-  const passo = 3 * 1024 * 1024;
+  const passo = 1536 * 1024; // múltiplo de 3
   for (let i = 0; i < bytes.length; i += passo) {
     await FileSystem.writeAsStringAsync(destino, bytesParaBase64(bytes.subarray(i, i + passo)), i === 0 ? enc : { ...enc, append: true });
     await new Promise((r) => setTimeout(r, 0));
@@ -12114,7 +12120,7 @@ function CindraStudioScreen({ visible, onClose }) {
         try {
           bytes = await extrairDoZipArquivoStudio(arqCacheZip, e);
         } catch (errEntrada) {
-          pulados.push(`${caminho} (${String((errEntrada && errEntrada.message) || errEntrada).slice(0, 60)})`);
+          pulados.push(`${caminho}: ${causaErroStudio(errEntrada)}`);
           continue;
         }
         const eTexto = (ehExtensaoTexto(nome) ? true : ehExtensaoBinaria(nome) ? false : pareceTextoBytesStudio(bytes)) && bytes.length <= 2000000;
@@ -12130,7 +12136,7 @@ function CindraStudioScreen({ visible, onClose }) {
             await gravarBytesEmPartesStudio(destino, bytes);
             novosBins[caminho] = { tamanho: bytes.length };
           } catch (errGravar) {
-            pulados.push(`${caminho} (${String((errGravar && errGravar.message) || errGravar).slice(0, 60)})`);
+            pulados.push(`${caminho}: ${causaErroStudio(errGravar)}`);
           }
         }
         if (i % 10 === 0 || i === itens.length - 1) {
