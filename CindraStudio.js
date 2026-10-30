@@ -29,6 +29,8 @@ import * as DocumentPicker from 'expo-document-picker';
 // SDK 54: StorageAccessFramework, documentDirectory, writeAsStringAsync etc
 // só existem no caminho "legacy".
 import * as FileSystem from 'expo-file-system/legacy';
+// API nova do SDK 54: File + FileHandle gravam bytes direto (sem base64), em pedaços.
+import { File as ArquivoNovoStudio } from 'expo-file-system';
 // Módulo nativo local (modules/apk-builder): aapt2 + ECJ + D8 + apksig.
 import * as ApkBuilder from './modules/apk-builder';
 // Editor de imagem (cortar, zoom, girar, espelhar) usado na foto do ícone.
@@ -1794,21 +1796,50 @@ async function extrairDoZipArquivoStudio(uri, e) {
 }
 
 // Grava bytes grandes em pedaços (um base64 gigante estoura a memória do Android).
+// 1º: API nova (FileHandle.writeBytes, sem base64). 2º: legacy com append. Confere o tamanho no fim.
 async function gravarBytesEmPartesStudio(destino, bytes) {
   const enc = { encoding: FileSystem.EncodingType.Base64 };
   if (bytes.length <= ESCRITA_UNICA_STUDIO) {
     await FileSystem.writeAsStringAsync(destino, bytesParaBase64(bytes), enc);
     return;
   }
-  const passo = 1536 * 1024; // múltiplo de 3
-  for (let i = 0; i < bytes.length; i += passo) {
-    await FileSystem.writeAsStringAsync(destino, bytesParaBase64(bytes.subarray(i, i + passo)), i === 0 ? enc : { ...enc, append: true });
-    await new Promise((r) => setTimeout(r, 0));
+  let gravou = false;
+  let erroNovo = '';
+  if (ArquivoNovoStudio) {
+    try {
+      const arq = new ArquivoNovoStudio(destino);
+      try { if (arq.exists) arq.delete(); } catch (e) { /* segue */ }
+      arq.create({ intermediates: true, overwrite: true });
+      const h = arq.open();
+      try {
+        const passo = 1024 * 1024;
+        for (let i = 0; i < bytes.length; i += passo) {
+          h.writeBytes(bytes.subarray(i, Math.min(i + passo, bytes.length)));
+          await new Promise((r) => setTimeout(r, 0));
+        }
+      } finally {
+        try { h.close(); } catch (e) { /* já fechou */ }
+      }
+      const info = await FileSystem.getInfoAsync(destino);
+      gravou = !!(info.exists && info.size === bytes.length);
+    } catch (e) {
+      erroNovo = causaErroStudio(e);
+    }
   }
-  const info = await FileSystem.getInfoAsync(destino);
-  if (!info.exists || info.size !== bytes.length) {
+  if (gravou) return;
+  // plano B: legacy com append
+  await FileSystem.deleteAsync(destino, { idempotent: true });
+  const passoB = 1536 * 1024; // múltiplo de 3
+  try {
+    for (let i = 0; i < bytes.length; i += passoB) {
+      await FileSystem.writeAsStringAsync(destino, bytesParaBase64(bytes.subarray(i, i + passoB)), i === 0 ? enc : { ...enc, append: true });
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  } catch (e) { /* confere abaixo */ }
+  const infoB = await FileSystem.getInfoAsync(destino);
+  if (!infoB.exists || infoB.size !== bytes.length) {
     await FileSystem.deleteAsync(destino, { idempotent: true });
-    throw new Error('o aparelho não gravou o arquivo grande por partes');
+    throw new Error(`não consegui gravar o arquivo grande${erroNovo ? ` (${erroNovo})` : ''}`);
   }
 }
 
