@@ -1717,6 +1717,93 @@ function extrairDoZipStudio(zip, e) {
   throw new Error('compressão do .zip não suportada');
 }
 
+// ── Leitura do .zip POR PEDAÇOS ───────────────────────────────
+// Não carrega o .zip inteiro na memória (era isso que dava OutOfMemoryError):
+// lê só o índice e depois cada arquivo, um de cada vez. Sem limite de tamanho do .zip.
+const PEDACO_LEITURA_ZIP_STUDIO = 3 * 1024 * 1024;
+const ESCRITA_UNICA_STUDIO = 8 * 1024 * 1024;
+
+async function lerBytesArquivoStudio(uri, pos, len) {
+  const out = new Uint8Array(len);
+  let feito = 0;
+  while (feito < len) {
+    const n = Math.min(PEDACO_LEITURA_ZIP_STUDIO, len - feito);
+    const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64, position: pos + feito, length: n });
+    const bytes = base64ParaBytes(b64);
+    if (bytes.length < n) throw new Error('arquivo zip truncado');
+    out.set(bytes.subarray(0, n), feito);
+    feito += n;
+  }
+  return out;
+}
+
+async function listarZipArquivoStudio(uri, tamanho) {
+  if (!tamanho || tamanho < 22) throw new Error('isso não parece um arquivo .zip');
+  const cauda = Math.min(tamanho, 22 + 65535);
+  const fimBuf = await lerBytesArquivoStudio(uri, tamanho - cauda, cauda);
+  const dvf = new DataView(fimBuf.buffer, fimBuf.byteOffset, fimBuf.byteLength);
+  let fim = -1;
+  for (let i = fimBuf.length - 22; i >= 0; i -= 1) {
+    if (dvf.getUint32(i, true) === 0x06054b50) { fim = i; break; }
+  }
+  if (fim < 0) throw new Error('isso não parece um arquivo .zip');
+  const total = dvf.getUint16(fim + 10, true);
+  const tamCd = dvf.getUint32(fim + 12, true);
+  const offCd = dvf.getUint32(fim + 16, true);
+  if (tamCd === 0xffffffff || offCd === 0xffffffff) throw new Error('.zip grande demais (zip64)');
+  if (offCd + tamCd > tamanho) throw new Error('índice do .zip danificado');
+  const cd = await lerBytesArquivoStudio(uri, offCd, tamCd);
+  const dv = new DataView(cd.buffer, cd.byteOffset, cd.byteLength);
+  const lista = [];
+  let p = 0;
+  for (let n = 0; n < total; n += 1) {
+    if (p + 46 > cd.length || dv.getUint32(p, true) !== 0x02014b50) throw new Error('índice do .zip danificado');
+    const flags = dv.getUint16(p + 8, true);
+    const metodo = dv.getUint16(p + 10, true);
+    const tamComp = dv.getUint32(p + 20, true);
+    const tamOrig = dv.getUint32(p + 24, true);
+    const nNome = dv.getUint16(p + 28, true);
+    const nExtra = dv.getUint16(p + 30, true);
+    const nCom = dv.getUint16(p + 32, true);
+    const desloc = dv.getUint32(p + 42, true);
+    const nome = bytesParaTextoStudio(cd.subarray(p + 46, p + 46 + nNome));
+    if (tamComp === 0xffffffff || tamOrig === 0xffffffff || desloc === 0xffffffff) throw new Error('.zip grande demais (zip64)');
+    lista.push({ nome, metodo, tamComp, tamOrig, desloc, criptografado: (flags & 1) !== 0 });
+    p += 46 + nNome + nExtra + nCom;
+  }
+  return lista;
+}
+
+async function extrairDoZipArquivoStudio(uri, e) {
+  if (e.criptografado) throw new Error('.zip com senha não é suportado');
+  const cab = await lerBytesArquivoStudio(uri, e.desloc, 30);
+  const dv = new DataView(cab.buffer, cab.byteOffset, cab.byteLength);
+  if (dv.getUint32(0, true) !== 0x04034b50) throw new Error('.zip danificado');
+  const ini = e.desloc + 30 + dv.getUint16(26, true) + dv.getUint16(28, true);
+  const dados = await lerBytesArquivoStudio(uri, ini, e.tamComp);
+  if (e.metodo === 0) return dados;
+  if (e.metodo === 8) return inflarStudio(dados, e.tamOrig);
+  throw new Error('compressão do .zip não suportada');
+}
+
+// Grava bytes grandes em pedaços (um base64 gigante estoura a memória do Android).
+async function gravarBytesEmPartesStudio(destino, bytes) {
+  const enc = { encoding: FileSystem.EncodingType.Base64 };
+  if (bytes.length <= ESCRITA_UNICA_STUDIO) {
+    await FileSystem.writeAsStringAsync(destino, bytesParaBase64(bytes), enc);
+    return;
+  }
+  const passo = 3 * 1024 * 1024;
+  for (let i = 0; i < bytes.length; i += passo) {
+    await FileSystem.writeAsStringAsync(destino, bytesParaBase64(bytes.subarray(i, i + passo)), i === 0 ? enc : { ...enc, append: true });
+  }
+  const info = await FileSystem.getInfoAsync(destino);
+  if (!info.exists || info.size !== bytes.length) {
+    await FileSystem.deleteAsync(destino, { idempotent: true });
+    throw new Error('o aparelho não gravou o arquivo grande por partes');
+  }
+}
+
 // Barra de texto pro corpo da notificação (a notificação do Android via
 // expo-notifications não desenha barra nativa, então a barra vai no texto).
 function barraTextoStudio(pct) {
@@ -4445,7 +4532,21 @@ async function abrirLinkNoApp(url) {
   }
 }
 const ARQUIVO_NUVEM_STUDIO = `${FileSystem.documentDirectory}cindrastudio/_nuvem.json`;
-const LIMITE_BINARIO_NUVEM = 15 * 1024 * 1024;
+const LIMITE_BINARIO_NUVEM = 3 * 1024 * 1024; // máx. 3 MB por arquivo na nuvem; maior que isso fica só no celular
+
+// true se o texto passa de 3 MB em UTF-8 (conta os bytes só quando precisa)
+function textoAcimaDoLimiteNuvemStudio(t) {
+  const s = String(t || '');
+  if (s.length * 3 <= LIMITE_BINARIO_NUVEM) return false;
+  if (s.length > LIMITE_BINARIO_NUVEM) return true;
+  let bytes = 0;
+  for (let i = 0; i < s.length; i += 1) {
+    const c = s.charCodeAt(i);
+    bytes += c < 0x80 ? 1 : c < 0x800 ? 2 : (c >= 0xd800 && c <= 0xdbff) ? (i += 1, 4) : 3;
+    if (bytes > LIMITE_BINARIO_NUVEM) return true;
+  }
+  return false;
+}
 
 function nuvemPadrao() {
   // pendentes: { pacote: quando mudou } · excluir: { pacote: true }
@@ -4607,7 +4708,17 @@ function registrarExclusaoNuvem(pacote) {
 async function montarPacoteNuvem(pacote) {
   const e = await lerEstadoStudio(pacote);
   if (!e) return null;
-  const { conteudos, ...projetoSem } = e.projeto;
+  const { conteudos: todosTextos, ...projetoSem0 } = e.projeto;
+  const conteudos = {};
+  let arvoreNuvem = projetoSem0.arvore;
+  for (const c of Object.keys(todosTextos || {})) {
+    if (textoAcimaDoLimiteNuvemStudio(todosTextos[c])) { // texto > 3 MB: fica só no celular
+      if (arvoreNuvem) arvoreNuvem = removerNoDaArvore(arvoreNuvem, c);
+      continue;
+    }
+    conteudos[c] = todosTextos[c];
+  }
+  const projetoSem = arvoreNuvem ? { ...projetoSem0, arvore: arvoreNuvem } : projetoSem0;
   const binarios64 = {};
   const pastaBin = pastaBinariosStudio(pacote);
   for (const caminho of Object.keys(e.projeto.binarios || {})) {
@@ -11953,16 +12064,17 @@ function CindraStudioScreen({ visible, onClose }) {
     if (!projeto || progressoZip) return;
     const titulo = 'Importando .zip';
     ULTIMA_NOTIF_ZIP_STUDIO.pct = -1;
+    let arqCacheZip = null;
     try {
       const r = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true, multiple: false });
       if (r.canceled || !r.assets || !r.assets.length) return;
       const arq = r.assets[0];
       reportarZip(titulo, 2, 'lendo o arquivo', true);
       await pausaUi();
-      const b64 = await FileSystem.readAsStringAsync(arq.uri, { encoding: FileSystem.EncodingType.Base64 });
-      FileSystem.deleteAsync(arq.uri, { idempotent: true }).catch(() => {});
-      const zip = base64ParaBytes(b64);
-      const lista = listarZipStudio(zip);
+      arqCacheZip = arq.uri;
+      const infoZip = await FileSystem.getInfoAsync(arq.uri);
+      const lista = await listarZipArquivoStudio(arq.uri, infoZip.size || arq.size || 0);
+      const pulados = [];
 
       // caminhos seguros; se tudo estiver dentro de UMA pasta raiz, tira ela
       let itens = lista
@@ -11991,8 +12103,14 @@ function CindraStudioScreen({ visible, onClose }) {
         const { e, partes } = itens[i];
         const caminho = partes.join('/');
         const nome = partes[partes.length - 1];
-        const bytes = extrairDoZipStudio(zip, e);
-        const eTexto = ehExtensaoTexto(nome) ? true : ehExtensaoBinaria(nome) ? false : pareceTextoBytesStudio(bytes);
+        let bytes;
+        try {
+          bytes = await extrairDoZipArquivoStudio(arqCacheZip, e);
+        } catch (errEntrada) {
+          pulados.push(`${caminho} (${String((errEntrada && errEntrada.message) || errEntrada).slice(0, 60)})`);
+          continue;
+        }
+        const eTexto = (ehExtensaoTexto(nome) ? true : ehExtensaoBinaria(nome) ? false : pareceTextoBytesStudio(bytes)) && bytes.length <= 2000000;
         delete historicoRef.current[caminho];
         if (eTexto) {
           novosTextos[caminho] = bytesParaTextoStudio(bytes);
@@ -12001,8 +12119,12 @@ function CindraStudioScreen({ visible, onClose }) {
           const destino = pastaBinariosStudio(projeto.pacote) + caminho;
           await FileSystem.makeDirectoryAsync(destino.split('/').slice(0, -1).join('/'), { intermediates: true });
           await FileSystem.deleteAsync(destino, { idempotent: true });
-          await FileSystem.writeAsStringAsync(destino, bytesParaBase64(bytes), { encoding: FileSystem.EncodingType.Base64 });
-          novosBins[caminho] = { tamanho: bytes.length };
+          try {
+            await gravarBytesEmPartesStudio(destino, bytes);
+            novosBins[caminho] = { tamanho: bytes.length };
+          } catch (errGravar) {
+            pulados.push(`${caminho} (${String((errGravar && errGravar.message) || errGravar).slice(0, 60)})`);
+          }
         }
         if (i % 10 === 0 || i === itens.length - 1) {
           reportarZip(titulo, 5 + ((i + 1) / itens.length) * 90, `${i + 1}/${itens.length} arquivos`);
@@ -12044,13 +12166,16 @@ function CindraStudioScreen({ visible, onClose }) {
       reportarZip(titulo, 100, '', true);
       setTimeout(() => setProgressoZip(null), 900);
       const qtd = Object.keys(novosTextos).length + Object.keys(novosBins).length;
-      exibirAviso(pastaAlvo ? `Pasta ${pastaAlvo.split('/').pop()} trocada` : 'Projeto importado', `${qtd} ${qtd === 1 ? 'arquivo entrou' : 'arquivos entraram'} no projeto`, 'sucesso');
-      notificarProgressoZipStudio('Projeto importado', `${qtd} ${qtd === 1 ? 'arquivo entrou' : 'arquivos entraram'} no projeto`, true);
+      const msgOk = `${qtd} ${qtd === 1 ? 'arquivo entrou' : 'arquivos entraram'} no projeto${pulados.length ? ` · ${pulados.length} não ${pulados.length === 1 ? 'entrou' : 'entraram'}: ${pulados.slice(0, 2).join(', ')}${pulados.length > 2 ? '…' : ''}` : ''}`;
+      exibirAviso(pastaAlvo ? `Pasta ${pastaAlvo.split('/').pop()} trocada` : 'Projeto importado', msgOk, pulados.length ? 'erro' : 'sucesso');
+      notificarProgressoZipStudio('Projeto importado', msgOk, true);
     } catch (e) {
       setProgressoZip(null);
       const motivo = String(e && e.message ? e.message : e);
       exibirAviso('Não consegui importar', motivo, 'erro');
       notificarProgressoZipStudio('Importação falhou', motivo, true);
+    } finally {
+      if (arqCacheZip) FileSystem.deleteAsync(arqCacheZip, { idempotent: true }).catch(() => {});
     }
   };
 
