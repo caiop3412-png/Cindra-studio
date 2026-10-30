@@ -1733,6 +1733,7 @@ async function lerBytesArquivoStudio(uri, pos, len) {
     if (bytes.length < n) throw new Error('arquivo zip truncado');
     out.set(bytes.subarray(0, n), feito);
     feito += n;
+    await new Promise((r) => setTimeout(r, 0));
   }
   return out;
 }
@@ -1796,6 +1797,7 @@ async function gravarBytesEmPartesStudio(destino, bytes) {
   const passo = 3 * 1024 * 1024;
   for (let i = 0; i < bytes.length; i += passo) {
     await FileSystem.writeAsStringAsync(destino, bytesParaBase64(bytes.subarray(i, i + passo)), i === 0 ? enc : { ...enc, append: true });
+    await new Promise((r) => setTimeout(r, 0));
   }
   const info = await FileSystem.getInfoAsync(destino);
   if (!info.exists || info.size !== bytes.length) {
@@ -12103,6 +12105,11 @@ function CindraStudioScreen({ visible, onClose }) {
         const { e, partes } = itens[i];
         const caminho = partes.join('/');
         const nome = partes[partes.length - 1];
+        if (i % 10 === 0 || e.tamOrig > 262144) {
+          const mb = e.tamOrig >= 1048576 ? ` (${(e.tamOrig / 1048576).toFixed(1)} MB)` : '';
+          reportarZip(titulo, 5 + (i / itens.length) * 90, `${i + 1}/${itens.length} · ${nome}${mb}`);
+          await pausaUi();
+        }
         let bytes;
         try {
           bytes = await extrairDoZipArquivoStudio(arqCacheZip, e);
