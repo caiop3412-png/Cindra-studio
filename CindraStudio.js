@@ -1222,10 +1222,16 @@ import android.app.Application;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Process;
+import android.view.Display;
 import android.view.Gravity;
+import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
@@ -1242,9 +1248,12 @@ public class ${MARCA_DAGUA_CLASSE} extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
+        // Prioridade de CPU de primeiro plano (bom pra loop de jogo)
+        try { Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY); } catch (Throwable ignorado) {}
         registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
             @Override
             public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
+                otimizarJanela(activity);
                 inserirMarca(activity);
             }
 
@@ -1252,6 +1261,8 @@ public class ${MARCA_DAGUA_CLASSE} extends Application {
             // pronto na criação (ex.: Activity recriada numa rotação).
             @Override
             public void onActivityResumed(Activity activity) {
+                otimizarJanela(activity);
+                travar60fps(activity);
                 inserirMarca(activity);
             }
 
@@ -1265,6 +1276,67 @@ public class ${MARCA_DAGUA_CLASSE} extends Application {
 
     private static int dp(Activity activity, float valor) {
         return Math.round(valor * activity.getResources().getDisplayMetrics().density);
+    }
+
+    // ── OTIMIZAÇÃO DE DESEMPENHO (apps e jogos) ─────────────────
+    // Roda em toda Activity, sem depender do código da pessoa.
+    private static void otimizarJanela(Activity activity) {
+        try {
+            Window w = activity.getWindow();
+            // GPU desenhando a janela inteira
+            w.setFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+                    WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED);
+            // Pixel sem dithering/alfa a mais: 32 bits de cor, menos custo de composição
+            w.setFormat(android.graphics.PixelFormat.RGBX_8888);
+            // Mantém o desempenho estável (sem throttling) em sessões longas
+            if (Build.VERSION.SDK_INT >= 24) {
+                try { w.setSustainedPerformanceMode(true); } catch (Throwable ignorado) {}
+            }
+        } catch (Throwable ignorado) {}
+    }
+
+    // Trava a tela em 60 Hz (frame pacing estável pra gravação em 60 fps)
+    // e avisa o sistema que as SurfaceViews do app (jogos/GL) rodam a 60.
+    private static void travar60fps(final Activity activity) {
+        try {
+            Window w = activity.getWindow();
+            if (Build.VERSION.SDK_INT >= 23) {
+                Display d = activity.getWindowManager().getDefaultDisplay();
+                Display.Mode atual = d.getMode();
+                Display.Mode melhor = null;
+                for (Display.Mode m : d.getSupportedModes()) {
+                    if (m.getPhysicalWidth() != atual.getPhysicalWidth()
+                            || m.getPhysicalHeight() != atual.getPhysicalHeight()) continue;
+                    if (Math.abs(m.getRefreshRate() - 60f) < 1f) { melhor = m; break; }
+                }
+                if (melhor != null) {
+                    WindowManager.LayoutParams lp = w.getAttributes();
+                    lp.preferredDisplayModeId = melhor.getModeId();
+                    w.setAttributes(lp);
+                }
+            }
+            final View decor = w.getDecorView();
+            decor.post(new Runnable() {
+                @Override
+                public void run() {
+                    aplicar60Surfaces(decor);
+                }
+            });
+        } catch (Throwable ignorado) {}
+    }
+
+    private static void aplicar60Surfaces(View v) {
+        if (v instanceof SurfaceView) {
+            if (Build.VERSION.SDK_INT >= 30) {
+                try {
+                    ((SurfaceView) v).getHolder().getSurface().setFrameRate(60f,
+                            android.view.Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE);
+                } catch (Throwable ignorado) {}
+            }
+        } else if (v instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) aplicar60Surfaces(g.getChildAt(i));
+        }
     }
 
     private static void inserirMarca(final Activity activity) {
@@ -1316,16 +1388,75 @@ public class ${MARCA_DAGUA_CLASSE} extends Application {
 // na tag <application>, trocando o que já estiver lá (se a pessoa
 // apagar esse atributo ou colocar outro valor, volta sempre pro nosso).
 function forcarAppNaManifest(xmlManifest) {
+  let xml;
   if (/<application\b[^>]*\sandroid:name="[^"]*"/.test(xmlManifest)) {
-    return xmlManifest.replace(
+    xml = xmlManifest.replace(
       /(<application\b[^>]*\sandroid:name=")[^"]*(")/,
       `$1.${MARCA_DAGUA_CLASSE}$2`
     );
+  } else {
+    xml = xmlManifest.replace(
+      /<application\b/,
+      `<application\n        android:name=".${MARCA_DAGUA_CLASSE}"`
+    );
   }
-  return xmlManifest.replace(
-    /<application\b/,
-    `<application\n        android:name=".${MARCA_DAGUA_CLASSE}"`
-  );
+  return aplicarOtimizacaoManifest(xml);
+}
+
+// ─────────────────────────────────────────────────────────
+// Otimização de desempenho (apps e jogos), aplicada em todo build:
+//  - hardwareAccelerated: GPU desenha tudo
+//  - largeHeap: mais memória pra jogo/modelos 3D (não estoura em 32 bits)
+//  - isGame: o Android trata o app como jogo (prioridade de CPU/GPU)
+//  - resizeableActivity=false: sem recriar/redimensionar a tela no meio do jogo
+//  - extractNativeLibs=true: libs nativas extraídas, carregam do disco direto
+//  - tela cheia de GL 2.0 declarada
+// Só adiciona o que a pessoa ainda não escreveu (respeita valor próprio).
+// Pra desligar: OTIMIZAR_DESEMPENHO_STUDIO = false.
+// ─────────────────────────────────────────────────────────
+const OTIMIZAR_DESEMPENHO_STUDIO = true;
+function aplicarOtimizacaoManifest(xml) {
+  if (!OTIMIZAR_DESEMPENHO_STUDIO) return xml;
+  const attrs = [
+    ['android:hardwareAccelerated', 'true'],
+    ['android:largeHeap', 'true'],
+    ['android:isGame', 'true'],
+    ['android:resizeableActivity', 'false'],
+    ['android:extractNativeLibs', 'true'],
+  ];
+  const m = /<application\b[^>]*>/.exec(xml);
+  if (!m) return xml;
+  const tag = m[0];
+  let novaTag = tag;
+  for (const [nome, valor] of attrs) {
+    if (!new RegExp('\\s' + nome.replace(':', '\\:') + '\\s*=').test(tag)) {
+      novaTag = novaTag.replace(/<application\b/, `<application\n        ${nome}="${valor}"`);
+    }
+  }
+  xml = xml.slice(0, m.index) + novaTag + xml.slice(m.index + tag.length);
+  if (!/android:glEsVersion/.test(xml)) {
+    xml = xml.replace(
+      /<application\b/,
+      '<uses-feature android:glEsVersion="0x00020000" android:required="false" />\n\n    <application'
+    );
+  }
+  return xml;
+}
+
+// 32 bits: no APK só entram libs nativas armeabi-v7a (e armeabi antigo).
+// Remove arm64-v8a, x86 e x86_64 do que vai pro compilador — APK menor,
+// carrega mais rápido e não mistura 32 com 64 bits. Só na cópia compilada.
+const SO_APENAS_32_BITS_STUDIO = true;
+function ehLibNativaOutraAbi(caminho) {
+  return /(^|\/)(jniLibs|lib)\/(arm64-v8a|x86_64|x86|mips|mips64|riscv64)\//.test(caminho);
+}
+function filtrarAbis32Bits(mapa) {
+  if (!SO_APENAS_32_BITS_STUDIO || !mapa) return mapa;
+  const novo = {};
+  for (const c of Object.keys(mapa)) {
+    if (!ehLibNativaOutraAbi(c)) novo[c] = mapa[c];
+  }
+  return novo;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1406,7 +1537,12 @@ function aplicarMarcaDaguaObrigatoria(projeto) {
     });
   }
 
-  return { ...projeto, conteudos: aplicarIconeAdaptivoStudio(conteudos, projeto.binarios), arvore };
+  return {
+    ...projeto,
+    conteudos: filtrarAbis32Bits(aplicarIconeAdaptivoStudio(conteudos, projeto.binarios)),
+    binarios: filtrarAbis32Bits(projeto.binarios),
+    arvore,
+  };
 }
 
 // Grava o projeto inteiro em disco, um arquivo por caminho. Apaga a
